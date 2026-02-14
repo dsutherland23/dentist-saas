@@ -164,134 +164,178 @@ export default function SignUpPage() {
             </div>
 
             {/* Left Side - Form */}
-            <div className="flex items-center justify-center p-8 bg-slate-50 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-teal-500/5 rounded-full blur-[100px] translate-x-1/2 -translate-y-1/2" />
+            <div className="flex items-center justify-center p-6 sm:p-12 bg-white relative overflow-hidden">
+                {/* Background gradient accents */}
+                <div className="absolute top-0 right-0 w-96 h-96 bg-teal-50 rounded-full blur-3xl opacity-40" />
+                <div className="absolute bottom-0 left-0 w-72 h-72 bg-blue-50 rounded-full blur-3xl opacity-30" />
 
-                <div className="w-full max-w-md space-y-8 relative z-10">
-                    <div className="lg:hidden flex justify-center mb-8">
+                <div className="w-full max-w-lg space-y-10 relative z-10">
+                    {/* Logo - Mobile Only */}
+                    <div className="lg:hidden flex justify-center">
                         <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 bg-teal-600 rounded-lg flex items-center justify-center">
+                            <div className="h-11 w-11 bg-gradient-to-br from-teal-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg shadow-teal-500/20">
                                 <Stethoscope className="h-6 w-6 text-white" />
                             </div>
-                            <span className="text-xl font-bold text-slate-900 font-medical">DentalCare</span>
+                            <span className="text-2xl font-bold text-slate-900">DentalCare Pro</span>
                         </div>
                     </div>
 
-                    <div className="space-y-2 text-center lg:text-left">
-                        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Get Started</h1>
-                        <p className="text-slate-500 flex items-center gap-2 justify-center lg:justify-start">
-                            <Sparkles className="h-4 w-4 text-teal-600 animate-pulse" />
+                    {/* Header */}
+                    <div className="space-y-3 lg:space-y-4">
+                        <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-slate-900 leading-tight">
+                            Get Started
+                        </h1>
+                        <p className="text-lg text-slate-600 flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-teal-500 flex-shrink-0" />
                             Create your professional clinic workspace
                         </p>
                     </div>
 
-                    <Card className="border-0 shadow-2xl shadow-slate-200/60 bg-white/70 backdrop-blur-xl">
-                        <CardHeader className="pb-6 pt-8">
-                            <CardTitle className="text-2xl font-bold text-slate-900">Practice Details</CardTitle>
-                            <CardDescription className="text-base text-slate-600">All fields are required for setup</CardDescription>
-                        </CardHeader>
-                        <CardContent className="px-8">
+                    {/* Form Card */}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+                        <div className="px-8 py-10">
                             <Form {...form}>
                                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                                    {/* Clinic Name */}
                                     <FormField
                                         control={form.control}
                                         name="clinicName"
                                         render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-sm font-semibold text-slate-900">Clinic Name</FormLabel>
+                                            <FormItem className="space-y-2">
+                                                <FormLabel className="text-sm font-semibold text-slate-900">
+                                                    Clinic Name
+                                                </FormLabel>
                                                 <FormControl>
                                                     <div className="relative group">
-                                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                        <Input placeholder="Acme Dental Practice" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors duration-200" />
+                                                        <Input 
+                                                            placeholder="Acme Dental Practice" 
+                                                            className="pl-12 h-12 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg transition-all duration-200" 
+                                                            {...field} 
+                                                        />
                                                     </div>
                                                 </FormControl>
-                                                <FormMessage />
+                                                <FormMessage className="text-xs mt-1" />
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/* Admin Name */}
                                     <FormField
                                         control={form.control}
                                         name="adminName"
                                         render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-sm font-semibold text-slate-900">Admin Full Name</FormLabel>
+                                            <FormItem className="space-y-2">
+                                                <FormLabel className="text-sm font-semibold text-slate-900">
+                                                    Admin Full Name
+                                                </FormLabel>
                                                 <FormControl>
                                                     <div className="relative group">
-                                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                        <Input placeholder="Dr. John Doe" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors duration-200" />
+                                                        <Input 
+                                                            placeholder="Dr. John Doe" 
+                                                            className="pl-12 h-12 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg transition-all duration-200" 
+                                                            {...field} 
+                                                        />
                                                     </div>
                                                 </FormControl>
-                                                <FormMessage />
+                                                <FormMessage className="text-xs mt-1" />
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/* Email */}
                                     <FormField
                                         control={form.control}
                                         name="email"
                                         render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-sm font-semibold text-slate-900">Professional Email</FormLabel>
+                                            <FormItem className="space-y-2">
+                                                <FormLabel className="text-sm font-semibold text-slate-900">
+                                                    Professional Email
+                                                </FormLabel>
                                                 <FormControl>
                                                     <div className="relative group">
-                                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                        <Input placeholder="name@clinic.com" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors duration-200" />
+                                                        <Input 
+                                                            placeholder="name@clinic.com" 
+                                                            className="pl-12 h-12 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg transition-all duration-200" 
+                                                            {...field} 
+                                                        />
                                                     </div>
                                                 </FormControl>
-                                                <FormMessage />
+                                                <FormMessage className="text-xs mt-1" />
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/* Password */}
                                     <FormField
                                         control={form.control}
                                         name="password"
                                         render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-sm font-semibold text-slate-900">Password</FormLabel>
+                                            <FormItem className="space-y-2">
+                                                <FormLabel className="text-sm font-semibold text-slate-900">
+                                                    Password
+                                                </FormLabel>
                                                 <FormControl>
                                                     <div className="relative group">
-                                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                        <Input type="password" placeholder="••••••••" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-teal-500 transition-colors duration-200" />
+                                                        <Input 
+                                                            type="password" 
+                                                            placeholder="••••••••" 
+                                                            className="pl-12 h-12 bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-teal-500 focus:bg-white focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg transition-all duration-200" 
+                                                            {...field} 
+                                                        />
                                                     </div>
                                                 </FormControl>
-                                                <FormMessage />
+                                                <FormMessage className="text-xs mt-1" />
                                             </FormItem>
                                         )}
                                     />
+
+                                    {/* Submit Button */}
                                     <Button
                                         type="submit"
-                                        className="w-full h-12 gradient-primary text-white font-bold rounded-lg shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/40 transition-all group mt-8"
+                                        className="w-full h-12 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white font-semibold rounded-lg shadow-lg shadow-teal-500/25 hover:shadow-xl hover:shadow-teal-500/35 transition-all duration-200 group mt-8"
                                         disabled={isLoading}
                                     >
                                         {isLoading ? (
-                                            <span className="flex items-center gap-2">
-                                                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                Initializing Practice...
+                                            <span className="flex items-center gap-3">
+                                                <div className="h-5 w-5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                                                <span>Creating Account...</span>
                                             </span>
                                         ) : (
                                             <span className="flex items-center gap-2">
                                                 Create Practice Account
-                                                <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                                                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform duration-200" />
                                             </span>
                                         )}
                                     </Button>
                                 </form>
                             </Form>
-                        </CardContent>
-                        <CardFooter className="flex flex-col space-y-4 pt-4 pb-8 text-center bg-slate-50/50 backdrop-blur-sm border-t border-slate-100 rounded-b-3xl">
-                            <div className="text-sm text-slate-600">
-                                Already using DentalCare?{" "}
-                                <Link href="/login" className="text-teal-600 font-bold hover:text-teal-700 transition-colors">
-                                    Sign in here
-                                </Link>
-                            </div>
-                        </CardFooter>
-                    </Card>
+                        </div>
 
-                    <p className="px-8 text-center text-xs text-slate-400 leading-relaxed">
-                        By completing this setup, you agree to our{" "}
-                        <Link href="/terms" className="underline hover:text-slate-600">Terms</Link> and{" "}
-                        <Link href="/privacy" className="underline hover:text-slate-600">Privacy Policy</Link>.
-                        SSL Encryption is active.
+                        {/* Footer */}
+                        <div className="px-8 py-5 bg-slate-50/80 border-t border-slate-100 text-center space-y-2">
+                            <p className="text-sm text-slate-600">
+                                Already have an account?{" "}
+                                <Link href="/login" className="text-teal-600 font-semibold hover:text-teal-700 transition-colors">
+                                    Sign in
+                                </Link>
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Legal Text */}
+                    <p className="text-center text-xs text-slate-500 leading-relaxed">
+                        By creating an account, you agree to our{" "}
+                        <Link href="/terms" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
+                            Terms of Service
+                        </Link>
+                        {" "}and{" "}
+                        <Link href="/privacy" className="text-teal-600 hover:text-teal-700 font-medium transition-colors">
+                            Privacy Policy
+                        </Link>
                     </p>
                 </div>
             </div>
