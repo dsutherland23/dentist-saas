@@ -13,11 +13,13 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
     if (!user) redirect("/login")
 
     // Fetch data
-    const [patientRes, apptRes, treatmentRes, filesRes] = await Promise.all([
+    const [patientRes, apptRes, treatmentRes, filesRes, availableTreatmentsRes, dentistsRes] = await Promise.all([
         supabase.from("patients").select("*").eq("id", id).single(),
         supabase.from("appointments").select("*, dentists:users(last_name)").eq("patient_id", id).order("start_time", { ascending: false }),
         supabase.from("treatment_records").select("*, dentists:users(last_name)").eq("patient_id", id).order("created_at", { ascending: false }),
-        supabase.from("patient_files").select("*").eq("patient_id", id).order("created_at", { ascending: false })
+        supabase.from("patient_files").select("*").eq("patient_id", id).order("created_at", { ascending: false }),
+        supabase.from("treatments").select("*").eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("users").select("id, first_name, last_name, role").in("role", ["dentist", "clinic_admin", "super_admin"])
     ])
 
     if (patientRes.error) {
@@ -31,6 +33,9 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
             appointments={apptRes.data || []}
             treatments={treatmentRes.data || []}
             files={filesRes.data || []}
+            availableTreatments={availableTreatmentsRes.data || []}
+            dentists={dentistsRes.data || []}
+            currentUserId={user.id}
         />
     )
 }

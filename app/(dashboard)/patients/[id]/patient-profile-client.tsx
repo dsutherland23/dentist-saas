@@ -87,13 +87,27 @@ interface PatientProfileClientProps {
         file_path: string;
         created_at: string;
     }[]
+    availableTreatments: {
+        id: string;
+        name: string;
+        price: number;
+        category: string;
+    }[]
+    dentists: {
+        id: string;
+        first_name: string;
+        last_name: string;
+        role: string;
+    }[]
+    currentUserId: string;
 }
 
-export default function PatientProfileClient({ patient, appointments, treatments, files }: PatientProfileClientProps) {
+export default function PatientProfileClient({ patient, appointments, treatments, files, availableTreatments, dentists, currentUserId }: PatientProfileClientProps) {
     const router = useRouter()
     const supabase = createClient()
     const [isAlertsOpen, setIsAlertsOpen] = useState(false)
     const [isInsuranceOpen, setIsInsuranceOpen] = useState(false)
+    const [isContactOpen, setIsContactOpen] = useState(false)
     const [isTreatmentOpen, setIsTreatmentOpen] = useState(false)
     const [isFileOpen, setIsFileOpen] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -105,6 +119,12 @@ export default function PatientProfileClient({ patient, appointments, treatments
         medical_conditions: patient.medical_conditions || ""
     })
 
+    const [contactData, setContactData] = useState({
+        phone: patient.phone || "",
+        email: patient.email || "",
+        address: patient.address || ""
+    })
+
     const [insuranceData, setInsuranceData] = useState({
         insurance_provider: patient.insurance_provider || "",
         insurance_policy_number: patient.insurance_policy_number || ""
@@ -114,7 +134,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
         procedures_performed: "",
         diagnosis: "",
         notes: "",
-        dentist_id: "",
+        dentist_id: currentUserId,
         appointment_id: ""
     })
 
@@ -148,6 +168,27 @@ export default function PatientProfileClient({ patient, appointments, treatments
         } finally {
             setIsSaving(false)
             setIsAlertsOpen(false)
+        }
+    }
+
+    const handleUpdateContact = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setIsSaving(true)
+        try {
+            const res = await fetch(`/api/patients/${patient.id}/contact`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(contactData)
+            })
+            if (res.ok) {
+                toast.success("Contact information updated")
+                router.refresh()
+            }
+        } catch (error) {
+            toast.error("Failed to update contact info")
+        } finally {
+            setIsSaving(false)
+            setIsContactOpen(false)
         }
     }
 
@@ -235,6 +276,24 @@ export default function PatientProfileClient({ patient, appointments, treatments
         }
     }
 
+    const handleDeleteTreatment = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this treatment record?")) return
+
+        try {
+            const res = await fetch(`/api/treatment-records/${id}`, {
+                method: 'DELETE'
+            })
+            if (res.ok) {
+                toast.success("Treatment record deleted")
+                router.refresh()
+            } else {
+                toast.error("Failed to delete treatment record")
+            }
+        } catch (error) {
+            toast.error("Error deleting treatment record")
+        }
+    }
+
     const getFileUrl = (path: string) => {
         const { data } = supabase.storage.from('patient-files').getPublicUrl(path)
         return data.publicUrl
@@ -288,7 +347,27 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                 </DialogHeader>
                                 <div className="grid gap-4 py-4">
                                     <div className="space-y-2">
-                                        <Label>Procedures Performed</Label>
+                                        <div className="flex items-center justify-between">
+                                            <Label>Procedures Performed</Label>
+                                            {availableTreatments.length > 0 && (
+                                                <Select onValueChange={(val) => {
+                                                    const current = treatmentData.procedures_performed
+                                                    const newValue = current ? `${current}, ${val}` : val
+                                                    setTreatmentData({ ...treatmentData, procedures_performed: newValue })
+                                                }}>
+                                                    <SelectTrigger className="h-8 w-[180px] text-xs">
+                                                        <SelectValue placeholder="Add Preset..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availableTreatments.map(t => (
+                                                            <SelectItem key={t.id} value={t.name}>
+                                                                {t.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </div>
                                         <Input
                                             placeholder="Ex: Teeth cleaning, Filling..."
                                             value={treatmentData.procedures_performed}
@@ -315,13 +394,16 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
                                             <Label>Dentist</Label>
-                                            <Select onValueChange={val => setTreatmentData({ ...treatmentData, dentist_id: val })}>
+                                            <Select value={treatmentData.dentist_id} onValueChange={val => setTreatmentData({ ...treatmentData, dentist_id: val })}>
                                                 <SelectTrigger>
                                                     <SelectValue placeholder="Select Dentist" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {/* This should ideally be populated from a staff list */}
-                                                    <SelectItem value="demo-dentist">Dr. Current User</SelectItem>
+                                                    {dentists.map(dentist => (
+                                                        <SelectItem key={dentist.id} value={dentist.id}>
+                                                            Dr. {dentist.last_name} ({dentist.first_name})
+                                                        </SelectItem>
+                                                    ))}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -359,6 +441,57 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     <Card className="border-none shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg">Contact Info</CardTitle>
+                            <Dialog open={isContactOpen} onOpenChange={setIsContactOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-teal-600">
+                                        <Pencil className="h-4 w-4" />
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <form onSubmit={handleUpdateContact}>
+                                        <DialogHeader>
+                                            <DialogTitle>Update Contact Info</DialogTitle>
+                                            <DialogDescription>Update contact details for {patient.first_name}.</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="phone">Phone Number</Label>
+                                                <Input
+                                                    id="phone"
+                                                    value={contactData.phone}
+                                                    onChange={e => setContactData({ ...contactData, phone: e.target.value })}
+                                                    placeholder="(555) 123-4567"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="email">Email Address</Label>
+                                                <Input
+                                                    id="email"
+                                                    type="email"
+                                                    value={contactData.email}
+                                                    onChange={e => setContactData({ ...contactData, email: e.target.value })}
+                                                    placeholder="patient@example.com"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="address">Address</Label>
+                                                <Input
+                                                    id="address"
+                                                    value={contactData.address}
+                                                    onChange={e => setContactData({ ...contactData, address: e.target.value })}
+                                                    placeholder="123 Main St, City, State"
+                                                />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <Button type="submit" disabled={isSaving} className="bg-teal-600">
+                                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                Save Changes
+                                            </Button>
+                                        </DialogFooter>
+                                    </form>
+                                </DialogContent>
+                            </Dialog>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center text-sm text-slate-600">
@@ -565,7 +698,14 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                                     <CardTitle className="text-xl text-slate-800">{tx.procedures_performed}</CardTitle>
                                                     <CardDescription className="font-semibold text-teal-600">{tx.diagnosis}</CardDescription>
                                                 </div>
-                                                <Badge className="bg-teal-50 text-teal-700 border-teal-100">Verified Match</Badge>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                                                    onClick={() => handleDeleteTreatment(tx.id)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
                                             </div>
                                         </CardHeader>
                                         <CardContent>

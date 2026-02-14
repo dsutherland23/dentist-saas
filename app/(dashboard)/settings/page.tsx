@@ -45,6 +45,7 @@ export default function SettingsPage() {
 
     // Clinic State
     const [clinic, setClinic] = useState({
+        id: "",
         name: "",
         email: "",
         phone: "",
@@ -53,11 +54,61 @@ export default function SettingsPage() {
         city: "",
         state: "",
         zip: "",
+        logo_url: "",
         business_hours: {
             weekday: "9:00 AM - 6:00 PM",
             weekend: "Closed"
         }
     })
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return
+
+        const file = e.target.files[0]
+        const formData = new FormData()
+        formData.append('file', file)
+
+        if (clinic.id) {
+            formData.append('clinicId', clinic.id)
+        }
+
+        setIsSaving(true)
+
+        try {
+            const res = await fetch('/api/settings/logo-upload', {
+                method: 'POST',
+                body: formData,
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(data.error || data.details || "Upload failed")
+            }
+
+            const publicUrl = data.publicUrl
+
+            setClinic(prev => ({ ...prev, logo_url: publicUrl }))
+
+            // Auto save the clinic setting
+            const updateRes = await fetch('/api/settings/clinic', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...clinic, logo_url: publicUrl })
+            })
+
+            if (updateRes.ok) {
+                toast.success("Logo uploaded and saved successfully!")
+            } else {
+                toast.success("Logo uploaded. Click 'Save Changes' to confirm if needed.")
+            }
+        } catch (error: any) {
+            console.error("Error uploading logo:", error)
+            toast.error(error.message || "Error uploading logo")
+        } finally {
+            setIsSaving(false)
+        }
+    }
 
     // Team State
     const [team, setTeam] = useState<any[]>([])
@@ -302,6 +353,31 @@ export default function SettingsPage() {
                             <CardDescription>Update your practice details and contact information</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            <div className="flex items-center gap-6">
+                                <div className="h-24 w-24 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center bg-slate-50 relative overflow-hidden">
+                                    {clinic.logo_url ? (
+                                        <img src={clinic.logo_url} alt="Clinic Logo" className="object-cover w-full h-full" />
+                                    ) : (
+                                        <Building2 className="h-8 w-8 text-slate-300" />
+                                    )}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="logo-upload" className="block font-medium">Clinic Logo</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            id="logo-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleLogoUpload}
+                                            disabled={isSaving}
+                                            className="w-full max-w-xs"
+                                        />
+                                        {isSaving && <Loader2 className="h-4 w-4 animate-spin text-teal-600" />}
+                                    </div>
+                                    <p className="text-xs text-slate-500">Upload a square image for best results (PNG, JPG).</p>
+                                </div>
+                            </div>
+                            <Separator />
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="practice-name">Practice Name</Label>

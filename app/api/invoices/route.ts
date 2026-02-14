@@ -29,7 +29,8 @@ export async function GET(req: Request) {
                 .select(`
                     *,
                     patient:patients(*),
-                    items:invoice_items(*)
+                    items:invoice_items(*),
+                    clinic:clinics(*)
                 `)
                 .eq("id", invoiceId)
                 .eq("clinic_id", userData.clinic_id)
@@ -43,7 +44,8 @@ export async function GET(req: Request) {
             .from("invoices")
             .select(`
                 *,
-                patient:patients(first_name, last_name, email)
+                patient:patients(first_name, last_name, email),
+                clinic:clinics(*)
             `)
             .eq("clinic_id", userData.clinic_id)
             .neq("status", "cancelled") // Hide cancelled/archived by default

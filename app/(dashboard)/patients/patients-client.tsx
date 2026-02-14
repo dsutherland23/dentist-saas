@@ -24,6 +24,7 @@ import { MoreHorizontal, Search, Filter } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ManagePatientDialog } from "./manage-patient-dialog"
+import { NewInvoiceDialog } from "@/app/(dashboard)/invoices/new-invoice-dialog"
 import { deletePatient } from "./actions"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -40,6 +41,8 @@ interface Patient {
 
 export default function PatientsClient({ initialPatients }: { initialPatients: Patient[] }) {
     const [searchTerm, setSearchTerm] = useState("")
+    const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
+    const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined)
     const router = useRouter()
     const searchParams = useSearchParams()
 
@@ -151,12 +154,22 @@ export default function PatientsClient({ initialPatients }: { initialPatients: P
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => navigator.clipboard.writeText(patient.id)}>
+                                                <DropdownMenuItem onClick={() => {
+                                                    navigator.clipboard.writeText(patient.id)
+                                                    toast.success("Patient ID copied to clipboard")
+                                                }}>
                                                     Copy ID
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
-                                                <DropdownMenuItem>View details</DropdownMenuItem>
-                                                <DropdownMenuItem>Create invoice</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => router.push(`/patients/${patient.id}`)}>
+                                                    View details
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => {
+                                                    setSelectedPatientId(patient.id)
+                                                    setIsInvoiceOpen(true)
+                                                }}>
+                                                    Create invoice
+                                                </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => handleDelete(patient.id)} className="text-red-600 focus:text-red-600">
                                                     Delete
                                                 </DropdownMenuItem>
@@ -169,6 +182,12 @@ export default function PatientsClient({ initialPatients }: { initialPatients: P
                     </TableBody>
                 </Table>
             </div>
-        </div>
+            <NewInvoiceDialog
+                open={isInvoiceOpen}
+                onOpenChange={setIsInvoiceOpen}
+                defaultPatientId={selectedPatientId}
+                patients={filteredPatients}
+            />
+        </div >
     )
 }

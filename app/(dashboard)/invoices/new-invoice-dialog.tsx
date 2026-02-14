@@ -22,10 +22,15 @@ interface NewInvoiceDialogProps {
     defaultPatientId?: string
     onSuccess?: () => void
     trigger?: React.ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
 }
 
-export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, onSuccess, trigger }: NewInvoiceDialogProps) {
-    const [open, setOpen] = useState(false)
+export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, onSuccess, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: NewInvoiceDialogProps) {
+    const [internalOpen, setInternalOpen] = useState(false)
+    const isControlled = controlledOpen !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+    const setOpen = isControlled ? setControlledOpen! : setInternalOpen
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [patients, setPatients] = useState<any[]>(initialPatients || [])
     const [newInvoice, setNewInvoice] = useState({

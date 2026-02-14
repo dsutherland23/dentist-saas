@@ -28,13 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import jsPDF from "jspdf"
-import "jspdf-autotable"
-
-declare module "jspdf" {
-    interface jsPDF {
-        autoTable: (options: any) => jsPDF
-    }
-}
+import autoTable from "jspdf-autotable"
 
 import { NewInvoiceDialog } from "./new-invoice-dialog"
 
@@ -112,55 +106,128 @@ export default function InvoicesPage() {
         }
     }
 
-    const generatePDF = (invoice: any, action: 'download' | 'print') => {
-        const doc = new jsPDF()
+    const generatePDF = async (invoice: any, action: 'download' | 'print') => {
+        try {
+            console.log("Starting PDF generation for invoice:", invoice)
+            const doc = new jsPDF()
+            let startY = 20
 
-        // Header
-        doc.setFontSize(22)
-        doc.setTextColor(13, 148, 136) // Teal-600
-        doc.text("DENTAL CLINIC INVOICE", 105, 20, { align: 'center' })
+            // Function to load image with timeout and error handling
+            const loadImage = (url: string): Promise<HTMLImageElement> => {
+                return new Promise((resolve, reject) => {
+                    const img = new Image()
+                    img.crossOrigin = "anonymous"
 
-        doc.setFontSize(10)
-        doc.setTextColor(100)
-        doc.text(`Invoice #: ${invoice.invoice_number}`, 14, 40)
-        doc.text(`Date: ${new Date(invoice.issue_date).toLocaleDateString()}`, 14, 45)
-        doc.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString()}`, 14, 50)
+                    const timeout = setTimeout(() => {
+                        reject(new Error("Image load timeout"))
+                    }, 5000)
 
-        // Patient Info
-        doc.setTextColor(0)
-        doc.setFontSize(12)
-        doc.text("BILL TO:", 14, 65)
-        doc.setFontSize(11)
-        doc.text(`${invoice.patient?.first_name} ${invoice.patient?.last_name}`, 14, 72)
-        doc.text(`${invoice.patient?.email}`, 14, 78)
-        doc.text(`${invoice.patient?.phone || ""}`, 14, 84)
+                    img.onload = () => {
+                        clearTimeout(timeout)
+                        resolve(img)
+                    }
+                    img.onerror = (e) => {
+                        clearTimeout(timeout)
+                        console.error("Image load error details:", e)
+                        reject(new Error("Image load failed"))
+                    }
+                    img.src = url
+                })
+            }
 
-        // Table
-        const tableData = invoice.items?.map((item: any) => [
-            item.description,
-            item.quantity.toString(),
-            `$${Number(item.unit_price).toFixed(2)}`,
-            `$${Number(item.total).toFixed(2)}`
-        ]) || []
+            // Add Logo if available
+            if (invoice.clinic?.logo_url) {
+                console.log("Attempting to load logo from URL:", invoice.clinic.logo_url)
+                try {
+                    const img = await loadImage(invoice.clinic.logo_url)
+                    // Add image at top left
+                    doc.addImage(img, 'PNG', 14, 10, 30, 30)
+                    startY = 50 // Push text down if logo exists
+                    console.log("Logo added successfully")
+                } catch (e) {
+                    console.error("Failed to load logo for PDF. Continuing without logo.", e)
+                }
+            } else {
+                console.log("No logo URL found in invoice.clinic object")
+            }
 
-        doc.autoTable({
-            startY: 95,
-            head: [['Description', 'Qty', 'Unit Price', 'Total']],
-            body: tableData,
-            theme: 'striped',
-            headStyles: { fillColor: [13, 148, 136] }
-        })
+            // Header
+            doc.setFontSize(22)
+            doc.setTextColor(13, 148, 136) // Teal-600
 
-        // Summary
-        const finalY = (doc as any).lastAutoTable.finalY + 10
-        doc.setFontSize(14)
-        doc.text(`Total Amount: $${Number(invoice.total_amount).toFixed(2)}`, 140, finalY)
+            // Adjust title position based on logo presence
+            // If logo is present (startY=50), keep title centered but ensure no overlap
+            // If no logo (startY=20), title is at 20
+            const titleY = invoice.clinic?.logo_url ? 25 : 20
+            doc.text("DENTAL CLINIC INVOICE", 105, titleY, { align: 'center' })
 
-        if (action === 'download') {
-            doc.save(`${invoice.invoice_number}.pdf`)
-        } else {
-            const pdfBlob = doc.output('bloburl')
-            window.open(pdfBlob.toString(), '_blank')
+            doc.setFontSize(10)
+            doc.setTextColor(100)
+
+            // Adjust info position
+            const infoY = startY + 10
+
+            doc.text(`Invoice #: ${invoice.invoice_number}`, 14, infoY)
+            doc.text(`Date: ${new Date(invoice.issue_date).toLocaleDateString()}`, 14, infoY + 5)
+            doc.text(`Due Date: ${new Date(invoice.due_date).toLocaleDateString()}`, 14, infoY + 10)
+
+            // Clinic Address (if we have it)
+            if (invoice.clinic) {
+                doc.setFontSize(10)
+                doc.setTextColor(80)
+                const clinicInfo = [
+                    invoice.clinic.name,
+                    invoice.clinic.address,
+                    `${invoice.clinic.city || ''}, ${invoice.clinic.state || ''} ${invoice.clinic.zip || ''}`,
+                    invoice.clinic.phone,
+                    invoice.clinic.email
+                ].filter(Boolean)
+
+                doc.text(clinicInfo.join('\n'), 196, infoY, { align: 'right' })
+            }
+
+            // Patient Info
+            doc.setTextColor(0)
+            doc.setFontSize(12)
+            doc.text("BILL TO:", 14, infoY + 25)
+            doc.setFontSize(11)
+            doc.text(`${invoice.patient?.first_name} ${invoice.patient?.last_name}`, 14, infoY + 32)
+            doc.text(`${invoice.patient?.email}`, 14, infoY + 38)
+            doc.text(`${invoice.patient?.phone || ""}`, 14, infoY + 44)
+
+            // Table
+            const tableData = invoice.items?.map((item: any) => [
+                item.description || "Service",
+                item.quantity?.toString() || "0",
+                `$${Number(item.unit_price || 0).toFixed(2)}`,
+                `$${Number(item.total || 0).toFixed(2)}`
+            ]) || []
+
+            autoTable(doc, {
+                startY: infoY + 55,
+                head: [['Description', 'Qty', 'Unit Price', 'Total']],
+                body: tableData,
+                theme: 'striped',
+                headStyles: { fillColor: [13, 148, 136] },
+                styles: { fontSize: 10 },
+            })
+
+            // Summary
+            const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 10 : (infoY + 80)
+            doc.setFontSize(14)
+            doc.text(`Total Amount: $${Number(invoice.total_amount || 0).toFixed(2)}`, 140, finalY)
+
+            console.log("Saving PDF...")
+            if (action === 'download') {
+                doc.save(`${invoice.invoice_number}.pdf`)
+            } else {
+                const pdfBlob = doc.output('bloburl')
+                window.open(pdfBlob.toString(), '_blank')
+            }
+            console.log("PDF generation completed successfully")
+        } catch (error) {
+            console.error("CRITICAL ERROR in generatePDF:", error)
+            toast.error("Failed to generate PDF. Check console for details.")
         }
     }
 
