@@ -186,82 +186,80 @@ export default function SignUpPage() {
                     </div>
 
                     <Card className="border-0 shadow-2xl shadow-slate-200/60 bg-white/70 backdrop-blur-xl">
-                        <CardHeader className="pb-4">
-                            <CardTitle className="text-xl">Practice Details</CardTitle>
-                            <CardDescription>All fields are required for setup</CardDescription>
+                        <CardHeader className="pb-6 pt-8">
+                            <CardTitle className="text-2xl font-bold text-slate-900">Practice Details</CardTitle>
+                            <CardDescription className="text-base text-slate-600">All fields are required for setup</CardDescription>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="px-8">
                             <Form {...form}>
-                                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <FormField
-                                            control={form.control}
-                                            name="clinicName"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-slate-900">Clinic Name</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative group">
-                                                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                            <Input placeholder="Acme Dental Practice" className="pl-10 h-11 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10" {...field} />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="adminName"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-slate-900">Admin Full Name</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative group">
-                                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                            <Input placeholder="Dr. John Doe" className="pl-10 h-11 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10" {...field} />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="email"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-slate-900">Professional Email</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative group">
-                                                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                            <Input placeholder="name@clinic.com" className="pl-10 h-11 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10" {...field} />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="password"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-slate-900">Password</FormLabel>
-                                                    <FormControl>
-                                                        <div className="relative group">
-                                                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
-                                                            <Input type="password" placeholder="••••••••" className="pl-10 h-11 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10" {...field} />
-                                                        </div>
-                                                    </FormControl>
-                                                    <FormMessage />
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
+                                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                                    <FormField
+                                        control={form.control}
+                                        name="clinicName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-sm font-semibold text-slate-900">Clinic Name</FormLabel>
+                                                <FormControl>
+                                                    <div className="relative group">
+                                                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                                        <Input placeholder="Acme Dental Practice" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="adminName"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-sm font-semibold text-slate-900">Admin Full Name</FormLabel>
+                                                <FormControl>
+                                                    <div className="relative group">
+                                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                                        <Input placeholder="Dr. John Doe" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="email"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-sm font-semibold text-slate-900">Professional Email</FormLabel>
+                                                <FormControl>
+                                                    <div className="relative group">
+                                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                                        <Input placeholder="name@clinic.com" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="password"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="text-sm font-semibold text-slate-900">Password</FormLabel>
+                                                <FormControl>
+                                                    <div className="relative group">
+                                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-teal-500 transition-colors" />
+                                                        <Input type="password" placeholder="••••••••" className="pl-10 h-12 bg-white border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 text-base rounded-lg" {...field} />
+                                                    </div>
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
                                     <Button
                                         type="submit"
-                                        className="w-full h-12 gradient-primary text-white font-bold rounded-xl shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/40 transition-all group mt-2"
+                                        className="w-full h-12 gradient-primary text-white font-bold rounded-lg shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/40 transition-all group mt-8"
                                         disabled={isLoading}
                                     >
                                         {isLoading ? (
