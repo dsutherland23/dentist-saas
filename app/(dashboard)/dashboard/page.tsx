@@ -15,7 +15,10 @@ import {
     Loader2,
     MessageSquare,
     ExternalLink,
-    MoreVertical
+    MoreVertical,
+    Phone,
+    Mail,
+    PhoneCall
 } from "lucide-react"
 import {
     DropdownMenu,
@@ -29,7 +32,9 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { toast } from "sonner"
+import { AppointmentReminderModal } from "@/components/dashboard/appointment-reminder-modal"
 
 interface DashboardStats {
     revenue: {
@@ -73,6 +78,17 @@ interface RotaItem {
     type: 'shift'
 }
 
+interface FollowUpItem {
+    id: string
+    patient_id: string
+    patient_name: string
+    phone: string | null
+    email: string | null
+    status: string
+    start_time: string
+    treatment_type: string
+}
+
 export default function DashboardPage() {
     const { profile } = useAuth()
     const router = useRouter()
@@ -82,6 +98,7 @@ export default function DashboardPage() {
     const [activity, setActivity] = useState<ActivityItem[]>([])
     const [schedule, setSchedule] = useState<ScheduleItem[]>([])
     const [rota, setRota] = useState<RotaItem[]>([])
+    const [followUps, setFollowUps] = useState<FollowUpItem[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
@@ -91,10 +108,11 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
         try {
             setLoading(true)
-            const [statsRes, activityRes, scheduleRes] = await Promise.all([
+            const [statsRes, activityRes, scheduleRes, followUpRes] = await Promise.all([
                 fetch("/api/dashboard/stats"),
                 fetch("/api/dashboard/activity"),
-                fetch("/api/dashboard/schedule")
+                fetch("/api/dashboard/schedule"),
+                fetch("/api/dashboard/follow-up")
             ])
 
             if (statsRes.ok) {
@@ -111,6 +129,11 @@ export default function DashboardPage() {
                 const data = await scheduleRes.json()
                 setSchedule(data.schedule || [])
                 setRota(data.rota || [])
+            }
+
+            if (followUpRes.ok) {
+                const data = await followUpRes.json()
+                setFollowUps(data.followUps || [])
             }
         } catch (error) {
             console.error("Failed to fetch dashboard data:", error)
@@ -141,6 +164,7 @@ export default function DashboardPage() {
 
     return (
         <div className="min-h-screen gradient-mesh">
+            <AppointmentReminderModal />
             <div className="p-8 space-y-8">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -337,106 +361,205 @@ export default function DashboardPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Quick Stats */}
+                    {/* Quick Stats — Today's Appointments + Calendar Preview */}
                     <Card className="lg:col-span-3 card-modern border-0">
-                        <CardHeader>
-                            <CardTitle className="text-2xl">Quick Stats</CardTitle>
-                            <CardDescription className="mt-1">Performance overview</CardDescription>
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg">Today's Appointments</CardTitle>
+                                <span className="text-sm font-bold text-teal-600">
+                                    {loading ? "…" : stats ? stats.appointments.today : schedule.length}
+                                </span>
+                            </div>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            {/* Today's Appointments */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">Today's Appointments</span>
-                                    <span className="text-sm font-bold text-slate-900">18 / 24</span>
-                                </div>
-                                <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-teal-500 to-teal-600 rounded-full" style={{ width: "75%" }}>
-                                        <div className="absolute inset-0 animate-shimmer"></div>
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-500">75% capacity</p>
+                        <CardContent className="space-y-4">
+                            {/* Compact stat */}
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-slate-500">
+                                    {schedule.filter((a) => a.status === "completed").length} completed
+                                </span>
+                                <span className="text-slate-700 font-medium">
+                                    {schedule.length} total
+                                </span>
+                            </div>
+                            <div className="relative h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div
+                                    className="absolute inset-y-0 left-0 bg-gradient-to-r from-teal-500 to-teal-600 rounded-full transition-all"
+                                    style={{
+                                        width:
+                                            schedule.length > 0
+                                                ? `${(schedule.filter((a) => a.status === "completed").length / schedule.length) * 100}%`
+                                                : "0%",
+                                    }}
+                                />
                             </div>
 
-                            {/* Patient Satisfaction */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">Patient Satisfaction</span>
-                                    <span className="text-sm font-bold text-slate-900">4.8 / 5.0</span>
-                                </div>
-                                <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full" style={{ width: "96%" }}>
-                                        <div className="absolute inset-0 animate-shimmer"></div>
+                            {/* Calendar preview */}
+                            <div className="pt-2 border-t border-slate-100">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
+                                    Today's schedule
+                                </p>
+                                {loading ? (
+                                    <div className="flex justify-center py-6">
+                                        <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
                                     </div>
-                                </div>
-                                <p className="text-xs text-slate-500">Based on 234 reviews</p>
-                            </div>
-
-                            {/* Revenue Target */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">Monthly Revenue Target</span>
-                                    <span className="text-sm font-bold text-slate-900">$48K / $50K</span>
-                                </div>
-                                <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full" style={{ width: "96%" }}>
-                                        <div className="absolute inset-0 animate-shimmer"></div>
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-500">$2K remaining to goal</p>
-                            </div>
-
-                            {/* Treatment Success Rate */}
-                            <div className="space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-sm font-medium text-slate-700">Treatment Success Rate</span>
-                                    <span className="text-sm font-bold text-slate-900">98.5%</span>
-                                </div>
-                                <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full" style={{ width: "98.5%" }}>
-                                        <div className="absolute inset-0 animate-shimmer"></div>
-                                    </div>
-                                </div>
-                                <p className="text-xs text-slate-500">Excellent performance</p>
-                            </div>
-
-                            {/* Upcoming Milestones */}
-                            <div className="mt-6 p-4 rounded-xl bg-gradient-to-br from-teal-50 to-blue-50 border border-teal-100">
-                                <h4 className="font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                                    <Sparkles className="h-4 w-4 text-teal-600" />
-                                    Upcoming Milestones
-                                </h4>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">2000th Patient</span>
-                                        <span className="font-semibold text-teal-600">153 to go</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-slate-600">$50K Revenue</span>
-                                        <span className="font-semibold text-teal-600">$2K to go</span>
-                                    </div>
-                                </div>
+                                ) : schedule.length === 0 ? (
+                                    <p className="text-sm text-slate-500 py-4 text-center">
+                                        No appointments today
+                                    </p>
+                                ) : (
+                                    <ScrollArea className="h-[200px] pr-2">
+                                        <div className="space-y-2">
+                                            {schedule.map((apt) => (
+                                                <div
+                                                    key={apt.id}
+                                                    className="flex items-center gap-3 py-2 px-3 rounded-lg bg-slate-50 hover:bg-teal-50 transition-colors"
+                                                >
+                                                    <span className="text-xs font-bold text-teal-600 shrink-0 w-16">
+                                                        {apt.time}
+                                                    </span>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-sm font-medium text-slate-900 truncate">
+                                                            {apt.patient}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 truncate">
+                                                            {apt.treatment}
+                                                        </p>
+                                                    </div>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={`shrink-0 text-[10px] h-5 ${
+                                                            apt.status === "completed"
+                                                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                                                : apt.status === "in_treatment"
+                                                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                                                  : apt.status === "checked_in"
+                                                                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                                                                    : "bg-slate-100 text-slate-600 border-slate-200"
+                                                        }`}
+                                                    >
+                                                        {apt.status}
+                                                    </Badge>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                )}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full mt-2 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                                    onClick={handleViewCalendar}
+                                >
+                                    <CalendarCheck className="mr-2 h-3.5 w-3.5" />
+                                    Open full calendar
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>
                 </div>
 
+                {/* Follow-up Needed — No-Show, Canceled, Unconfirmed */}
+                {followUps.length > 0 && (
+                    <Card className="card-modern border-0 border-l-4 border-l-rose-400">
+                        <CardHeader>
+                            <div>
+                                <CardTitle className="text-2xl flex items-center gap-2">
+                                    <PhoneCall className="h-6 w-6 text-rose-600" />
+                                    Follow-up Needed
+                                </CardTitle>
+                                <CardDescription className="mt-1">
+                                    Patients with No-Show, Canceled, or Unconfirmed appointments — suggest call back and reschedule
+                                </CardDescription>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <ScrollArea className="h-[320px] pr-4">
+                                <div className="space-y-4">
+                                    {followUps.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className="p-4 rounded-xl bg-rose-50/50 border border-rose-100 hover:bg-rose-50 transition-all"
+                                        >
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-2">
+                                                        <p className="font-semibold text-slate-900 truncate">
+                                                            {item.patient_name}
+                                                        </p>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`shrink-0 text-[10px] font-bold uppercase ${
+                                                                item.status === "no_show"
+                                                                    ? "bg-rose-100 text-rose-800 border-rose-200"
+                                                                    : item.status === "cancelled"
+                                                                        ? "bg-amber-100 text-amber-800 border-amber-200"
+                                                                        : "bg-slate-100 text-slate-700 border-slate-200"
+                                                            }`}
+                                                        >
+                                                            {item.status === "no_show" ? "No-Show" : item.status === "cancelled" ? "Canceled" : "Unconfirmed"}
+                                                        </Badge>
+                                                    </div>
+                                                    <p className="text-xs text-slate-600 mb-2">{item.treatment_type}</p>
+                                                    <div className="flex flex-wrap gap-3 text-sm">
+                                                        {item.phone ? (
+                                                            <a
+                                                                href={`tel:${item.phone}`}
+                                                                className="flex items-center gap-1.5 text-teal-600 hover:text-teal-700 font-medium"
+                                                            >
+                                                                <Phone className="h-3.5 w-3.5" />
+                                                                {item.phone}
+                                                            </a>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1.5 text-slate-400">
+                                                                <Phone className="h-3.5 w-3.5" /> No phone
+                                                            </span>
+                                                        )}
+                                                        {item.email ? (
+                                                            <a
+                                                                href={`mailto:${item.email}`}
+                                                                className="flex items-center gap-1.5 text-teal-600 hover:text-teal-700 font-medium truncate"
+                                                            >
+                                                                <Mail className="h-3.5 w-3.5 shrink-0" />
+                                                                <span className="truncate">{item.email}</span>
+                                                            </a>
+                                                        ) : (
+                                                            <span className="flex items-center gap-1.5 text-slate-400">
+                                                                <Mail className="h-3.5 w-3.5 shrink-0" /> No email
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2 shrink-0">
+                                                    {item.phone && (
+                                                        <Button size="sm" variant="outline" className="text-xs font-bold" asChild>
+                                                            <a href={`tel:${item.phone}`}>
+                                                                <Phone className="h-3 w-3 mr-1" />
+                                                                Call back
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                    <Button size="sm" className="text-xs font-bold bg-teal-600 hover:bg-teal-700" asChild>
+                                                        <Link href={`/patients/${item.patient_id}`}>
+                                                            <CalendarCheck className="h-3 w-3 mr-1" />
+                                                            Reschedule
+                                                        </Link>
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+                )}
+
                 {/* Upcoming Appointments */}
                 <Card className="card-modern border-0">
                     <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-2xl font-bold font-outfit">Today's Practice Schedule</CardTitle>
-                                <CardDescription className="mt-1">Overview of appointments and staff on duty</CardDescription>
-                            </div>
-                            <Button
-                                variant="outline"
-                                className="backdrop-blur-sm bg-white/50 border-slate-200/50 hover:bg-white/80"
-                                onClick={handleViewCalendar}
-                            >
-                                <CalendarCheck className="mr-2 h-4 w-4" />
-                                Open Full Calendar
-                            </Button>
+                        <div>
+                            <CardTitle className="text-2xl font-bold font-outfit">Today's Practice Schedule</CardTitle>
+                            <CardDescription className="mt-1">Overview of appointments and staff on duty</CardDescription>
                         </div>
                     </CardHeader>
                     <CardContent>

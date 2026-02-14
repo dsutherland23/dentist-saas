@@ -85,13 +85,17 @@ export async function GET() {
                 .eq("status", "completed")
                 .gte("start_time", monthStart.toISOString()),
 
-            // Today's appointments
-            supabase
-                .from("appointments")
-                .select("id", { count: "exact", head: true })
-                .eq("clinic_id", clinicId)
-                .gte("start_time", new Date(now.setHours(0, 0, 0, 0)).toISOString())
-                .lt("start_time", new Date(now.setHours(23, 59, 59, 999)).toISOString())
+            // Today's appointments (use explicit date range; do not mutate now)
+            (() => {
+                const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+                const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+                return supabase
+                    .from("appointments")
+                    .select("id", { count: "exact", head: true })
+                    .eq("clinic_id", clinicId)
+                    .gte("start_time", start.toISOString())
+                    .lte("start_time", end.toISOString())
+            })()
         ])
 
         // Calculate totals

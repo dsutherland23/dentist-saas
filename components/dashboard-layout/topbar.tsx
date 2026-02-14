@@ -23,20 +23,86 @@ import {
 } from "@/components/ui/sheet"
 import { Sidebar } from "./sidebar"
 import { ManagePatientDialog } from "@/app/(dashboard)/patients/manage-patient-dialog"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Users, Calendar, FileText } from "lucide-react"
 import { NotificationCenter } from "./notification-center"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { NewAppointmentDialog } from "@/app/(dashboard)/calendar/new-appointment-dialog"
 import { NewInvoiceDialog } from "@/app/(dashboard)/invoices/new-invoice-dialog"
 import { useSidebar } from "@/lib/hooks/use-sidebar-context"
+
+const SEARCH_DEBOUNCE_MS = 350
 
 export function Topbar() {
     const { signOut, profile, user } = useAuth()
     const { isCollapsed, toggle } = useSidebar()
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
     const [patients, setPatients] = useState<any[]>([])
     const [dentists, setDentists] = useState<any[]>([])
+    const [searchValue, setSearchValue] = useState("")
+    const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const isPatientsPage = pathname === "/patients" || pathname?.startsWith("/patients")
+    const isInvoicesPage = pathname === "/invoices" || pathname?.startsWith("/invoices")
+    const qFromUrl = searchParams?.get("q") ?? ""
+    const prevPathnameRef = useRef<string | null>(null)
+
+    const looksLikeInvoiceNumber = (q: string) => /^INV-[\w-]*$/i.test(q.trim())
+
+    useEffect(() => {
+        const currentPath = pathname ?? ""
+        const justNavigated = prevPathnameRef.current !== currentPath
+        prevPathnameRef.current = currentPath
+        if (justNavigated && (isPatientsPage || isInvoicesPage)) {
+            setSearchValue(qFromUrl)
+        }
+    }, [pathname, isPatientsPage, isInvoicesPage, qFromUrl])
+
+    const applySearch = (query: string) => {
+        const trimmed = query.trim()
+        const isInvoiceQuery = looksLikeInvoiceNumber(trimmed)
+
+        if (trimmed) {
+            if (isInvoiceQuery) {
+                const url = `/invoices?q=${encodeURIComponent(trimmed)}`
+                if (isInvoicesPage) router.replace(url)
+                else router.push(url)
+            } else {
+                const url = `/patients?q=${encodeURIComponent(trimmed)}`
+                if (isPatientsPage) router.replace(url)
+                else router.push(url)
+            }
+        } else {
+            if (isPatientsPage) router.replace("/patients")
+            else if (isInvoicesPage) router.replace("/invoices")
+        }
+    }
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value
+        setSearchValue(value)
+        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+        searchDebounceRef.current = setTimeout(() => {
+            applySearch(value)
+        }, SEARCH_DEBOUNCE_MS)
+    }
+
+    const handleSearchSubmit = (e: React.FormEvent) => {
+        e.preventDefault()
+        if (searchDebounceRef.current) {
+            clearTimeout(searchDebounceRef.current)
+            searchDebounceRef.current = null
+        }
+        applySearch(searchValue)
+    }
+
+    useEffect(() => {
+        return () => {
+            if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+        }
+    }, [])
 
     const fullName = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : "Loading..."
     const initial = profile?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || "U"
@@ -92,22 +158,14 @@ export function Topbar() {
                 </Sheet>
 
                 {/* Search Bar */}
-                <form
-                    className="flex-1 max-w-xl"
-                    onSubmit={(e) => {
-                        e.preventDefault()
-                        const formData = new FormData(e.currentTarget)
-                        const query = formData.get("search")
-                        if (query) {
-                            router.push(`/patients?q=${encodeURIComponent(query.toString())}`)
-                        }
-                    }}
-                >
+                <form className="flex-1 max-w-xl" onSubmit={handleSearchSubmit}>
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                         <Input
                             name="search"
                             placeholder="Search patients, invoices, records..."
+                            value={searchValue}
+                            onChange={handleSearchChange}
                             className="pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-10"
                         />
                     </div>

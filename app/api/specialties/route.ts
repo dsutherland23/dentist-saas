@@ -17,7 +17,7 @@ export async function GET() {
         return NextResponse.json(specialties || [])
     } catch (error) {
         console.error("[SPECIALTIES_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -38,14 +38,14 @@ export async function POST(request: Request) {
             .single()
 
         if (userData?.role !== 'clinic_admin' && userData?.role !== 'super_admin') {
-            return new NextResponse("Forbidden", { status: 403 })
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
         const body = await request.json()
         const { name } = body
 
         if (!name) {
-            return new NextResponse("Missing specialty name", { status: 400 })
+            return NextResponse.json({ error: "Missing specialty name" }, { status: 400 })
         }
 
         const { data: newSpecialty, error } = await supabase
@@ -62,6 +62,6 @@ export async function POST(request: Request) {
         return NextResponse.json(newSpecialty)
     } catch (error) {
         console.error("[SPECIALTIES_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

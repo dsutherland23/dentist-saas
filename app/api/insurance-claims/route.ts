@@ -7,7 +7,7 @@ export async function GET() {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -17,7 +17,7 @@ export async function GET() {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const { data: claims, error } = await supabase
@@ -35,7 +35,7 @@ export async function GET() {
         return NextResponse.json(claims)
     } catch (error) {
         console.error("[CLAIMS_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -55,14 +55,14 @@ export async function POST(req: Request) {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const body = await req.json()
         const { patient_id, invoice_id, insurance_provider, policy_number, amount_claimed } = body
 
         if (!patient_id || !insurance_provider || !amount_claimed) {
-            return new NextResponse("Missing required fields", { status: 400 })
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
         const claim_number = `CLM-${Math.floor(100000 + Math.random() * 900000)}`
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
         return NextResponse.json(claim)
     } catch (error) {
         console.error("[CLAIMS_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -96,7 +96,7 @@ export async function PATCH(req: Request) {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
-        if (!user) return new NextResponse("Unauthorized", { status: 401 })
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const { data: userData } = await supabase
             .from("users")
@@ -104,12 +104,12 @@ export async function PATCH(req: Request) {
             .eq("id", user.id)
             .single()
 
-        if (!userData?.clinic_id) return new NextResponse("Clinic Not Found", { status: 404 })
+        if (!userData?.clinic_id) return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
 
         const body = await req.json()
         const { id, status, notes } = body
 
-        if (!id || !status) return new NextResponse("Missing fields", { status: 400 })
+        if (!id || !status) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
 
         const { data: claim, error } = await supabase
             .from("insurance_claims")
@@ -124,7 +124,7 @@ export async function PATCH(req: Request) {
         return NextResponse.json(claim)
     } catch (error) {
         console.error("[CLAIMS_PATCH]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -133,12 +133,12 @@ export async function DELETE(req: Request) {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
-        if (!user) return new NextResponse("Unauthorized", { status: 401 })
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const { searchParams } = new URL(req.url)
         const id = searchParams.get("id")
 
-        if (!id) return new NextResponse("Missing ID", { status: 400 })
+        if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 })
 
         const { data: userData } = await supabase
             .from("users")
@@ -146,7 +146,7 @@ export async function DELETE(req: Request) {
             .eq("id", user.id)
             .single()
 
-        if (!userData?.clinic_id) return new NextResponse("Clinic Not Found", { status: 404 })
+        if (!userData?.clinic_id) return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
 
         const { error } = await supabase
             .from("insurance_claims")
@@ -159,6 +159,6 @@ export async function DELETE(req: Request) {
         return new NextResponse(null, { status: 204 })
     } catch (error) {
         console.error("[CLAIMS_DELETE]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

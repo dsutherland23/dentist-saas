@@ -19,7 +19,7 @@ export async function getClinicId() {
         .single()
 
     if (!userData?.clinic_id) {
-        throw new Error("User has no associated clinic.")
+        redirect("/onboarding")
     }
 
     return userData.clinic_id
@@ -46,21 +46,21 @@ export async function savePatient(formData: FormData) {
     // Balance is calculated from invoices. Status is likely inferred or added.
     // For now, I will ignore `status` and `balance` in the insert.
 
-    const { error } = await supabase.from("patients").insert({
+    const { data: patient, error } = await supabase.from("patients").insert({
         first_name: rawData.first_name,
         last_name: rawData.last_name,
         email: rawData.email,
         phone: rawData.phone,
         date_of_birth: rawData.date_of_birth,
         clinic_id: clinicId
-    })
+    }).select("id, first_name, last_name").single()
 
     if (error) {
         throw new Error(error.message)
     }
 
     revalidatePath("/patients")
-    return { success: true }
+    return { success: true, patient }
 }
 
 export async function deletePatient(patientId: string) {

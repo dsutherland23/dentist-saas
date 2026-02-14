@@ -7,7 +7,7 @@ export async function GET(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const now = new Date()
@@ -80,7 +80,7 @@ export async function GET(request: Request) {
         return NextResponse.json(onShiftStaff)
     } catch (error) {
         console.error("[STAFF_ON_SHIFT_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 

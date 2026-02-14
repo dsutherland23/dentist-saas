@@ -7,7 +7,7 @@ export async function GET() {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -17,7 +17,7 @@ export async function GET() {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const { data: messages, error } = await supabase
@@ -36,7 +36,7 @@ export async function GET() {
         return NextResponse.json(messages)
     } catch (error) {
         console.error("[MESSAGES_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -56,22 +56,23 @@ export async function POST(req: Request) {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const body = await req.json()
         const { receiver_id, content } = body
 
         if (!receiver_id || !content) {
-            return new NextResponse("Missing required fields", { status: 400 })
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
+        // DB column is "message", not "content"
         const { data: message, error } = await supabase
             .from("messages")
             .insert({
                 sender_id: user.id,
                 receiver_id,
-                content,
+                message: content,
                 clinic_id: userData.clinic_id,
                 created_at: new Date().toISOString()
             })
@@ -87,6 +88,6 @@ export async function POST(req: Request) {
         return NextResponse.json(message)
     } catch (error) {
         console.error("[MESSAGES_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

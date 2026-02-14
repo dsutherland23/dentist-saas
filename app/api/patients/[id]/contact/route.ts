@@ -15,7 +15,7 @@ export async function PATCH(
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { error } = await supabase
@@ -29,12 +29,12 @@ export async function PATCH(
 
         if (error) {
             console.error("[PATIENT_CONTACT_UPDATE]", error)
-            return new NextResponse("Internal Error", { status: 500 })
+            return NextResponse.json({ error: "Internal server error" }, { status: 500 })
         }
 
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error("[PATIENT_CONTACT_UPDATE]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

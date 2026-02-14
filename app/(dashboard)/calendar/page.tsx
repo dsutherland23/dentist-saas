@@ -11,20 +11,20 @@ export default async function CalendarPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect("/login")
 
-    let clinicId
-    try {
-        clinicId = await getClinicId()
-    } catch (e) {
-        return <div className="p-8">Error loading clinic data. Please ensure you are logged in correctly.</div>
-    }
+    // getClinicId() redirects to /onboarding if no clinic — do NOT wrap in try-catch
+    // as redirect() throws a special error that must propagate
+    const clinicId = await getClinicId()
+
+    const now = new Date()
+    const rangeStart = new Date(now)
+    rangeStart.setDate(rangeStart.getDate() - 14)
+    const rangeEnd = new Date(now)
+    rangeEnd.setDate(rangeEnd.getDate() + 60)
 
     // Parallel fetching
-    const [patientsRes, dentistsRes, appsRes] = await Promise.all([
+    const [patientsRes, dentistsRes, appsRes, blocksRes] = await Promise.all([
         supabase.from("patients").select("id, first_name, last_name").eq("clinic_id", clinicId),
-
-        // Fetch all users for now as dentists might be just 'users' in some setups, but filtering by role is better
         supabase.from("users").select("id, first_name, last_name, role").eq("clinic_id", clinicId),
-
         supabase.from("appointments")
             .select(`
                 *,
@@ -32,16 +32,31 @@ export default async function CalendarPage() {
                 dentists:users (first_name, last_name)
             `)
             .eq("clinic_id", clinicId)
+            .neq("status", "completed"),
+        supabase.from("blocked_slots")
+            .select("*")
+            .eq("clinic_id", clinicId)
+            .gte("end_time", rangeStart.toISOString())
+            .lte("start_time", rangeEnd.toISOString())
+            .order("start_time", { ascending: true })
     ])
 
-    // Filter dentists strictly in JS or just pass all users? 
-    // Let's pass all users for the dropdown to be flexible, or filter.
-    // Ideally only show dentists.
+    if (patientsRes.error || dentistsRes.error || appsRes.error) {
+        console.error("Calendar data fetch errors:", {
+            patients: patientsRes.error,
+            dentists: dentistsRes.error,
+            appointments: appsRes.error,
+            blockedSlots: blocksRes.error
+        })
+    }
+
     const dentists = dentistsRes.data?.filter(u => u.role === 'dentist' || u.role === 'clinic_admin') || []
+    const blockedSlots = blocksRes.error ? [] : (blocksRes.data || [])
 
     return (
         <CalendarClient
             initialAppointments={appsRes.data || []}
+            initialBlockedSlots={blockedSlots}
             patients={patientsRes.data || []}
             dentists={dentists}
         />

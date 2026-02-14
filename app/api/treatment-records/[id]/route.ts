@@ -11,7 +11,7 @@ export async function DELETE(
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -21,7 +21,7 @@ export async function DELETE(
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Unauthorized", { status: 403 })
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
         const { error } = await supabase
@@ -35,6 +35,6 @@ export async function DELETE(
         return new NextResponse(null, { status: 204 })
     } catch (error) {
         console.error("[TREATMENT_RECORD_DELETE]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

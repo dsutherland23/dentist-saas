@@ -12,7 +12,7 @@ export async function POST(
         const { procedures_performed, diagnosis, notes, dentist_id, appointment_id } = body
 
         const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return new NextResponse("Unauthorized", { status: 401 })
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         // Get clinic_id
         const { data: userData } = await supabase
@@ -21,7 +21,7 @@ export async function POST(
             .eq("id", user.id)
             .single()
 
-        if (!userData?.clinic_id) return new NextResponse("Clinic Not Found", { status: 404 })
+        if (!userData?.clinic_id) return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
 
         const { data, error } = await supabase
             .from("treatment_records")
@@ -42,6 +42,6 @@ export async function POST(
         return NextResponse.json(data)
     } catch (error) {
         console.error("[TREATMENTS_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

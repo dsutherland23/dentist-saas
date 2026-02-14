@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { createPortal } from "react-dom"
 import {
     format,
     addDays,
@@ -17,7 +18,7 @@ import {
     parseISO,
     startOfDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
@@ -28,6 +29,13 @@ import {
 } from "@/components/ui/popover"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 import { rescheduleAppointment } from "./actions"
 import {
@@ -38,7 +46,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { differenceInMinutes, addMinutes } from "date-fns"
+import { differenceInMinutes, addMinutes, isAfter } from "date-fns"
+import { getAppointmentStatusLabel } from "@/lib/appointment-status"
+import { useRouter } from "next/navigation"
 
 interface Appointment {
     id: string
@@ -49,17 +59,29 @@ interface Appointment {
     status: string
     patient_id: string
     dentist_id: string
+    checked_in_at?: string | null
+    checked_out_at?: string | null
     patients?: { first_name: string, last_name: string }
     dentists?: { first_name: string, last_name: string }
 }
 
+interface BlockedSlot {
+    id: string
+    staff_id: string
+    start_time: string
+    end_time: string
+    reason?: string | null
+}
+
 interface CalendarClientProps {
     initialAppointments: Appointment[]
+    initialBlockedSlots?: BlockedSlot[]
     patients: { id: string; first_name: string; last_name: string }[]
     dentists: { id: string; first_name: string; last_name: string }[]
 }
 
-export default function CalendarClient({ initialAppointments, patients, dentists }: CalendarClientProps) {
+export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists }: CalendarClientProps) {
+    const router = useRouter()
     const [currentDate, setCurrentDate] = useState(new Date())
     const [view, setView] = useState<"day" | "week" | "month">("week")
     const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
@@ -71,6 +93,65 @@ export default function CalendarClient({ initialAppointments, patients, dentists
     } | null>(null)
     const [isUpdating, setIsUpdating] = useState(false)
     const [draggedOver, setDraggedOver] = useState<{ day: string; hour?: number } | null>(null)
+    const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null)
+    const [isNewAppointmentOpen, setIsNewAppointmentOpen] = useState(false)
+    const [newAppointmentStart, setNewAppointmentStart] = useState<Date | undefined>(undefined)
+    const [contextMenuBlock, setContextMenuBlock] = useState<{ id: string; dentistName: string } | null>(null)
+    const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
+    const [isUnblocking, setIsUnblocking] = useState(false)
+
+    const closeContextMenu = useCallback(() => setContextMenuBlock(null), [])
+
+    useEffect(() => {
+        if (!contextMenuBlock) return
+        const handleClick = (e: MouseEvent) => {
+            if ((e.target as HTMLElement)?.closest?.("[data-block-context-menu]")) return
+            closeContextMenu()
+        }
+        const handleEscape = (e: KeyboardEvent) => e.key === "Escape" && closeContextMenu()
+        document.addEventListener("click", handleClick, true)
+        document.addEventListener("keydown", handleEscape)
+        return () => {
+            document.removeEventListener("click", handleClick, true)
+            document.removeEventListener("keydown", handleEscape)
+        }
+    }, [contextMenuBlock, closeContextMenu])
+
+    const handleUnblock = async (id: string) => {
+        setIsUnblocking(true)
+        try {
+            const res = await fetch(`/api/blocked-slots/${id}`, { method: "DELETE" })
+            if (!res.ok) throw new Error("Failed to unblock")
+            toast.success("Time slot unblocked")
+            closeContextMenu()
+            router.refresh()
+        } catch {
+            toast.error("Failed to unblock time slot")
+        } finally {
+            setIsUnblocking(false)
+        }
+    }
+
+    const handleStatusChange = async (appointmentId: string, newStatus: string) => {
+        setUpdatingStatusId(appointmentId)
+        try {
+            const res = await fetch(`/api/appointments/${appointmentId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: newStatus }),
+            })
+            if (!res.ok) throw new Error("Update failed")
+            if (newStatus === "checked_in") toast.success("Patient checked in")
+            else if (newStatus === "in_treatment") toast.success("Treatment started")
+            else if (newStatus === "completed") toast.success("Appointment completed (checked out)")
+            else toast.success("Status updated")
+            router.refresh()
+        } catch (err) {
+            toast.error("Failed to update status")
+        } finally {
+            setUpdatingStatusId(null)
+        }
+    }
 
     const appointments = initialAppointments.map(appt => ({
         ...appt,
@@ -78,6 +159,13 @@ export default function CalendarClient({ initialAppointments, patients, dentists
         end: parseISO(appt.end_time),
         patientName: appt.patients ? `${appt.patients.first_name} ${appt.patients.last_name}` : "Unknown Patient",
         dentistName: appt.dentists ? `Dr. ${appt.dentists.last_name}` : "Unknown Dentist"
+    }))
+
+    const blockedSlots = initialBlockedSlots.map(blk => ({
+        ...blk,
+        start: parseISO(blk.start_time),
+        end: parseISO(blk.end_time),
+        dentistName: dentists.find(d => d.id === blk.staff_id) ? `Dr. ${dentists.find(d => d.id === blk.staff_id)?.last_name}` : "Staff"
     }))
 
     // Dynamic date calculations based on view
@@ -132,58 +220,123 @@ export default function CalendarClient({ initialAppointments, patients, dentists
         return format(currentDate, "MMMM yyyy")
     }
 
+    const BlockedSlotCard = ({ blk, isMonthView = false }: { blk: any; isMonthView?: boolean }) => {
+        const blockClass = "text-[10px] px-2 py-1 rounded bg-slate-200/70 text-slate-500 font-medium border border-slate-300/60 cursor-context-menu opacity-90"
+        const hoverTitle = blk.reason
+            ? `${blk.dentistName} – ${blk.reason}`
+            : `Blocked: ${blk.dentistName}`
+
+        const onContextMenu = (e: React.MouseEvent) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setContextMenuBlock({ id: blk.id, dentistName: blk.dentistName })
+            setContextMenuPos({ x: e.clientX, y: e.clientY })
+        }
+
+        return isMonthView ? (
+            <div data-blocked onContextMenu={onContextMenu} className={cn(blockClass, "w-full truncate flex items-center gap-1")} title={hoverTitle}>
+                <Ban className="h-3 w-3 shrink-0 opacity-70" />
+                <span className="font-bold text-slate-500 uppercase text-[8px] shrink-0">{format(blk.start, "h a")}</span>
+                <span className="truncate">{blk.dentistName} blocked</span>
+            </div>
+        ) : (
+            <div
+                data-blocked
+                onContextMenu={onContextMenu}
+                className={cn(blockClass, "absolute left-1 right-1 p-2 min-h-[36px] z-10 flex flex-col justify-center")}
+                style={{
+                    top: `${(blk.start.getMinutes() / 60) * 100}%`,
+                    height: `${Math.max((blk.end.getTime() - blk.start.getTime()) / 60000 / 60 * 100, 35)}%`,
+                }}
+                title={hoverTitle}
+            >
+                <div className="truncate flex items-center gap-1">
+                    <Ban className="h-3 w-3 shrink-0 opacity-70" />
+                    <span className="font-bold text-slate-500 uppercase text-[8px] shrink-0">{format(blk.start, "h a")}</span>
+                    <span className="truncate">{blk.dentistName} blocked</span>
+                </div>
+            </div>
+        )
+    }
+
+    const STATUS_DROPDOWN_OPTIONS = [
+        { value: "pending", label: "Pending" },
+        { value: "unconfirmed", label: "Unconfirmed" },
+        { value: "checked_in", label: "Checked-In" },
+        { value: "no_show", label: "No-Show" },
+        { value: "cancelled", label: "Canceled" },
+    ] as const
+    const statusToDropdownValue = (s: string) => {
+        if (["pending", "unconfirmed", "checked_in", "no_show", "cancelled"].includes(s)) return s
+        if (["scheduled", "confirmed"].includes(s)) return "pending" // awaiting arrival
+        if (s === "in_treatment") return "checked_in"
+        return "pending"
+    }
+
     const AppointmentCard = ({ appt, isMonthView = false }: { appt: any, isMonthView?: boolean }) => {
+        const now = new Date()
+        const oneMinAfterStart = addMinutes(appt.start, 1)
+        const showStatusDropdown = isAfter(now, oneMinAfterStart) && !["completed"].includes(appt.status)
+
         const colorIndex = dentists.findIndex(d => d.id === appt.dentist_id) % 5
         const colors = [
-            "bg-teal-50 border-teal-200 text-teal-700 hover:bg-teal-100",
-            "bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100",
-            "bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100",
-            "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100",
-            "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
+            "bg-teal-50 border-teal-200 text-teal-700",
+            "bg-blue-50 border-blue-200 text-blue-700",
+            "bg-purple-50 border-purple-200 text-purple-700",
+            "bg-amber-50 border-amber-200 text-amber-700",
+            "bg-rose-50 border-rose-200 text-rose-700"
         ]
         const colorClass = colors[colorIndex] || colors[0]
+
+        const cardBaseClass = "text-[10px] px-2 py-1 rounded bg-slate-100/50 text-slate-700 font-medium border border-slate-200/50 cursor-grab active:cursor-grabbing hover:bg-slate-200/50 transition-colors"
 
         return (
             <Popover>
                 <PopoverTrigger asChild>
                     {isMonthView ? (
                         <div
+                            data-appointment
                             draggable
                             onDragStart={(e) => {
                                 e.dataTransfer.setData("appointmentId", appt.id)
                                 e.dataTransfer.effectAllowed = "move"
                             }}
-                            className="text-[10px] px-2 py-1 rounded bg-slate-100/50 text-slate-700 truncate font-medium border border-slate-200/50 cursor-grab active:cursor-grabbing hover:bg-slate-200/50 transition-colors"
+                            className={cn(cardBaseClass, "w-full truncate")}
                         >
-                            <span className="font-bold text-teal-600 uppercase text-[8px] mr-1">{format(appt.start, "h a")}</span>
-                            {appt.patientName}
+                            <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
+                            <span className="truncate">{appt.patientName}</span>
                         </div>
                     ) : (
                         <div
+                            data-appointment
                             draggable
                             onDragStart={(e) => {
                                 e.dataTransfer.setData("appointmentId", appt.id)
                                 e.dataTransfer.effectAllowed = "move"
                             }}
-                            className={cn(
-                                "absolute inset-x-1 p-2 rounded-lg border text-[11px] shadow-sm cursor-grab active:cursor-grabbing transition-all z-20 group/appt overflow-hidden hover:ring-2 hover:ring-teal-500 hover:ring-offset-1 scrollbit-hidden",
-                                colorClass
-                            )}
+                            className={cn(cardBaseClass, "absolute left-1 right-1 p-2 z-20 group/appt overflow-hidden")}
                             style={{
                                 top: `${(appt.start.getMinutes() / 60) * 100}%`,
                                 height: `${Math.max((appt.end.getTime() - appt.start.getTime()) / 60000 / 60 * 100, 35)}%`,
-                                minHeight: "40px"
+                                minHeight: "36px"
                             }}
                         >
-                            <div className="font-bold truncate flex items-center gap-1">
-                                <div className="h-1 w-1 rounded-full bg-current opacity-50" />
-                                {appt.patientName}
+                            <div className="truncate flex items-center gap-1">
+                                <span className="font-bold text-teal-600 uppercase text-[8px] shrink-0">{format(appt.start, "h a")}</span>
+                                <span className="truncate">{appt.patientName}</span>
                             </div>
-                            <div className="opacity-80 truncate pl-2 font-medium">{appt.treatment_type}</div>
+                            <div className="truncate pl-0 mt-0.5 opacity-80 text-[9px]">{appt.treatment_type}</div>
                         </div>
                     )}
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-0 overflow-hidden border-slate-200 shadow-xl" side="right" align="start">
+                <PopoverContent
+                    data-appointment
+                    className="w-80 p-0 overflow-hidden border-slate-200 shadow-xl"
+                    side="right"
+                    align="start"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                >
                     <div className={cn("p-4 border-b", colorClass.split(" ")[0])}>
                         <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
@@ -222,14 +375,87 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                                     {format(appt.start, "h:mm a")} – {format(appt.end, "h:mm a")}
                                 </span>
                             </div>
-                            <Badge variant="outline" className="text-[9px] uppercase tracking-tighter bg-slate-50 border-slate-200 text-slate-500 font-bold">
-                                Confirmed
-                            </Badge>
+                            {showStatusDropdown ? (
+                                <Select
+                                    value={statusToDropdownValue(appt.status)}
+                                    onValueChange={(v) => handleStatusChange(appt.id, v)}
+                                    disabled={updatingStatusId === appt.id}
+                                >
+                                    <SelectTrigger className="h-7 w-[100px] text-[9px] font-bold uppercase tracking-tighter px-2 py-0 border-slate-200">
+                                        <SelectValue placeholder="Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {STATUS_DROPDOWN_OPTIONS.map((o) => (
+                                            <SelectItem key={o.value} value={o.value} className="text-[11px] font-medium">
+                                                {o.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            ) : (
+                                <Badge
+                                    variant="outline"
+                                    className={cn(
+                                        "text-[9px] uppercase tracking-tighter font-bold",
+                                        (appt.status === "checked_in" || appt.status === "in_treatment")
+                                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                            : appt.status === "completed"
+                                                ? "bg-slate-100 border-slate-200 text-slate-600"
+                                                : "bg-slate-50 border-slate-200 text-slate-500"
+                                    )}
+                                >
+                                    {getAppointmentStatusLabel(appt.status)}
+                                </Badge>
+                            )}
                         </div>
+                        {(appt.checked_in_at || appt.checked_out_at) && (
+                            <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px] text-slate-500">
+                                {appt.checked_in_at && (
+                                    <p className="flex items-center gap-1.5">
+                                        <span className="font-semibold text-emerald-600">In:</span>
+                                        {format(parseISO(appt.checked_in_at), "h:mm a")}
+                                    </p>
+                                )}
+                                {appt.checked_out_at && (
+                                    <p className="flex items-center gap-1.5">
+                                        <span className="font-semibold text-slate-600">Out:</span>
+                                        {format(parseISO(appt.checked_out_at), "h:mm a")}
+                                    </p>
+                                )}
+                            </div>
+                        )}
                     </div>
-                    <div className="bg-slate-50 p-3 border-t border-slate-100 flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1 h-8 text-[11px] font-bold">Reschedule</Button>
-                        <Button className="flex-1 h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700">Check In</Button>
+                    <div className="bg-slate-50 p-3 border-t border-slate-100 flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold">Reschedule</Button>
+                        {appt.status !== "completed" && appt.status !== "cancelled" && appt.status !== "checked_in" && appt.status !== "in_treatment" && (
+                            <Button
+                                className="h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60"
+                                disabled={updatingStatusId === appt.id}
+                                onClick={() => handleStatusChange(appt.id, "checked_in")}
+                            >
+                                {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Check In"}
+                            </Button>
+                        )}
+                        {appt.status === "checked_in" && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-[11px] font-bold border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                                disabled={updatingStatusId === appt.id}
+                                onClick={() => handleStatusChange(appt.id, "in_treatment")}
+                            >
+                                {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Start treatment"}
+                            </Button>
+                        )}
+                        {(appt.status === "checked_in" || appt.status === "in_treatment") && (
+                            <Button
+                                className="h-8 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60"
+                                disabled={updatingStatusId === appt.id}
+                                onClick={() => handleStatusChange(appt.id, "completed")}
+                            >
+                                {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Complete / Check out"}
+                            </Button>
+                        )}
                     </div>
                 </PopoverContent>
             </Popover>
@@ -349,7 +575,27 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                             </button>
                         ))}
                     </div>
-                    <NewAppointmentDialog patients={patients} dentists={dentists} />
+                    <NewAppointmentDialog
+                        patients={patients}
+                        dentists={dentists}
+                        trigger={
+                            <Button
+                                className="bg-teal-600 hover:bg-teal-700"
+                                onClick={() => {
+                                    setNewAppointmentStart(undefined)
+                                    setIsNewAppointmentOpen(true)
+                                }}
+                            >
+                                <Plus className="mr-2 h-4 w-4" /> New Appointment
+                            </Button>
+                        }
+                        open={isNewAppointmentOpen}
+                        onOpenChange={(o) => {
+                            setIsNewAppointmentOpen(o)
+                            if (!o) setNewAppointmentStart(undefined)
+                        }}
+                        initialStartDate={newAppointmentStart}
+                    />
                 </div>
             </div>
 
@@ -368,10 +614,10 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                             ))}
                         </div>
 
-                        <div className="flex-1 overflow-y-auto relative scrollbar-thin">
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-thin">
                             {hours.map(hour => (
-                                <div key={hour} className={cn("grid min-h-[80px]", view === "day" ? "grid-cols-[100px_1fr]" : "grid-cols-[100px_repeat(7,1fr)]")}>
-                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[10px] text-slate-400 font-bold p-2 text-center sticky left-0 flex items-start justify-center pt-3">
+                                <div key={hour} className={cn("grid h-[80px] shrink-0", view === "day" ? "grid-cols-[100px_1fr]" : "grid-cols-[100px_repeat(7,1fr)]")}>
+                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[10px] text-slate-400 font-bold p-2 text-center sticky left-0 flex items-start justify-center pt-3 h-[80px]">
                                         {format(setHours(new Date(), hour), "h a")}
                                     </div>
 
@@ -383,11 +629,23 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                                                 onDragOver={handleDragOver(day, hour)}
                                                 onDragLeave={handleDragLeave(day, hour)}
                                                 onDrop={handleDrop(day, hour)}
+                                                onClick={(e) => {
+                                                    if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
+                                                    const slotStart = setHours(startOfDay(day), hour)
+                                                    setNewAppointmentStart(slotStart)
+                                                    setIsNewAppointmentOpen(true)
+                                                }}
                                                 className={cn(
-                                                    "border-r border-b border-slate-100 relative group transition-all p-1",
+                                                    "border-r border-b border-slate-100 relative group transition-all p-1 cursor-pointer h-[80px] overflow-visible",
                                                     isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
                                                 )}
                                             >
+                                                {blockedSlots.filter(blk =>
+                                                    isSameDay(blk.start, day) &&
+                                                    blk.start.getHours() === hour
+                                                ).map(blk => (
+                                                    <BlockedSlotCard key={blk.id} blk={blk} />
+                                                ))}
                                                 {appointments.filter(appt =>
                                                     isSameDay(appt.start, day) &&
                                                     appt.start.getHours() === hour
@@ -411,6 +669,7 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                         ))}
                         {days.map(day => {
                             const dayApps = appointments.filter(a => isSameDay(a.start, day))
+                            const dayBlocks = blockedSlots.filter(blk => isSameDay(blk.start, day))
                             const isCurrentMonth = isSameMonth(day, currentDate)
                             const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === undefined
 
@@ -418,10 +677,15 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                                 <div
                                     key={day.toString()}
                                     onDragOver={handleDragOver(day)}
-                                    // onDragLeave intentionally omitted for month view to keep it stable
                                     onDrop={handleDrop(day)}
+                                    onClick={(e) => {
+                                        if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
+                                        const slotStart = setHours(startOfDay(day), minHour)
+                                        setNewAppointmentStart(slotStart)
+                                        setIsNewAppointmentOpen(true)
+                                    }}
                                     className={cn(
-                                        "min-h-[120px] border-r border-b border-slate-100 p-2 transition-all",
+                                        "min-h-[120px] border-r border-b border-slate-100 p-2 transition-all cursor-pointer",
                                         !isCurrentMonth ? "bg-slate-50/30 opacity-40" : "",
                                         isSameDay(day, new Date()) ? "bg-teal-50/20" : "",
                                         isOver ? "bg-teal-500/5 ring-2 ring-inset ring-teal-500/30 z-10" : "hover:bg-slate-50/30"
@@ -440,13 +704,16 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                                             </span>
                                         )}
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="space-y-1 min-w-0">
+                                        {dayBlocks.slice(0, 2).map(blk => (
+                                            <BlockedSlotCard key={blk.id} blk={blk} isMonthView={true} />
+                                        ))}
                                         {dayApps.slice(0, 3).map(appt => (
                                             <AppointmentCard key={appt.id} appt={appt} isMonthView={true} />
                                         ))}
-                                        {dayApps.length > 3 && (
+                                        {(dayApps.length > 3 || dayBlocks.length > 2) && (
                                             <div className="text-[9px] text-slate-400 font-bold px-2">
-                                                + {dayApps.length - 3} more
+                                                + {Math.max(dayApps.length - 3, 0) + Math.max(dayBlocks.length - 2, 0)} more
                                             </div>
                                         )}
                                     </div>
@@ -456,6 +723,30 @@ export default function CalendarClient({ initialAppointments, patients, dentists
                     </div>
                 )}
             </div>
+
+            {contextMenuBlock && typeof document !== "undefined" && createPortal(
+                <div
+                    data-block-context-menu
+                    className="fixed z-[100] min-w-[140px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                    style={{ left: contextMenuPos.x, top: contextMenuPos.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        type="button"
+                        onClick={() => handleUnblock(contextMenuBlock.id)}
+                        disabled={isUnblocking}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                    >
+                        {isUnblocking ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Unlock className="h-4 w-4 text-teal-600" />
+                        )}
+                        Unblock
+                    </button>
+                </div>,
+                document.body
+            )}
 
             <Dialog open={isRescheduleOpen} onOpenChange={setIsRescheduleOpen}>
                 <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-none shadow-2xl">

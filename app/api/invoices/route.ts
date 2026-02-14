@@ -7,7 +7,7 @@ export async function GET(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -17,7 +17,7 @@ export async function GET(req: Request) {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const url = new URL(req.url)
@@ -56,7 +56,7 @@ export async function GET(req: Request) {
         return NextResponse.json(invoices)
     } catch (error) {
         console.error("[INVOICES_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -76,14 +76,14 @@ export async function POST(req: Request) {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const body = await req.json()
         const { patient_id, items, due_date } = body
 
         if (!patient_id || !items || items.length === 0) {
-            return new NextResponse("Missing required fields", { status: 400 })
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
         const subtotal = items.reduce((acc: number, item: any) => acc + (item.quantity * item.unit_price), 0)
@@ -125,7 +125,7 @@ export async function POST(req: Request) {
         return NextResponse.json(invoice)
     } catch (error) {
         console.error("[INVOICES_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -134,12 +134,12 @@ export async function PATCH(req: Request) {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
-        if (!user) return new NextResponse("Unauthorized", { status: 401 })
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const body = await req.json()
         const { id, status } = body
 
-        if (!id || !status) return new NextResponse("Missing fields", { status: 400 })
+        if (!id || !status) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
 
         const { error } = await supabase
             .from("invoices")
@@ -150,6 +150,6 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ success: true })
     } catch (error) {
         console.error("[INVOICES_PATCH]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

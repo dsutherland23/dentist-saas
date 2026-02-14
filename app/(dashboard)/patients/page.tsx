@@ -15,38 +15,51 @@ export default async function PatientsPage() {
         redirect("/login")
     }
 
-    // Get Clinic ID
-    let clinicId
-    try {
-        clinicId = await getClinicId()
-    } catch (e) {
-        // Redirect to onboarding or show error if clinic not found
-        // For now let's just log and throw since onboarding should happen at signup on success
-        console.error(e)
-        // If no clinic, maybe the user is not fully onboarded.
-        // But let's assume valid state for now.
-        return <div className="p-8">Error: User has no clinic associated. Please contact support.</div>
-    }
+    // Get Clinic ID (redirects to /onboarding if user has no clinic)
+    const clinicId = await getClinicId()
 
-    const { data: patients, error } = await supabase
-        .from("patients")
-        .select("*")
-        .eq("clinic_id", clinicId)
-        .order("created_at", { ascending: false })
+    const now = new Date()
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString()
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString()
+
+    const [patientsRes, todayAppointmentsRes] = await Promise.all([
+        supabase
+            .from("patients")
+            .select("*")
+            .eq("clinic_id", clinicId)
+            .order("created_at", { ascending: false }),
+
+        supabase
+            .from("appointments")
+            .select(`
+                id,
+                patient_id,
+                start_time,
+                end_time,
+                status,
+                treatment_type
+            `)
+            .eq("clinic_id", clinicId)
+            .gte("start_time", todayStart)
+            .lte("start_time", todayEnd)
+            .in("status", ["pending", "unconfirmed", "scheduled", "confirmed", "checked_in", "in_treatment", "no_show", "cancelled"])
+    ])
+
+    const { data: patients, error } = patientsRes
 
     if (error) {
         console.error("Error fetching patients:", error)
         return <div className="p-8">Error loading patients. Please try refreshing.</div>
     }
 
-    // Transform data to match client interface if needed
-    // The DB schema fields are snake_case, JS prefers camelCase usually but I used snake_case in interface too.
-    // PatientsClient interface: id, first_name, last_name, email, phone, insurance_provider
-    // DB: id, first_name, last_name, email, phone, insurance_provider... perfect match.
+    const todayAppointments = todayAppointmentsRes.data || []
 
     return (
         <Suspense fallback={<div className="p-8">Loading patients...</div>}>
-            <PatientsClient initialPatients={patients || []} />
+            <PatientsClient
+                initialPatients={patients || []}
+                todayAppointments={todayAppointments}
+            />
         </Suspense>
     )
 }

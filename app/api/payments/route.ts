@@ -7,7 +7,7 @@ export async function GET() {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -17,7 +17,7 @@ export async function GET() {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const { data: payments, error } = await supabase
@@ -40,7 +40,7 @@ export async function GET() {
         return NextResponse.json(payments)
     } catch (error) {
         console.error("[PAYMENTS_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -60,14 +60,14 @@ export async function POST(req: Request) {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
         }
 
         const body = await req.json()
         const { invoice_id, amount_paid, payment_method, status, transaction_id } = body
 
         if (!invoice_id || !amount_paid) {
-            return new NextResponse("Missing required fields", { status: 400 })
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
         const { data: payment, error } = await supabase
@@ -95,6 +95,6 @@ export async function POST(req: Request) {
         return NextResponse.json(payment)
     } catch (error) {
         console.error("[PAYMENTS_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

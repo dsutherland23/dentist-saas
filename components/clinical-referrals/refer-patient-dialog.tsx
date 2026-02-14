@@ -20,7 +20,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Loader2 } from "lucide-react"
+import { Loader2, Copy, Mail, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 interface Specialist {
@@ -33,6 +33,8 @@ interface ReferPatientDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     specialist: Specialist | null
+    /** When set, after referral is sent we auto-open Email or WhatsApp with the intake link */
+    preferredShareChannel?: "email" | "whatsapp" | null
     onSuccess?: () => void
 }
 
@@ -40,9 +42,11 @@ export function ReferPatientDialog({
     open,
     onOpenChange,
     specialist,
+    preferredShareChannel,
     onSuccess,
 }: ReferPatientDialogProps) {
     const [loading, setLoading] = React.useState(false)
+    const [intakeLink, setIntakeLink] = React.useState<string | null>(null)
     const [formData, setFormData] = React.useState({
         patient_first_name: "",
         patient_last_name: "",
@@ -51,6 +55,21 @@ export function ReferPatientDialog({
         reason: "",
     })
     const [consentChecked, setConsentChecked] = React.useState(false)
+
+    const handleClose = (open: boolean) => {
+        if (!open) {
+            setIntakeLink(null)
+            setFormData({
+                patient_first_name: "",
+                patient_last_name: "",
+                dob: "",
+                urgency: "routine",
+                reason: "",
+            })
+            setConsentChecked(false)
+        }
+        onOpenChange(open)
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -68,6 +87,7 @@ export function ReferPatientDialog({
         }
 
         setLoading(true)
+        setIntakeLink(null)
 
         try {
             const response = await fetch("/api/referrals", {
@@ -80,24 +100,42 @@ export function ReferPatientDialog({
                 }),
             })
 
+            const data = await response.json()
+
             if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.error || "Failed to create referral")
+                throw new Error(data.error || "Failed to create referral")
             }
 
             toast.success("Referral sent successfully!")
-            onOpenChange(false)
-            onSuccess?.()
+            if (data.intake_link) {
+                setIntakeLink(data.intake_link)
+                if (preferredShareChannel === "email") {
+                    const subject = encodeURIComponent("Referral intake – please confirm your practice details")
+                    const body = encodeURIComponent(
+                        `Please use the link below to confirm your practice details and location for the referral.\n\n${data.intake_link}\n\nThis link expires in 48 hours and can only be used once.`
+                    )
+                    window.open(`mailto:?subject=${subject}&body=${body}`, "_blank")
+                } else if (preferredShareChannel === "whatsapp") {
+                    const text = encodeURIComponent(
+                        `Please confirm your practice details for the referral using this link (expires in 48 hours, one-time use):\n${data.intake_link}`
+                    )
+                    window.open(`https://wa.me/?text=${text}`, "_blank")
+                }
+            } else {
+                onOpenChange(false)
+                onSuccess?.()
+            }
 
-            // Reset form
-            setFormData({
-                patient_first_name: "",
-                patient_last_name: "",
-                dob: "",
-                urgency: "routine",
-                reason: "",
-            })
-            setConsentChecked(false)
+            if (!data.intake_link) {
+                setFormData({
+                    patient_first_name: "",
+                    patient_last_name: "",
+                    dob: "",
+                    urgency: "routine",
+                    reason: "",
+                })
+                setConsentChecked(false)
+            }
         } catch (error) {
             toast.error(error instanceof Error ? error.message : "Failed to create referral")
         } finally {
@@ -105,10 +143,33 @@ export function ReferPatientDialog({
         }
     }
 
+    const copyIntakeLink = () => {
+        if (!intakeLink) return
+        navigator.clipboard.writeText(intakeLink)
+        toast.success("Link copied to clipboard")
+    }
+
+    const shareEmail = () => {
+        if (!intakeLink) return
+        const subject = encodeURIComponent("Referral intake – please confirm your practice details")
+        const body = encodeURIComponent(
+            `Please use the link below to confirm your practice details and location for the referral.\n\n${intakeLink}\n\nThis link expires in 48 hours and can only be used once.`
+        )
+        window.open(`mailto:?subject=${subject}&body=${body}`, "_blank")
+    }
+
+    const shareWhatsApp = () => {
+        if (!intakeLink) return
+        const text = encodeURIComponent(
+            `Please confirm your practice details for the referral using this link (expires in 48 hours, one-time use):\n${intakeLink}`
+        )
+        window.open(`https://wa.me/?text=${text}`, "_blank")
+    }
+
     if (!specialist) return null
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={handleClose}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Refer Patient</DialogTitle>
@@ -117,6 +178,41 @@ export function ReferPatientDialog({
                     </DialogDescription>
                 </DialogHeader>
 
+                {intakeLink ? (
+                    <div className="space-y-4 mt-4">
+                        <p className="text-sm text-slate-600">
+                            Share this secure intake link with {specialist.name}. They can confirm their practice details and location (link expires in 48 hours, one-time use).
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={copyIntakeLink}>
+                                <Copy className="h-4 w-4 mr-2" />
+                                Copy link
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={shareEmail}>
+                                <Mail className="h-4 w-4 mr-2" />
+                                Email
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" onClick={shareWhatsApp}>
+                                <MessageCircle className="h-4 w-4 mr-2" />
+                                WhatsApp
+                            </Button>
+                        </div>
+                        <p className="text-xs text-slate-500 break-all font-mono bg-slate-50 p-2 rounded">
+                            {intakeLink}
+                        </p>
+                        <div className="flex justify-end pt-2">
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    handleClose(false)
+                                    onSuccess?.()
+                                }}
+                            >
+                                Done
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
                 <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                     {/* Patient Information */}
                     <div className="grid grid-cols-2 gap-4">
@@ -212,6 +308,7 @@ export function ReferPatientDialog({
                         </Button>
                     </div>
                 </form>
+                )}
             </DialogContent>
         </Dialog>
     )

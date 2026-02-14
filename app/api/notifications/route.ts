@@ -6,7 +6,7 @@ export async function GET() {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
-        if (!user) return new NextResponse("Unauthorized", { status: 401 })
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const { data: userData } = await supabase
             .from("users")
@@ -14,7 +14,7 @@ export async function GET() {
             .eq("id", user.id)
             .single()
 
-        if (!userData?.clinic_id) return new NextResponse("Clinic Not Found", { status: 404 })
+        if (!userData?.clinic_id) return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
 
         const { data: notifications, error } = await supabase
             .from("notifications")
@@ -28,7 +28,7 @@ export async function GET() {
         return NextResponse.json(notifications)
     } catch (error) {
         console.error("[NOTIFICATIONS_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -37,7 +37,7 @@ export async function PATCH(req: Request) {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
-        if (!user) return new NextResponse("Unauthorized", { status: 401 })
+        if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
         const body = await req.json()
         const { id, is_read } = body
@@ -52,6 +52,6 @@ export async function PATCH(req: Request) {
         return new NextResponse("OK", { status: 200 })
     } catch (error) {
         console.error("[NOTIFICATIONS_PATCH]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

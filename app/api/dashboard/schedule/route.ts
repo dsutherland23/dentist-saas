@@ -22,11 +22,11 @@ export async function GET() {
 
         const clinicId = userData.clinic_id
 
-        // Get today's details
+        // Get today's details (use separate Date instances to avoid mutating)
         const now = new Date()
-        const todayStart = new Date(now.setHours(0, 0, 0, 0))
-        const todayEnd = new Date(now.setHours(23, 59, 59, 999))
-        const dayOfWeek = new Date().getDay() // 0-6
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+        const dayOfWeek = now.getDay() // 0-6
 
         // Fetch today's appointments
         const { data: appointments, error: apptError } = await supabase
@@ -44,7 +44,7 @@ export async function GET() {
             .lte("start_time", todayEnd.toISOString())
             .order("start_time", { ascending: true })
 
-        // Fetch today's staff rota
+        // Fetch today's staff rota from staff_schedules
         const { data: staffRota, error: rotaError } = await supabase
             .from("staff_schedules")
             .select(`
@@ -57,9 +57,30 @@ export async function GET() {
             .eq("day_of_week", dayOfWeek)
             .eq("is_active", true)
 
-        if (apptError || rotaError) {
-            console.error("Error fetching schedule data:", apptError || rotaError)
+        if (apptError) {
+            console.error("Error fetching appointments:", apptError)
             return NextResponse.json({ error: "Failed to fetch schedule" }, { status: 500 })
+        }
+
+        // If rota fetch failed or no schedules, fall back to all active staff in clinic
+        let rotaFromSchedules = staffRota || []
+        if (rotaError) {
+            console.warn("Rota fetch error (falling back to staff list):", rotaError)
+        }
+        if (rotaFromSchedules.length === 0) {
+            // No schedules configured — show all clinic staff as "on duty"
+            const { data: allStaff } = await supabase
+                .from("users")
+                .select("id, first_name, last_name, role")
+                .eq("clinic_id", clinicId)
+                .neq("role", "patient")
+                .eq("is_active", true)
+            rotaFromSchedules = (allStaff || []).map((u: any) => ({
+                id: u.id,
+                start_time: "09:00",
+                end_time: "17:00",
+                users: u,
+            }))
         }
 
         // Format appointments
@@ -82,7 +103,7 @@ export async function GET() {
         }) || []
 
         // Format staff rota
-        const rota = staffRota?.map((shift: any) => ({
+        const rota = rotaFromSchedules?.map((shift: any) => ({
             id: shift.id,
             staff_id: shift.users?.id || "",
             time: `${shift.start_time?.slice(0, 5)} - ${shift.end_time?.slice(0, 5)}`,

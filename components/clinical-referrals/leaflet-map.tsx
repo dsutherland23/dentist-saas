@@ -149,7 +149,7 @@ export default function LeafletMap({ specialists, onReferClick, center, zoom, se
                 url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
             />
             <SetBounds specialists={specialists} />
-            {specialists.map((specialist) => {
+            {specialists.filter((s) => s.lat != null && s.lng != null && !Number.isNaN(Number(s.lat)) && !Number.isNaN(Number(s.lng))).map((specialist) => {
                 // Only animate if there's a search query and this specialist matches it
                 const shouldAnimate = searchQuery ? (
                     specialist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -182,6 +182,12 @@ export default function LeafletMap({ specialists, onReferClick, center, zoom, se
                                         <p className="text-xs text-slate-500 flex items-center gap-2">
                                             <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
                                             {specialist.phone}
+                                        </p>
+                                    )}
+                                    {specialist.email && (
+                                        <p className="text-xs text-slate-500 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-200"></span>
+                                            {specialist.email}
                                         </p>
                                     )}
                                 </div>

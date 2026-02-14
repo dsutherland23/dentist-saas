@@ -25,7 +25,7 @@ export async function GET(request: Request) {
         // Filter by approval status
         if (myProfile) {
             const { data: { user } } = await supabase.auth.getUser()
-            if (!user) return new NextResponse("Unauthorized", { status: 401 })
+            if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
             query = query.eq("user_id", user.id)
         } else if (!includeAll) {
             query = query.eq("status", "approved")
@@ -57,18 +57,18 @@ export async function GET(request: Request) {
         return NextResponse.json(specialists || [])
     } catch (error) {
         console.error("[SPECIALISTS_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
-// POST /api/specialists - Create specialist registration
+// POST /api/specialists - Create specialist (self-registration or admin-add)
 export async function POST(request: Request) {
     try {
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const body = await request.json()
@@ -87,12 +87,63 @@ export async function POST(request: Request) {
             email,
             website,
             bio,
-            credentials_url
+            credentials_url,
+            adminAdd
         } = body
 
-        // Validate required fields
+        const { data: userData } = await supabase
+            .from("users")
+            .select("role")
+            .eq("id", user.id)
+            .single()
+
+        const isAdmin = userData?.role === "clinic_admin" || userData?.role === "super_admin"
+
+        if (adminAdd && isAdmin) {
+            // Admin adding a specialist directly — user_id null, auto-approved
+            if (!name || !specialty_id) {
+                return NextResponse.json({ error: "Name and specialty are required" }, { status: 400 })
+            }
+            const defaultLat = lat ?? 18.1096
+            const defaultLng = lng ?? -77.2975
+
+            const { data: newSpecialist, error } = await supabase
+                .from("specialists")
+                .insert({
+                    user_id: null,
+                    name,
+                    specialty_id,
+                    license_number: license_number || null,
+                    clinic_name: clinic_name || null,
+                    address: address || null,
+                    city: city || null,
+                    parish: parish || null,
+                    country: country || "Jamaica",
+                    lat: defaultLat,
+                    lng: defaultLng,
+                    phone: phone || null,
+                    email: email || null,
+                    website: website || null,
+                    bio: bio || null,
+                    credentials_url: credentials_url || null,
+                    status: "approved"
+                })
+                .select(`
+                    *,
+                    specialty:specialties(id, name)
+                `)
+                .single()
+
+            if (error) {
+                console.error("[SPECIALISTS_POST_ADMIN_ERROR]", error)
+                return NextResponse.json({ error: error.message }, { status: 400 })
+            }
+            return NextResponse.json(newSpecialist)
+        }
+
+        // Self-registration (requires RLS policy "Users can register themselves as specialist")
         if (!name || !specialty_id || !lat || !lng) {
-            return new NextResponse("Missing required fields", { status: 400 })
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
         const { data: newSpecialist, error } = await supabase
@@ -101,20 +152,20 @@ export async function POST(request: Request) {
                 user_id: user.id,
                 name,
                 specialty_id,
-                license_number,
-                clinic_name,
-                address,
-                city,
-                parish,
+                license_number: license_number || null,
+                clinic_name: clinic_name || null,
+                address: address || null,
+                city: city || null,
+                parish: parish || null,
                 country: country || "Jamaica",
                 lat,
                 lng,
-                phone,
-                email,
-                website,
-                bio,
-                credentials_url,
-                status: "pending" // Always pending until admin approves
+                phone: phone || null,
+                email: email || null,
+                website: website || null,
+                bio: bio || null,
+                credentials_url: credentials_url || null,
+                status: "pending",
             })
             .select(`
                 *,
@@ -130,7 +181,7 @@ export async function POST(request: Request) {
         return NextResponse.json(newSpecialist)
     } catch (error) {
         console.error("[SPECIALISTS_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -141,7 +192,7 @@ export async function PATCH(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -154,7 +205,7 @@ export async function PATCH(request: Request) {
         const { id, ...updates } = body
 
         if (!id) {
-            return new NextResponse("Missing Specialist ID", { status: 400 })
+            return NextResponse.json({ error: "Missing Specialist ID" }, { status: 400 })
         }
 
         // Check permissions: must be admin or the specialist owner
@@ -168,7 +219,7 @@ export async function PATCH(request: Request) {
         const isOwner = specialist?.user_id === user.id
 
         if (!isAdmin && !isOwner) {
-            return new NextResponse("Forbidden", { status: 403 })
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
         const { data: updatedSpecialist, error } = await supabase
@@ -186,7 +237,7 @@ export async function PATCH(request: Request) {
         return NextResponse.json(updatedSpecialist)
     } catch (error) {
         console.error("[SPECIALISTS_PATCH]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -197,7 +248,7 @@ export async function DELETE(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -207,14 +258,14 @@ export async function DELETE(request: Request) {
             .single()
 
         if (userData?.role !== 'clinic_admin' && userData?.role !== 'super_admin') {
-            return new NextResponse("Forbidden", { status: 403 })
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
         const { searchParams } = new URL(request.url)
         const specialistId = searchParams.get("id")
 
         if (!specialistId) {
-            return new NextResponse("Missing Specialist ID", { status: 400 })
+            return NextResponse.json({ error: "Missing Specialist ID" }, { status: 400 })
         }
 
         const { error } = await supabase
@@ -227,6 +278,6 @@ export async function DELETE(request: Request) {
         return new NextResponse(null, { status: 204 })
     } catch (error) {
         console.error("[SPECIALISTS_DELETE]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

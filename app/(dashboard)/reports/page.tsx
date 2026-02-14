@@ -18,22 +18,55 @@ import {
     Pie,
     Cell,
 } from "recharts"
-import { Download, Calendar, TrendingUp, Users, Activity, Loader2, Filter } from "lucide-react"
+import { Download, Calendar, TrendingUp, Users, Activity, Loader2, AlertCircle } from "lucide-react"
+
+interface ReportData {
+    revenueData: { name: string; value: number }[]
+    treatmentDistribution: { name: string; value: number }[]
+    staffPerformance: { name: string; appointments: number }[]
+    metrics: {
+        totalRevenue: number
+        revenueGrowth: number
+        appointmentCount: number
+        patientCount: number
+        newPatients: number
+        patientGrowth: number
+    }
+}
+
+const EMPTY_DATA: ReportData = {
+    revenueData: [],
+    treatmentDistribution: [],
+    staffPerformance: [],
+    metrics: {
+        totalRevenue: 0,
+        revenueGrowth: 0,
+        appointmentCount: 0,
+        patientCount: 0,
+        newPatients: 0,
+        patientGrowth: 0,
+    }
+}
 
 export default function ReportsPage() {
-    const [data, setData] = useState<any>(null)
+    const [data, setData] = useState<ReportData | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         async function fetchStats() {
             try {
                 const res = await fetch('/api/reports/stats')
-                if (res.ok) {
-                    const json = await res.json()
-                    setData(json)
+                if (!res.ok) {
+                    const text = await res.text().catch(() => "Unknown error")
+                    setError(res.status === 401 ? "Please log in to view reports." : res.status === 404 ? "Complete your clinic setup first." : `Failed to load reports: ${text}`)
+                    return
                 }
-            } catch (error) {
-                console.error("Error fetching report stats:", error)
+                const json = await res.json()
+                setData(json)
+            } catch (err) {
+                console.error("Error fetching report stats:", err)
+                setError("Failed to connect. Please check your connection and try again.")
             } finally {
                 setIsLoading(false)
             }
@@ -42,23 +75,20 @@ export default function ReportsPage() {
     }, [])
 
     const handleExport = () => {
-        if (!data) return
+        const d = data || EMPTY_DATA
 
         const headers = ["Category", "Name", "Value"]
         const csvRows = [headers.join(",")]
 
-        // Add metrics
-        csvRows.push(`Metric,Total Revenue,${data.metrics.totalRevenue}`)
-        csvRows.push(`Metric,Patient Count,${data.metrics.patientCount}`)
-        csvRows.push(`Metric,Appointments,${data.metrics.appointmentCount}`)
+        csvRows.push(`Metric,Total Revenue,${d.metrics.totalRevenue}`)
+        csvRows.push(`Metric,Patient Count,${d.metrics.patientCount}`)
+        csvRows.push(`Metric,Appointments,${d.metrics.appointmentCount}`)
 
-        // Add revenue data
-        data.revenueData.forEach((row: any) => {
+        d.revenueData.forEach((row) => {
             csvRows.push(`Revenue,${row.name},${row.value}`)
         })
 
-        // Add treatment data
-        data.treatmentDistribution.forEach((row: any) => {
+        d.treatmentDistribution.forEach((row) => {
             csvRows.push(`Treatment,${row.name},${row.value}`)
         })
 
@@ -80,6 +110,26 @@ export default function ReportsPage() {
             </div>
         )
     }
+
+    if (error) {
+        return (
+            <div className="flex h-[60vh] items-center justify-center">
+                <div className="text-center space-y-4 max-w-md">
+                    <div className="mx-auto h-12 w-12 rounded-full bg-amber-100 flex items-center justify-center">
+                        <AlertCircle className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-900">Unable to load reports</h2>
+                    <p className="text-slate-500">{error}</p>
+                    <Button onClick={() => window.location.reload()} variant="outline">
+                        Try again
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    // Use data with fallback to empty values
+    const d = data || EMPTY_DATA
 
     const COLORS = ["#0d9488", "#0ea5e9", "#8b5cf6", "#f59e0b", "#ef4444"]
 
@@ -112,10 +162,10 @@ export default function ReportsPage() {
                         <TrendingUp className="h-4 w-4 text-teal-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">${data.metrics.totalRevenue.toLocaleString()}</div>
+                        <div className="text-3xl font-bold">${d.metrics.totalRevenue.toLocaleString()}</div>
                         <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                            <span className={data.metrics.revenueGrowth >= 0 ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
-                                {data.metrics.revenueGrowth >= 0 ? "+" : ""}{data.metrics.revenueGrowth}%
+                            <span className={d.metrics.revenueGrowth >= 0 ? "text-emerald-600 font-medium" : "text-rose-600 font-medium"}>
+                                {d.metrics.revenueGrowth >= 0 ? "+" : ""}{d.metrics.revenueGrowth}%
                             </span> from previous month
                         </p>
                     </CardContent>
@@ -127,9 +177,9 @@ export default function ReportsPage() {
                         <Users className="h-4 w-4 text-blue-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">{data.metrics.newPatients}</div>
+                        <div className="text-3xl font-bold">{d.metrics.newPatients}</div>
                         <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                            <span className="text-emerald-600 font-medium">+{data.metrics.patientGrowth}%</span> growth rate
+                            <span className="text-emerald-600 font-medium">+{d.metrics.patientGrowth}%</span> growth rate
                         </p>
                     </CardContent>
                 </Card>
@@ -140,7 +190,7 @@ export default function ReportsPage() {
                         <Activity className="h-4 w-4 text-purple-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-3xl font-bold">{data.metrics.appointmentCount}</div>
+                        <div className="text-3xl font-bold">{d.metrics.appointmentCount}</div>
                         <p className="text-xs text-slate-500 mt-1">Practice volume for current month</p>
                     </CardContent>
                 </Card>
@@ -160,24 +210,28 @@ export default function ReportsPage() {
                             <CardDescription>Daily revenue trends for the current period</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[400px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={data.revenueData}>
-                                    <defs>
-                                        <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#0d9488" stopOpacity={0.1} />
-                                            <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => `$${v}`} />
-                                    <Tooltip
-                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                        formatter={(v: number | any) => [v ? `$${v.toLocaleString()}` : "$0", 'Revenue']}
-                                    />
-                                    <Area type="monotone" dataKey="value" stroke="#0d9488" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                            {d.revenueData.length === 0 ? (
+                                <div className="flex items-center justify-center h-full text-slate-400">No revenue data yet</div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={d.revenueData}>
+                                        <defs>
+                                            <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#0d9488" stopOpacity={0.1} />
+                                                <stop offset="95%" stopColor="#0d9488" stopOpacity={0} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} tickFormatter={(v) => `$${v}`} />
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                            formatter={(v: number | any) => [v ? `$${v.toLocaleString()}` : "$0", 'Revenue']}
+                                        />
+                                        <Area type="monotone" dataKey="value" stroke="#0d9488" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -190,24 +244,28 @@ export default function ReportsPage() {
                                 <CardDescription>Most frequent treatments performed</CardDescription>
                             </CardHeader>
                             <CardContent className="h-[350px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={data.treatmentDistribution}
-                                            cx="50%"
-                                            cy="50%"
-                                            innerRadius={60}
-                                            outerRadius={100}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                        >
-                                            {data.treatmentDistribution.map((_: any, index: number) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                                    </PieChart>
-                                </ResponsiveContainer>
+                                {d.treatmentDistribution.length === 0 ? (
+                                    <div className="flex items-center justify-center h-full text-slate-400">No treatment data yet</div>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={d.treatmentDistribution}
+                                                cx="50%"
+                                                cy="50%"
+                                                innerRadius={60}
+                                                outerRadius={100}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {d.treatmentDistribution.map((_: any, index: number) => (
+                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                )}
                             </CardContent>
                         </Card>
 
@@ -217,15 +275,19 @@ export default function ReportsPage() {
                                 <CardDescription>Number of procedures by type</CardDescription>
                             </CardHeader>
                             <CardContent className="h-[350px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={data.treatmentDistribution}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                                        <Bar dataKey="value" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
+                                {d.treatmentDistribution.length === 0 ? (
+                                    <div className="flex items-center justify-center h-full text-slate-400">No treatment data yet</div>
+                                ) : (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={d.treatmentDistribution}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                            <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
+                                            <Bar dataKey="value" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -238,15 +300,19 @@ export default function ReportsPage() {
                             <CardDescription>Appointments completed per staff member</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[400px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={data.staffPerformance} layout="vertical">
-                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                                    <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
-                                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} width={150} />
-                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
-                                    <Bar dataKey="appointments" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            {d.staffPerformance.length === 0 ? (
+                                <div className="flex items-center justify-center h-full text-slate-400">No staff data yet</div>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={d.staffPerformance} layout="vertical">
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                                        <XAxis type="number" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+                                        <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} width={150} />
+                                        <Tooltip contentStyle={{ borderRadius: '12px', border: 'none' }} />
+                                        <Bar dataKey="appointments" fill="#8b5cf6" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

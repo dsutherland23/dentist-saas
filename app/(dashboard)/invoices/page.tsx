@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,7 +34,8 @@ import autoTable from "jspdf-autotable"
 import { NewInvoiceDialog } from "./new-invoice-dialog"
 
 export default function InvoicesPage() {
-    const [searchQuery, setSearchQuery] = useState("")
+    const searchParams = useSearchParams()
+    const [searchQuery, setSearchQuery] = useState(searchParams?.get("q") ?? "")
     const [invoices, setInvoices] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [patients, setPatients] = useState<any[]>([])
@@ -73,6 +75,11 @@ export default function InvoicesPage() {
         fetchInvoices()
         fetchPatients()
     }, [])
+
+    useEffect(() => {
+        const q = searchParams?.get("q") ?? ""
+        setSearchQuery(q)
+    }, [searchParams])
 
     const handleArchiveInvoice = async (id: string) => {
         if (!confirm("Are you sure you want to archive this invoice? It will no longer appear in the active list.")) return

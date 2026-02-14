@@ -8,7 +8,7 @@ export async function GET() {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { data: userData } = await supabase
@@ -18,7 +18,7 @@ export async function GET() {
             .single()
 
         if (!userData?.clinic_id) {
-            return new NextResponse("Clinic Not Found", { status: 404 })
+            return NextResponse.json({ error: "Clinic not found. Please complete onboarding." }, { status: 404 })
         }
 
         const now = new Date()
@@ -52,20 +52,11 @@ export async function GET() {
             return { name: dateStr, value: amount }
         })
 
-        // 4. Treatment Analytics (Count and Revenue)
+        // 4. Treatment Analytics
         const { data: appointments } = await supabase
             .from("appointments")
             .select("treatment_type, id, dentist_id")
             .eq("clinic_id", userData.clinic_id)
-
-        // Get revenue per treatment type from invoices
-        const { data: invoiceItems } = await supabase
-            .from("invoice_items")
-            .select(`
-                total,
-                invoice:invoices(appointment_id)
-            `)
-            .eq("invoice.clinic_id", userData.clinic_id)
 
         const treatmentDistribution = appointments?.reduce((acc: any[], curr) => {
             const existing = acc.find(a => a.name === curr.treatment_type)
@@ -123,6 +114,6 @@ export async function GET() {
         })
     } catch (error) {
         console.error("[REPORTS_STATS_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Failed to load report data" }, { status: 500 })
     }
 }

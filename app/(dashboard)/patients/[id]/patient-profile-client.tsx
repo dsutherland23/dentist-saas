@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -47,7 +47,9 @@ import {
 } from "@/components/ui/select"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
+import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { NewInvoiceDialog } from "../../invoices/new-invoice-dialog"
+import { NewAppointmentDialog } from "../../calendar/new-appointment-dialog"
 import { useRouter } from "next/navigation"
 
 interface PatientProfileClientProps {
@@ -70,6 +72,8 @@ interface PatientProfileClientProps {
         start_time: string;
         treatment_type: string;
         status: string;
+        checked_in_at?: string | null;
+        checked_out_at?: string | null;
         dentists?: { last_name: string } | null;
     }[]
     treatments: {
@@ -147,6 +151,13 @@ export default function PatientProfileClient({ patient, appointments, treatments
         type: "document",
         file: null
     })
+
+    // Auto-refresh when user returns to this tab (e.g. after completing appointment on calendar)
+    useEffect(() => {
+        const onFocus = () => router.refresh()
+        window.addEventListener("focus", onFocus)
+        return () => window.removeEventListener("focus", onFocus)
+    }, [router])
 
     if (!patient) return <div>Patient not found</div>
 
@@ -321,7 +332,17 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         </p>
                     </div>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 flex-wrap gap-2">
+                    <NewAppointmentDialog
+                        patients={[{ id: patient.id, first_name: patient.first_name, last_name: patient.last_name }]}
+                        dentists={dentists.map(d => ({ id: d.id, first_name: d.first_name, last_name: d.last_name }))}
+                        defaultPatientId={patient.id}
+                        trigger={
+                            <Button className="bg-teal-600 hover:bg-teal-700 shadow-teal-100 shadow-lg">
+                                <Calendar className="mr-2 h-4 w-4" /> New Appointment
+                            </Button>
+                        }
+                    />
                     <Button variant="outline" onClick={() => router.push(`/messages?patientId=${patient.id}`)}>
                         <MessageSquare className="mr-2 h-4 w-4" /> Message
                     </Button>
@@ -657,6 +678,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         </TabsList>
 
                         <TabsContent value="appointments" className="mt-8 space-y-4">
+                            <p className="text-sm text-slate-500">Appointments from calendar. Data refreshes when you return to this tab.</p>
                             {appointments.length === 0 ? (
                                 <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200 text-slate-500">
                                     <Calendar className="h-10 w-10 mx-auto mb-3 opacity-20" />
@@ -673,8 +695,30 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                                     <CardDescription className="flex items-center mt-1">
                                                         <Clock className="h-3 w-3 mr-1" /> Assisted by Dr. {apt.dentists?.last_name || 'Staff'}
                                                     </CardDescription>
+                                                    {(apt.checked_in_at || apt.checked_out_at) && (
+                                                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                                                            {apt.checked_in_at && (
+                                                                <span className="font-medium text-emerald-600">Checked in {format(new Date(apt.checked_in_at), "h:mm a")}</span>
+                                                            )}
+                                                            {apt.checked_out_at && (
+                                                                <span className="font-medium text-slate-600">Checked out {format(new Date(apt.checked_out_at), "h:mm a")}</span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <Badge variant="outline" className="capitalize border-slate-200">{apt.status}</Badge>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={apt.status === "completed"
+                                                        ? "border-slate-200 bg-slate-50 text-slate-600"
+                                                        : apt.status === "checked_in" || apt.status === "in_treatment"
+                                                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                                            : apt.status === "no_show" || apt.status === "cancelled"
+                                                                ? "border-rose-200 bg-rose-50 text-rose-700"
+                                                                : "border-slate-200"
+                                                    }
+                                                >
+                                                    {getAppointmentStatusLabel(apt.status)}
+                                                </Badge>
                                             </div>
                                         </CardHeader>
                                     </Card>

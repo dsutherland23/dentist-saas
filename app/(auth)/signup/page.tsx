@@ -108,9 +108,9 @@ export default function SignUpPage() {
     }
 
     return (
-        <div className="min-h-screen grid lg:grid-cols-2">
+        <div className="min-h-screen min-h-dvh grid lg:grid-cols-2">
             {/* Right Side - Visuals (visible on desktop) */}
-            <div className="hidden lg:flex flex-col relative overflow-hidden bg-slate-900 p-12 text-white">
+            <div className="hidden lg:flex flex-col relative overflow-hidden bg-slate-900 p-8 xl:p-12 text-white">
                 <div className="absolute top-0 left-0 w-full h-full gradient-mesh opacity-20" />
                 <div className="relative z-10 flex flex-col h-full justify-between">
                     <div className="flex items-center gap-3">
@@ -120,12 +120,12 @@ export default function SignUpPage() {
                         <span className="text-2xl font-bold tracking-tight">DentalCare Pro</span>
                     </div>
 
-                    <div className="space-y-8">
+                    <div className="space-y-6 xl:space-y-8">
                         <div className="space-y-4">
-                            <h2 className="text-5xl font-bold leading-tight">
+                            <h2 className="text-3xl xl:text-4xl 2xl:text-5xl font-bold leading-tight">
                                 Transform your <span className="text-teal-400">practice</span> with modern tech.
                             </h2>
-                            <p className="text-xl text-slate-400 max-w-lg">
+                            <p className="text-lg xl:text-xl text-slate-400 max-w-lg">
                                 Join 1,000+ clinics worldwide using our platform to manage appointments, patients, and billing with ease.
                             </p>
                         </div>
@@ -137,18 +137,18 @@ export default function SignUpPage() {
                                 "Professional Invoicing & Payments",
                                 "Real-time Practice Analytics"
                             ].map((feature, i) => (
-                                <div key={i} className="flex items-center gap-4 group">
-                                    <div className="h-6 w-6 rounded-full bg-teal-500/10 border border-teal-500/50 flex items-center justify-center group-hover:bg-teal-500 transition-colors">
-                                        <CheckCircle2 className="h-4 w-4 text-teal-400 group-hover:text-white" />
+                                <div key={i} className="flex items-center gap-3 xl:gap-4 group">
+                                    <div className="h-5 w-5 xl:h-6 xl:w-6 shrink-0 rounded-full bg-teal-500/10 border border-teal-500/50 flex items-center justify-center group-hover:bg-teal-500 transition-colors">
+                                        <CheckCircle2 className="h-3 w-3 xl:h-4 xl:w-4 text-teal-400 group-hover:text-white" />
                                     </div>
-                                    <span className="text-lg text-slate-300">{feature}</span>
+                                    <span className="text-base xl:text-lg text-slate-300">{feature}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
 
-                    <div className="p-8 glass-dark rounded-3xl border border-white/10">
-                        <div className="flex items-center gap-4">
+                    <div className="p-6 xl:p-8 glass-dark rounded-2xl xl:rounded-3xl border border-white/10">
+                        <div className="flex items-center gap-3 xl:gap-4">
                             <div className="h-12 w-12 rounded-full bg-gradient-to-br from-teal-400 to-blue-500" />
                             <div>
                                 <p className="font-bold text-lg">Dr. Sarah Jenkins</p>
@@ -164,7 +164,7 @@ export default function SignUpPage() {
             </div>
 
             {/* Left Side - Form */}
-            <div className="flex items-center justify-center p-8 bg-slate-50 relative overflow-hidden">
+            <div className="flex items-center justify-center p-4 sm:p-6 lg:p-8 pt-[calc(2rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))] bg-slate-50 relative overflow-hidden overflow-y-auto min-h-screen min-h-dvh">
                 <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-teal-500/5 rounded-full blur-[100px] translate-x-1/2 -translate-y-1/2" />
 
                 <div className="w-full max-w-md space-y-8 relative z-10">
@@ -178,7 +178,7 @@ export default function SignUpPage() {
                     </div>
 
                     <div className="space-y-2 text-center lg:text-left">
-                        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Get Started</h1>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Get Started</h1>
                         <p className="text-slate-500 flex items-center gap-2 justify-center lg:justify-start">
                             <Sparkles className="h-4 w-4 text-teal-600 animate-pulse" />
                             Create your professional clinic workspace
@@ -261,7 +261,7 @@ export default function SignUpPage() {
                                     </div>
                                     <Button
                                         type="submit"
-                                        className="w-full h-12 gradient-primary text-white font-bold rounded-xl shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/40 transition-all group mt-2"
+                                        className="w-full min-h-[44px] h-12 gradient-primary text-white font-bold rounded-xl shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/40 transition-all group mt-2"
                                         disabled={isLoading}
                                     >
                                         {isLoading ? (
@@ -289,7 +289,7 @@ export default function SignUpPage() {
                         </CardFooter>
                     </Card>
 
-                    <p className="px-8 text-center text-xs text-slate-400 leading-relaxed">
+                    <p className="px-4 sm:px-8 text-center text-xs text-slate-400 leading-relaxed">
                         By completing this setup, you agree to our{" "}
                         <Link href="/terms" className="underline hover:text-slate-600">Terms</Link> and{" "}
                         <Link href="/privacy" className="underline hover:text-slate-600">Privacy Policy</Link>.

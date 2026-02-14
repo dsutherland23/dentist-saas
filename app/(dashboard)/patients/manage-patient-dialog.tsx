@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -19,11 +19,30 @@ import { Plus } from "lucide-react"
 
 interface ManagePatientDialogProps {
     trigger?: React.ReactNode
+    /** Called when patient is successfully added; receives the new patient */
+    onSuccess?: (patient: { id: string; first_name: string; last_name: string }) => void
 }
 
-export function ManagePatientDialog({ trigger }: ManagePatientDialogProps) {
+function calculateAge(dob: string | null): string | null {
+    if (!dob) return null
+    const birth = new Date(dob)
+    if (isNaN(birth.getTime())) return null
+    const today = new Date()
+    let age = today.getFullYear() - birth.getFullYear()
+    const m = today.getMonth() - birth.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+    if (age < 0) return null
+    return age === 1 ? "1 year" : `${age} years`
+}
+
+export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogProps) {
     const [open, setOpen] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
+    const [dateOfBirth, setDateOfBirth] = useState("")
+
+    useEffect(() => {
+        if (!open) setDateOfBirth("")
+    }, [open])
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -31,9 +50,10 @@ export function ManagePatientDialog({ trigger }: ManagePatientDialogProps) {
         const formData = new FormData(event.currentTarget)
 
         try {
-            await savePatient(formData)
+            const result = await savePatient(formData)
             toast.success("Patient added successfully")
             setOpen(false)
+            if (result?.patient && onSuccess) onSuccess(result.patient)
         } catch (error) {
             toast.error("Failed to add patient")
             console.error(error)
@@ -88,7 +108,20 @@ export function ManagePatientDialog({ trigger }: ManagePatientDialogProps) {
                             <Label htmlFor="dateOfBirth" className="text-right">
                                 DOB
                             </Label>
-                            <Input id="dateOfBirth" name="dateOfBirth" type="date" className="col-span-3" />
+                            <div className="col-span-3 flex items-center gap-3">
+                                <Input
+                                    id="dateOfBirth"
+                                    name="dateOfBirth"
+                                    type="date"
+                                    value={dateOfBirth}
+                                    onChange={(e) => setDateOfBirth(e.target.value)}
+                                />
+                                {calculateAge(dateOfBirth) && (
+                                    <span className="text-sm font-medium text-slate-600 whitespace-nowrap">
+                                        Age: {calculateAge(dateOfBirth)}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     </div>
                     <DialogFooter>

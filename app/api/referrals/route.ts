@@ -8,7 +8,7 @@ export async function GET(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const { searchParams } = new URL(request.url)
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
         return NextResponse.json(referrals || [])
     } catch (error) {
         console.error("[REFERRALS_GET]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         // Get user details for referring provider info
@@ -94,17 +94,20 @@ export async function POST(request: Request) {
 
         // Validate required fields
         if (!specialist_id || !patient_first_name || !patient_last_name || !reason) {
-            return new NextResponse("Missing required fields", { status: 400 })
+            return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
         if (!consent_confirmed) {
-            return new NextResponse("Patient consent required", { status: 400 })
+            return NextResponse.json({ error: "Patient consent required" }, { status: 400 })
         }
 
         // Extract clinic name safely
         const clinicName = userData?.clinics && typeof userData.clinics === 'object' && 'name' in userData.clinics
             ? (userData.clinics as { name: string }).name
             : ""
+
+        const intakeToken = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "").slice(0, 32)
+        const intakeTokenExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
 
         const { data: newReferral, error } = await supabase
             .from("referrals")
@@ -121,7 +124,9 @@ export async function POST(request: Request) {
                 reason,
                 attachments: attachments || null,
                 consent_confirmed,
-                status: "sent"
+                status: "sent",
+                intake_token: intakeToken,
+                intake_token_expires_at: intakeTokenExpiresAt,
             })
             .select(`
                 *,
@@ -135,13 +140,13 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.message }, { status: 400 })
         }
 
-        // TODO: Send email notification to specialist
-        // TODO: Generate PDF copy of referral
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (request.headers.get("x-forwarded-proto") && request.headers.get("host") ? `${request.headers.get("x-forwarded-proto")}://${request.headers.get("host")}` : "")
+        const intakeLink = baseUrl ? `${baseUrl.replace(/\/$/, "")}/specialist-intake?token=${intakeToken}` : ""
 
-        return NextResponse.json(newReferral)
+        return NextResponse.json({ ...newReferral, intake_link: intakeLink, intake_token: intakeToken })
     } catch (error) {
         console.error("[REFERRALS_POST]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }
 
@@ -152,14 +157,14 @@ export async function PATCH(request: Request) {
         const { data: { user } } = await supabase.auth.getUser()
 
         if (!user) {
-            return new NextResponse("Unauthorized", { status: 401 })
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
         const body = await request.json()
         const { id, status } = body
 
         if (!id || !status) {
-            return new NextResponse("Missing referral ID or status", { status: 400 })
+            return NextResponse.json({ error: "Missing referral ID or status" }, { status: 400 })
         }
 
         // Verify user is authorized to update this referral
@@ -170,7 +175,7 @@ export async function PATCH(request: Request) {
             .single()
 
         if (!referral) {
-            return new NextResponse("Referral not found", { status: 404 })
+            return NextResponse.json({ error: "Referral not found" }, { status: 404 })
         }
 
         // Check if user is the specialist for this referral
@@ -185,7 +190,7 @@ export async function PATCH(request: Request) {
         const canUpdate = userSpecialist || referral.referring_user_id === user.id
 
         if (!canUpdate) {
-            return new NextResponse("Forbidden", { status: 403 })
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
         const { data: updatedReferral, error } = await supabase
@@ -204,6 +209,6 @@ export async function PATCH(request: Request) {
         return NextResponse.json(updatedReferral)
     } catch (error) {
         console.error("[REFERRALS_PATCH]", error)
-        return new NextResponse("Internal Error", { status: 500 })
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

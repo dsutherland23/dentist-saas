@@ -73,7 +73,7 @@ export default function MessagesPage() {
             acc.push({
                 personId: otherId,
                 name: otherPerson ? `${otherPerson.first_name} ${otherPerson.last_name}` : "Unknown User",
-                lastMessage: msg.content,
+                lastMessage: msg.message ?? msg.content,
                 time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 timestamp: new Date(msg.created_at).getTime(),
                 unread: 0,
@@ -81,7 +81,7 @@ export default function MessagesPage() {
                 isOnShift: staffMember?.isOnShift || false
             })
         } else if (new Date(msg.created_at).getTime() > existing.timestamp) {
-            existing.lastMessage = msg.content
+            existing.lastMessage = msg.message ?? msg.content
             existing.time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             existing.timestamp = new Date(msg.created_at).getTime()
             existing.isOnShift = staffMember?.isOnShift || false
@@ -323,7 +323,7 @@ export default function MessagesPage() {
                                                                 : "bg-white text-slate-800 border border-slate-100"
                                                                 }`}
                                                         >
-                                                            {message.content}
+                                                            {message.message ?? message.content}
                                                         </div>
                                                         <span className="text-[10px] text-slate-400 mt-1.5 px-1">
                                                             {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
