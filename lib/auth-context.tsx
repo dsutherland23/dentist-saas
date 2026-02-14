@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 
 type AuthContextType = {
     isAuthenticated: boolean
@@ -17,22 +17,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [clinicName, setClinicName] = useState<string | null>(null)
     const [adminName, setAdminName] = useState<string | null>(null)
     const [email, setEmail] = useState<string | null>(null)
-    const [isLoading] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
 
-    // Try to load from sessionStorage on mount
-    if (typeof window !== 'undefined' && !clinicName) {
-        const pendingClinic = sessionStorage.getItem('clinic_pending')
-        if (pendingClinic) {
-            try {
-                const data = JSON.parse(pendingClinic)
-                setClinicName(data.clinicName)
-                setAdminName(data.adminName)
-                setEmail(data.email)
-            } catch (e) {
-                console.error('Failed to parse clinic data:', e)
+    useEffect(() => {
+        // Try to load from sessionStorage on mount
+        if (typeof window !== 'undefined') {
+            const pendingClinic = sessionStorage.getItem('clinic_pending')
+            if (pendingClinic) {
+                try {
+                    const data = JSON.parse(pendingClinic)
+                    setClinicName(data.clinicName)
+                    setAdminName(data.adminName)
+                    setEmail(data.email)
+                } catch (e) {
+                    console.error('Failed to parse clinic data:', e)
+                }
             }
         }
-    }
+        setIsLoading(false)
+    }, [])
 
     const signOut = () => {
         setClinicName(null)
