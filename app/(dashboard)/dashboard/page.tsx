@@ -104,7 +104,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true)
     const [scheduleStatusFilter, setScheduleStatusFilter] = useState<string | null>(null)
 
-    const SCHEDULE_STATUS_OPTIONS = [
+    const SCHEDULE_STATUS_OPTIONS: (string | null)[] = [
         null,
         "pending",
         "unconfirmed",
@@ -115,7 +115,7 @@ export default function DashboardPage() {
         "completed",
         "cancelled",
         "no_show",
-    ] as const
+    ]
     const filteredSchedule =
         scheduleStatusFilter == null
             ? schedule
