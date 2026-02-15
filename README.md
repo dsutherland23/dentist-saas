@@ -28,6 +28,9 @@ A modern, white-label dental practice management system built with Next.js 15, S
 4. **Open in browser:**
    Navigate to [http://localhost:3000](http://localhost:3000)
 
+5. **Optional — Load demo data:**  
+   After sign-up and onboarding, run the demo seed to add sample patients, staff, appointments, and clinical referrals. See [scripts/README-DEMO-SEED.md](scripts/README-DEMO-SEED.md). In Supabase SQL Editor, run `scripts/seed-demo-data.sql`.
+
 ## Features Implemented
 - **Dashboard:** Revenue metrics, activity feed, and KPIs.
 - **Calendar:** Interactive weekly view with drag-and-drop support.

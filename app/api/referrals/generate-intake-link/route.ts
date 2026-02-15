@@ -26,8 +26,11 @@ export async function POST(request: Request) {
         try {
             admin = createAdminClient()
         } catch (e) {
-            console.error("[GENERATE_INTAKE_LINK] Missing SUPABASE_SERVICE_ROLE_KEY")
-            return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+            const msg = !process.env.SUPABASE_SERVICE_ROLE_KEY
+                ? "Server configuration error: SUPABASE_SERVICE_ROLE_KEY is not set. Add it in .env.local from Supabase Dashboard → Project Settings → API → service_role (secret). Required for sending referral links."
+                : "Server configuration error: NEXT_PUBLIC_SUPABASE_URL is not set. Check .env.local."
+            console.error("[GENERATE_INTAKE_LINK]", msg)
+            return NextResponse.json({ error: msg }, { status: 500 })
         }
 
         const { data: firstSpecialty, error: specListError } = await admin

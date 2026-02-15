@@ -28,7 +28,7 @@ export default async function CalendarPage() {
         supabase.from("appointments")
             .select(`
                 *,
-                patients (first_name, last_name),
+                patients (first_name, last_name, phone),
                 dentists:users (first_name, last_name)
             `)
             .eq("clinic_id", clinicId)

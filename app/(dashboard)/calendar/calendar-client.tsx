@@ -18,7 +18,7 @@ import {
     parseISO,
     startOfDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
@@ -49,6 +49,7 @@ import {
 import { differenceInMinutes, addMinutes, isAfter } from "date-fns"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { useRouter } from "next/navigation"
+import { QueueReceiptDialog, type QueueReceiptData } from "@/components/calendar/queue-receipt-dialog"
 
 interface Appointment {
     id: string
@@ -61,7 +62,7 @@ interface Appointment {
     dentist_id: string
     checked_in_at?: string | null
     checked_out_at?: string | null
-    patients?: { first_name: string, last_name: string }
+    patients?: { first_name: string, last_name: string; phone?: string | null }
     dentists?: { first_name: string, last_name: string }
 }
 
@@ -99,6 +100,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const [contextMenuBlock, setContextMenuBlock] = useState<{ id: string; dentistName: string } | null>(null)
     const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 })
     const [isUnblocking, setIsUnblocking] = useState(false)
+    const [receiptData, setReceiptData] = useState<QueueReceiptData | null>(null)
+    const [isReceiptOpen, setIsReceiptOpen] = useState(false)
 
     const closeContextMenu = useCallback(() => setContextMenuBlock(null), [])
 
@@ -140,14 +143,36 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ status: newStatus }),
             })
-            if (!res.ok) throw new Error("Update failed")
-            if (newStatus === "checked_in") toast.success("Patient checked in")
-            else if (newStatus === "in_treatment") toast.success("Treatment started")
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error((json as { error?: string })?.error || "Update failed")
+            if (newStatus === "checked_in") {
+                toast.success("Patient checked in")
+                const d = json as {
+                    queueNumber?: number
+                    patients?: { first_name: string; last_name: string; date_of_birth?: string | null }
+                    dentists?: { first_name: string; last_name: string }
+                    start_time: string
+                }
+                if (typeof d?.queueNumber === "number") {
+                    setReceiptData({
+                        queueNumber: d.queueNumber,
+                        patientName: d.patients
+                            ? `${d.patients.first_name} ${d.patients.last_name}`
+                            : "Unknown Patient",
+                        dateOfBirth: d.patients?.date_of_birth ?? null,
+                        doctorName: d.dentists
+                            ? `Dr. ${d.dentists.last_name}`
+                            : "Staff",
+                        dateTime: format(parseISO(d.start_time), "EEEE, MMM d 'at' h:mm a"),
+                    })
+                    setIsReceiptOpen(true)
+                }
+            } else if (newStatus === "in_treatment") toast.success("Treatment started")
             else if (newStatus === "completed") toast.success("Appointment completed (checked out)")
             else toast.success("Status updated")
             router.refresh()
         } catch (err) {
-            toast.error("Failed to update status")
+            toast.error(err instanceof Error ? err.message : "Failed to update status")
         } finally {
             setUpdatingStatusId(null)
         }
@@ -158,7 +183,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         start: parseISO(appt.start_time),
         end: parseISO(appt.end_time),
         patientName: appt.patients ? `${appt.patients.first_name} ${appt.patients.last_name}` : "Unknown Patient",
-        dentistName: appt.dentists ? `Dr. ${appt.dentists.last_name}` : "Unknown Dentist"
+        dentistName: appt.dentists ? `Dr. ${appt.dentists.last_name}` : "Unknown Dentist",
+        patientPhone: appt.patients?.phone ?? null
     }))
 
     const blockedSlots = initialBlockedSlots.map(blk => ({
@@ -262,13 +288,14 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const STATUS_DROPDOWN_OPTIONS = [
         { value: "pending", label: "Pending" },
         { value: "unconfirmed", label: "Unconfirmed" },
+        { value: "confirmed", label: "Confirm" },
         { value: "checked_in", label: "Checked-In" },
         { value: "no_show", label: "No-Show" },
         { value: "cancelled", label: "Canceled" },
     ] as const
     const statusToDropdownValue = (s: string) => {
-        if (["pending", "unconfirmed", "checked_in", "no_show", "cancelled"].includes(s)) return s
-        if (["scheduled", "confirmed"].includes(s)) return "pending" // awaiting arrival
+        if (["pending", "unconfirmed", "confirmed", "checked_in", "no_show", "cancelled"].includes(s)) return s
+        if (s === "scheduled") return "pending" // awaiting arrival
         if (s === "in_treatment") return "checked_in"
         return "pending"
     }
@@ -347,6 +374,12 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             <div>
                                 <h4 className="font-bold text-slate-900">{appt.patientName}</h4>
                                 <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">Patient Record</p>
+                                {appt.patientPhone && (
+                                    <a href={`tel:${appt.patientPhone}`} className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-teal-600 hover:underline">
+                                        <Phone className="h-3 w-3 shrink-0" />
+                                        {appt.patientPhone}
+                                    </a>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -798,6 +831,12 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <QueueReceiptDialog
+                open={isReceiptOpen}
+                onOpenChange={setIsReceiptOpen}
+                data={receiptData}
+            />
         </div>
     )
 }

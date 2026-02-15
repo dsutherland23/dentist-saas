@@ -18,7 +18,8 @@ import {
     MoreVertical,
     Phone,
     Mail,
-    PhoneCall
+    PhoneCall,
+    Filter
 } from "lucide-react"
 import {
     DropdownMenu,
@@ -35,6 +36,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
 import { AppointmentReminderModal } from "@/components/dashboard/appointment-reminder-modal"
+import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 
 interface DashboardStats {
     revenue: {
@@ -100,6 +102,24 @@ export default function DashboardPage() {
     const [rota, setRota] = useState<RotaItem[]>([])
     const [followUps, setFollowUps] = useState<FollowUpItem[]>([])
     const [loading, setLoading] = useState(true)
+    const [scheduleStatusFilter, setScheduleStatusFilter] = useState<string | null>(null)
+
+    const SCHEDULE_STATUS_OPTIONS = [
+        null,
+        "pending",
+        "unconfirmed",
+        "scheduled",
+        "confirmed",
+        "checked_in",
+        "in_treatment",
+        "completed",
+        "cancelled",
+        "no_show",
+    ] as const
+    const filteredSchedule =
+        scheduleStatusFilter == null
+            ? schedule
+            : schedule.filter((a) => a.status === scheduleStatusFilter)
 
     useEffect(() => {
         fetchDashboardData()
@@ -395,21 +415,52 @@ export default function DashboardPage() {
 
                             {/* Calendar preview */}
                             <div className="pt-2 border-t border-slate-100">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-3">
-                                    Today's schedule
-                                </p>
+                                <div className="flex items-center justify-between gap-2 mb-3">
+                                    <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+                                        Today's schedule
+                                    </p>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-7 text-xs gap-1.5 border-slate-200 text-slate-600 hover:bg-slate-50"
+                                            >
+                                                <Filter className="h-3 w-3" />
+                                                {scheduleStatusFilter == null
+                                                    ? "All statuses"
+                                                    : getAppointmentStatusLabel(scheduleStatusFilter)}
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end" className="w-48">
+                                            <DropdownMenuItem onClick={() => setScheduleStatusFilter(null)}>
+                                                All statuses
+                                            </DropdownMenuItem>
+                                            {SCHEDULE_STATUS_OPTIONS.filter((s): s is string => s != null).map((status) => (
+                                                <DropdownMenuItem
+                                                    key={status}
+                                                    onClick={() => setScheduleStatusFilter(status)}
+                                                >
+                                                    {getAppointmentStatusLabel(status)}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </div>
                                 {loading ? (
                                     <div className="flex justify-center py-6">
                                         <Loader2 className="h-5 w-5 animate-spin text-teal-500" />
                                     </div>
-                                ) : schedule.length === 0 ? (
+                                ) : filteredSchedule.length === 0 ? (
                                     <p className="text-sm text-slate-500 py-4 text-center">
-                                        No appointments today
+                                        {schedule.length === 0
+                                            ? "No appointments today"
+                                            : `No ${scheduleStatusFilter ? getAppointmentStatusLabel(scheduleStatusFilter).toLowerCase() : ""} appointments`}
                                     </p>
                                 ) : (
                                     <ScrollArea className="h-[200px] pr-2">
                                         <div className="space-y-2">
-                                            {schedule.map((apt) => (
+                                            {filteredSchedule.map((apt) => (
                                                 <div
                                                     key={apt.id}
                                                     className="flex items-center gap-3 py-2 px-3 rounded-lg bg-slate-50 hover:bg-teal-50 transition-colors"

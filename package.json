@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/run-migration.js",
-    "db:verify": "node scripts/verify-db.js"
+    "db:verify": "node scripts/verify-db.js",
+    "db:seed-demo": "node scripts/run-seed-demo.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

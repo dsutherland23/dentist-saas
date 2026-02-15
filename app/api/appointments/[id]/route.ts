@@ -43,19 +43,50 @@ export async function PATCH(
             .update({ status })
             .eq("id", id)
             .eq("clinic_id", userData.clinic_id)
-            .select()
+            .select(`
+                *,
+                patients(first_name, last_name, date_of_birth),
+                dentists:users(first_name, last_name)
+            `)
             .single()
 
         if (error) {
             console.error("[APPOINTMENTS_PATCH] Supabase error:", error.message, error.code)
-            throw error
+            const isConstraintViolation = error.code === "23514" || error.message?.includes("check constraint")
+            return NextResponse.json(
+                {
+                    error: isConstraintViolation
+                        ? "Status not allowed. Run migrations or scripts/fix-appointment-status-constraint.sql to add pending/unconfirmed."
+                        : error.message,
+                },
+                { status: 400 }
+            )
         }
 
         revalidatePath("/calendar")
         revalidatePath("/patients")
         if (data?.patient_id) revalidatePath(`/patients/${data.patient_id}`)
 
-        return NextResponse.json(data)
+        // For check-in: compute queue number for receipt
+        let queueNumber: number | undefined
+        if (status === "checked_in" && data?.checked_in_at) {
+            const todayStart = new Date()
+            todayStart.setHours(0, 0, 0, 0)
+            const todayEnd = new Date()
+            todayEnd.setHours(23, 59, 59, 999)
+            const { count } = await supabase
+                .from("appointments")
+                .select("*", { count: "exact", head: true })
+                .eq("clinic_id", userData.clinic_id)
+                .in("status", ["checked_in", "in_treatment", "completed"])
+                .not("checked_in_at", "is", null)
+                .gte("start_time", todayStart.toISOString())
+                .lte("start_time", todayEnd.toISOString())
+                .lte("checked_in_at", data.checked_in_at)
+            queueNumber = count ?? 0
+        }
+
+        return NextResponse.json({ ...data, queueNumber })
     } catch (error) {
         console.error("[APPOINTMENTS_PATCH]", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
