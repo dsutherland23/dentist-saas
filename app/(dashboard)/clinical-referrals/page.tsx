@@ -93,10 +93,17 @@ export default function ClinicalReferralsPage() {
         setSendLinkLoading("email")
         try {
             const res = await fetch("/api/referrals/generate-intake-link", { method: "POST" })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || "Failed to generate link")
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                throw new Error(typeof data?.error === "string" ? data.error : "Failed to generate link")
+            }
+            const link = data?.intake_link
+            if (typeof link !== "string" || !link.trim()) {
+                toast.error("Link not generated. Set NEXT_PUBLIC_APP_URL in your server environment (e.g. Render).")
+                return
+            }
             setSendLinkChoiceOpen(false)
-            openWithLink(data.intake_link, "email")
+            openWithLink(link.trim(), "email")
             toast.success("Email app opening with link")
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "Failed to generate link")
@@ -109,10 +116,17 @@ export default function ClinicalReferralsPage() {
         setSendLinkLoading("whatsapp")
         try {
             const res = await fetch("/api/referrals/generate-intake-link", { method: "POST" })
-            const data = await res.json()
-            if (!res.ok) throw new Error(data.error || "Failed to generate link")
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                throw new Error(typeof data?.error === "string" ? data.error : "Failed to generate link")
+            }
+            const link = data?.intake_link
+            if (typeof link !== "string" || !link.trim()) {
+                toast.error("Link not generated. Set NEXT_PUBLIC_APP_URL in your server environment (e.g. Render).")
+                return
+            }
             setSendLinkChoiceOpen(false)
-            openWithLink(data.intake_link, "whatsapp")
+            openWithLink(link.trim(), "whatsapp")
             toast.success("WhatsApp opening with link")
         } catch (e) {
             toast.error(e instanceof Error ? e.message : "Failed to generate link")
@@ -130,17 +144,30 @@ export default function ClinicalReferralsPage() {
     }, [])
 
     // Fetch specialists
-    React.useEffect(() => {
+    const fetchSpecialists = React.useCallback(() => {
         setLoading(true)
         fetch("/api/specialists")
             .then((res) => res.json())
             .then((data) => {
-                setSpecialists(data)
-                setFilteredSpecialists(data)
+                setSpecialists(Array.isArray(data) ? data : [])
+                setFilteredSpecialists(Array.isArray(data) ? data : [])
             })
             .catch((error) => console.error("Failed to fetch specialists:", error))
             .finally(() => setLoading(false))
     }, [])
+
+    React.useEffect(() => {
+        fetchSpecialists()
+    }, [fetchSpecialists])
+
+    // Refetch when user returns to tab (e.g. after confirming referral link in WhatsApp)
+    React.useEffect(() => {
+        const onVisibility = () => {
+            if (document.visibilityState === "visible") fetchSpecialists()
+        }
+        document.addEventListener("visibilitychange", onVisibility)
+        return () => document.removeEventListener("visibilitychange", onVisibility)
+    }, [fetchSpecialists])
 
     // Apply filters
     React.useEffect(() => {
@@ -172,17 +199,7 @@ export default function ClinicalReferralsPage() {
         setReferDialogOpen(true)
     }
 
-    const handleRefreshData = () => {
-        setLoading(true)
-        fetch("/api/specialists")
-            .then((res) => res.json())
-            .then((data) => {
-                setSpecialists(data)
-                setFilteredSpecialists(data)
-            })
-            .catch((error) => console.error("Failed to fetch specialists:", error))
-            .finally(() => setLoading(false))
-    }
+    const handleRefreshData = () => fetchSpecialists()
 
     return (
         <div className="h-[calc(100vh-64px)] flex flex-col bg-white overflow-hidden">

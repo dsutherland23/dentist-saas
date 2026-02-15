@@ -155,6 +155,7 @@ export async function POST(request: Request) {
                 phone: sanitized.phone,
                 email: sanitized.email,
                 ...(lat != null && lng != null && { lat, lng }),
+                status: "approved", // So they appear on the map and in specialist list
                 updated_at: new Date().toISOString(),
             })
             .eq("id", referral.specialist_id)

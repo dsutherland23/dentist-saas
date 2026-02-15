@@ -91,11 +91,20 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Failed to create intake link" }, { status: 500 })
         }
 
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-            (request.headers.get("x-forwarded-proto") && request.headers.get("host")
+        const baseFromHeaders =
+            request.headers.get("x-forwarded-proto") && request.headers.get("host")
                 ? `${request.headers.get("x-forwarded-proto")}://${request.headers.get("host")}`
-                : "")
-        const intakeLink = baseUrl ? `${baseUrl.replace(/\/$/, "")}/specialist-intake?token=${intakeToken}` : ""
+                : ""
+        const baseFromUrl = request.url ? (() => {
+            try {
+                const u = new URL(request.url)
+                return `${u.protocol}//${u.host}`
+            } catch {
+                return ""
+            }
+        })() : ""
+        const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || baseFromHeaders || baseFromUrl).replace(/\/$/, "")
+        const intakeLink = baseUrl ? `${baseUrl}/specialist-intake?token=${intakeToken}` : ""
 
         return NextResponse.json({ intake_link: intakeLink })
     } catch (error) {
