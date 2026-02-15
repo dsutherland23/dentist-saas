@@ -21,7 +21,9 @@ export async function GET(req: Request) {
         }
 
         const { searchParams } = new URL(req.url)
-        const date = searchParams.get("date") || new Date().toISOString().split('T')[0]
+        const dateParam = searchParams.get("date")
+        const todayStr = new Date().toISOString().split("T")[0]
+        const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayStr
 
         const clinicId = userData.clinic_id
 
@@ -66,27 +68,35 @@ export async function GET(req: Request) {
             }
         }
 
-        // Enrich utilization data with dentist names
-        const enrichedUtilization = utilizationData?.map(u => ({
-            ...u,
-            dentist_name: dentistNames[u.dentist_id] || 'Unassigned',
-            utilizationLevel: 
-                u.utilization_percent >= 90 ? 'excellent' :
-                u.utilization_percent >= 70 ? 'good' : 'needs-improvement'
-        })) || []
+        // Enrich utilization data with dentist names and safe numeric fields
+        const pct = (u: any) => Number(u?.utilization_percent) || 0
+        const enrichedUtilization = utilizationData?.map(u => {
+            const percent = pct(u)
+            return {
+                ...u,
+                utilization_percent: percent,
+                total_hours: Number(u?.total_hours) || 0,
+                total_appointments: Number(u?.total_appointments) || 0,
+                dentist_name: dentistNames[u.dentist_id] || "Unassigned",
+                utilizationLevel:
+                    percent >= 90 ? "excellent" : percent >= 70 ? "good" : "needs-improvement",
+            }
+        }) || []
 
+        const opUse = Number(summaryData?.operatories_in_use) || 0
+        const bHours = Number(summaryData?.booked_hours) || 0
         return NextResponse.json({
             utilizationByChair: enrichedUtilization,
             todaySummary: {
-                totalAppointments: summaryData?.total_appointments || 0,
-                bookedHours: summaryData?.booked_hours || 0,
-                completedCount: summaryData?.completed_count || 0,
-                cancelledCount: summaryData?.cancelled_count || 0,
-                noShowCount: summaryData?.no_show_count || 0,
-                operatoriesInUse: summaryData?.operatories_in_use || 0,
-                providersScheduled: summaryData?.providers_scheduled || 0,
-                emptyChairTime: Math.max(0, (8 * (summaryData?.operatories_in_use || 0)) - (summaryData?.booked_hours || 0))
-            }
+                totalAppointments: Number(summaryData?.total_appointments) || 0,
+                bookedHours: bHours,
+                completedCount: Number(summaryData?.completed_count) || 0,
+                cancelledCount: Number(summaryData?.cancelled_count) || 0,
+                noShowCount: Number(summaryData?.no_show_count) || 0,
+                operatoriesInUse: opUse,
+                providersScheduled: Number(summaryData?.providers_scheduled) || 0,
+                emptyChairTime: Math.max(0, 8 * opUse - bHours),
+            },
         })
 
     } catch (error) {

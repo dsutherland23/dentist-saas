@@ -592,7 +592,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     }
 
     return (
-        <div className="flex flex-col min-h-[400px] h-[calc(100vh-8rem)] sm:h-[calc(100vh-100px)] bg-slate-50 p-3 sm:p-4 md:p-6 max-w-full overflow-hidden">
+        <div className="flex flex-col min-h-[400px] h-[calc(100vh-8rem)] sm:h-[calc(100vh-100px)] bg-slate-50 p-3 sm:p-4 md:p-6 max-w-full w-full min-w-0 overflow-hidden">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 shrink-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
                     <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">

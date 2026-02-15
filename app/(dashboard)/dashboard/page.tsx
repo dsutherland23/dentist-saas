@@ -21,7 +21,9 @@ import { InsuranceClaimsPanel } from "@/components/dashboard/insurance-claims-pa
 import { CashFlowPanel } from "@/components/dashboard/cash-flow-panel"
 import { RevenueIntelligencePanel } from "@/components/dashboard/revenue-intelligence-panel"
 import { ChairUtilizationPanel } from "@/components/dashboard/chair-utilization-panel"
+import { DashboardOverviewAppointments } from "@/components/dashboard/dashboard-overview-appointments"
 import { formatCurrency } from "@/lib/financial-utils"
+import { fetchWithAuth } from "@/lib/fetch-client"
 
 interface DashboardStats {
     revenue: { total: number; change: number; changeAmount: number; trend: number[] }
@@ -67,7 +69,9 @@ export default function DashboardPage() {
     const firstName = profile?.first_name || "Doctor"
     const [stats, setStats] = useState<DashboardStats | null>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState("overview")
+    const [refreshKey, setRefreshKey] = useState(0)
 
     useEffect(() => {
         fetchDashboardData()
@@ -76,13 +80,26 @@ export default function DashboardPage() {
     const fetchDashboardData = async () => {
         try {
             setLoading(true)
-            const statsRes = await fetch("/api/dashboard/stats")
-            if (statsRes.ok) setStats(await statsRes.json())
-        } catch {
-            toast.error("Failed to load dashboard")
+            setError(null)
+            const statsRes = await fetchWithAuth("/api/dashboard/stats")
+            if (!statsRes.ok) {
+                const errBody = await statsRes.json().catch(() => ({}))
+                throw new Error(errBody.error || `Request failed: ${statsRes.status}`)
+            }
+            const data = await statsRes.json()
+            setStats(data)
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to load dashboard"
+            setError(message)
+            toast.error(message)
         } finally {
             setLoading(false)
         }
+    }
+
+    const handleRefresh = () => {
+        setRefreshKey(k => k + 1)
+        fetchDashboardData().then(() => toast.success("Dashboard updated"))
     }
 
     const getStatValue = (key: string) => {
@@ -124,12 +141,10 @@ export default function DashboardPage() {
                             variant="outline"
                             size="sm"
                             className="h-9 border-slate-200 text-slate-600 hover:bg-white hover:text-slate-900"
-                            onClick={() => {
-                                fetchDashboardData()
-                                toast.success("Updated")
-                            }}
+                            onClick={handleRefresh}
+                            disabled={loading}
                         >
-                            Refresh
+                            {loading ? "Refreshing…" : "Refresh"}
                         </Button>
                         <Button
                             size="sm"
@@ -141,6 +156,16 @@ export default function DashboardPage() {
                         </Button>
                     </div>
                 </header>
+
+                {/* Error state */}
+                {error && (
+                    <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between gap-4">
+                        <p className="text-sm text-rose-800">{error}</p>
+                        <Button variant="outline" size="sm" className="shrink-0 border-rose-300 text-rose-700 hover:bg-rose-100" onClick={fetchDashboardData}>
+                            Try again
+                        </Button>
+                    </div>
+                )}
 
                 {/* Key metrics strip */}
                 <section className="mb-10">
@@ -195,8 +220,12 @@ export default function DashboardPage() {
 
                     <TabsContent value="overview" className="mt-0 space-y-10">
                         <section>
+                            <h2 className="dashboard-section-title mb-4">Appointments & status</h2>
+                            <DashboardOverviewAppointments refreshKey={refreshKey} />
+                        </section>
+                        <section>
                             <h2 className="dashboard-section-title mb-4">Revenue pipeline</h2>
-                            <RevenueIntelligencePanel />
+                            <RevenueIntelligencePanel key={refreshKey} />
                         </section>
                     </TabsContent>
 
@@ -242,18 +271,18 @@ export default function DashboardPage() {
                         </section>
                         <section>
                             <h2 className="dashboard-section-title mb-4">Insurance</h2>
-                            <InsuranceClaimsPanel />
+                            <InsuranceClaimsPanel refreshKey={refreshKey} />
                         </section>
                         <section>
                             <h2 className="dashboard-section-title mb-4">Cash flow</h2>
-                            <CashFlowPanel />
+                            <CashFlowPanel refreshKey={refreshKey} />
                         </section>
                     </TabsContent>
 
                     <TabsContent value="operations" className="mt-0">
                         <section>
                             <h2 className="dashboard-section-title mb-4">Today's operations</h2>
-                            <ChairUtilizationPanel />
+                            <ChairUtilizationPanel refreshKey={refreshKey} />
                         </section>
                     </TabsContent>
                 </Tabs>

@@ -253,10 +253,17 @@ export default function PatientProfileClient({ patient, appointments, treatments
         }
     }
 
+    const MAX_FILE_SIZE_MB = 10
+    const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
     const handleFileUpload = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!fileData.file) {
             toast.error("Please select a file")
+            return
+        }
+        if (fileData.file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`File must be under ${MAX_FILE_SIZE_MB}MB`)
             return
         }
 
@@ -799,7 +806,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                         <form onSubmit={handleFileUpload}>
                                             <DialogHeader>
                                                 <DialogTitle>Upload Patient File</DialogTitle>
-                                                <DialogDescription>Add X-rays, clinical photos, or legal documents.</DialogDescription>
+                                                <DialogDescription>Add X-rays, clinical photos, or legal documents. Max size {MAX_FILE_SIZE_MB}MB.</DialogDescription>
                                             </DialogHeader>
                                             <div className="grid gap-6 py-4">
                                                 <div className="grid gap-2">

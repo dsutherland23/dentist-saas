@@ -142,12 +142,12 @@ export default function StaffPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900 font-outfit">Staff Management</h1>
-                    <p className="text-slate-500 mt-1">Manage your team members and their roles</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 font-outfit truncate">Staff Management</h1>
+                    <p className="text-slate-500 mt-1 text-sm">Manage your team members and their roles</p>
                 </div>
                 <Button
                     onClick={() => {
@@ -208,28 +208,28 @@ export default function StaffPage() {
                 </Card>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
-                <div className="lg:col-span-2 space-y-6">
-                    <Card className="shadow-sm border-none bg-white">
+            <div className="grid gap-6 lg:grid-cols-3 min-w-0">
+                <div className="lg:col-span-2 space-y-6 min-w-0">
+                    <Card className="shadow-sm border-none bg-white min-w-0 overflow-hidden">
                         <CardHeader>
-                            <div className="flex items-center justify-between">
-                                <div>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div className="min-w-0">
                                     <CardTitle>Team Members</CardTitle>
                                     <CardDescription>A complete list of your practice staff</CardDescription>
                                 </div>
-                                <div className="relative w-72">
+                                <div className="relative w-full sm:w-72 min-w-0">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                                     <Input
                                         placeholder="Search staff..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-10 bg-slate-50/50 border-slate-100"
+                                        className="pl-10 bg-slate-50/50 border-slate-100 w-full min-w-0"
                                     />
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <Table>
+                        <CardContent className="p-0 overflow-x-auto min-w-0">
+                            <Table className="min-w-[500px]">
                                 <TableHeader>
                                     <TableRow className="bg-slate-50/50">
                                         <TableHead className="font-semibold">Staff Member</TableHead>

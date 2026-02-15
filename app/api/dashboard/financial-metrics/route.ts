@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase-server"
 import { NextResponse } from "next/server"
-import { calculateARAging, calculateCollectionMetrics } from "@/lib/financial-utils"
+import { calculateARAging, calculateCollectionMetrics, calculateDaysPastDue } from "@/lib/financial-utils"
 
 export async function GET() {
     try {
@@ -25,11 +25,24 @@ export async function GET() {
         const now = new Date()
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
 
-        // Fetch AR aging data from view
-        const { data: arAgingData } = await supabase
+        // Fetch AR aging data from view (fallback to invoices if view missing)
+        const { data: arAgingData, error: arError } = await supabase
             .from("invoice_ar_aging")
             .select("*")
             .eq("clinic_id", clinicId)
+
+        let arAgingRows = arAgingData || []
+        if (arError) {
+            const { data: invData } = await supabase
+                .from("invoices")
+                .select("id, clinic_id, balance_due, due_date, status")
+                .eq("clinic_id", clinicId)
+                .not("status", "in", "('paid','cancelled')")
+            arAgingRows = (invData || []).map((inv: any) => ({
+                ...inv,
+                days_past_due: calculateDaysPastDue(inv.due_date, inv.status),
+            }))
+        }
 
         // Fetch all invoices for collection metrics
         const { data: invoicesData } = await supabase
@@ -46,7 +59,7 @@ export async function GET() {
             .gte("payment_date", monthStart.toISOString())
 
         // Calculate AR aging buckets
-        const arAgingBuckets = calculateARAging(arAgingData || [])
+        const arAgingBuckets = calculateARAging(arAgingRows)
 
         // Calculate collection metrics
         const collectionMetrics = calculateCollectionMetrics(
@@ -54,12 +67,12 @@ export async function GET() {
             paymentsData || []
         )
 
-        // Payment method breakdown
-        const paymentMethodBreakdown = (paymentsData || []).reduce((acc: any, payment: any) => {
-            const method = payment.payment_method || 'other'
+        // Payment method breakdown (always return a plain object)
+        const paymentMethodBreakdown = (paymentsData || []).reduce((acc: Record<string, number>, payment: any) => {
+            const method = String(payment.payment_method || "other").toLowerCase()
             acc[method] = (acc[method] || 0) + parseFloat(payment.amount_paid || 0)
             return acc
-        }, {})
+        }, {} as Record<string, number>)
 
         // Calculate average payment turnaround
         let avgTurnaround = 0
@@ -110,19 +123,26 @@ export async function GET() {
             }, 0)
         }
 
+        const totalOutstanding = arAgingBuckets.reduce((sum, b) => sum + b.amount, 0)
+        const totalInvoices = arAgingBuckets.reduce((sum, b) => sum + b.count, 0)
         return NextResponse.json({
             arAging: {
                 buckets: arAgingBuckets,
-                totalOutstanding: arAgingBuckets.reduce((sum, b) => sum + b.amount, 0),
-                totalInvoices: arAgingBuckets.reduce((sum, b) => sum + b.count, 0)
+                totalOutstanding: Number(totalOutstanding) || 0,
+                totalInvoices: Number(totalInvoices) || 0,
             },
-            collectionMetrics,
-            paymentMethodBreakdown,
-            avgPaymentTurnaround: avgTurnaround,
+            collectionMetrics: {
+                totalBilled: Number(collectionMetrics.totalBilled) ?? 0,
+                totalCollected: Number(collectionMetrics.totalCollected) ?? 0,
+                collectionRate: Number(collectionMetrics.collectionRate) ?? 0,
+                outstandingBalance: Number(collectionMetrics.outstandingBalance) ?? 0,
+            },
+            paymentMethodBreakdown: paymentMethodBreakdown && typeof paymentMethodBreakdown === "object" ? paymentMethodBreakdown : {},
+            avgPaymentTurnaround: Number(avgTurnaround) || 0,
             cashFlowForecast: {
-                next30Days: forecastRevenue,
-                scheduledAppointments: scheduledAppointments?.length || 0
-            }
+                next30Days: Number(forecastRevenue) || 0,
+                scheduledAppointments: Number(scheduledAppointments?.length) || 0,
+            },
         })
 
     } catch (error) {

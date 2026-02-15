@@ -134,14 +134,14 @@ export default function ReportsPage() {
     const COLORS = ["#0d9488", "#0ea5e9", "#8b5cf6", "#f59e0b", "#ef4444"]
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Practice Analytics</h1>
-                    <p className="text-slate-500 mt-1">Real-time performance metrics and business health</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Practice Analytics</h1>
+                    <p className="text-slate-500 mt-1 text-sm">Real-time performance metrics and business health</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-2 sm:gap-3 shrink-0">
                     <Button variant="outline" className="bg-white">
                         <Calendar className="mr-2 h-4 w-4" /> This Month
                     </Button>

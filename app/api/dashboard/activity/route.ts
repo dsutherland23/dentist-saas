@@ -38,12 +38,14 @@ export async function GET(request: Request) {
                     .select(`
                         id,
                         status,
+                        treatment_type,
                         created_at,
+                        updated_at,
                         start_time,
                         patients (first_name, last_name)
                     `)
                     .eq("clinic_id", clinicId)
-                    .order("created_at", { ascending: false })
+                    .order("updated_at", { ascending: false })
                     .limit(limit)
                     .range(offset, offset + limit - 1)
             )
@@ -101,7 +103,7 @@ export async function GET(request: Request) {
         // Combine and format activity
         const activity: any[] = []
 
-        // Add appointment activities
+        // Add appointment activities (use updated_at so status changes appear in feed)
         appointmentsData.data?.forEach((appt: any) => {
             const patientName = appt.patients ? `${appt.patients.first_name} ${appt.patients.last_name}` : "Unknown Patient"
             let action = ""
@@ -116,9 +118,30 @@ export async function GET(request: Request) {
                     action = "Scheduled appointment"
                     type = "info"
                     break
+                case "confirmed":
+                    action = "Confirmed appointment"
+                    type = "info"
+                    break
+                case "checked_in":
+                    action = "Checked in"
+                    type = "success"
+                    break
+                case "in_treatment":
+                    action = "In treatment"
+                    type = "success"
+                    break
                 case "cancelled":
                     action = "Cancelled appointment"
                     type = "warning"
+                    break
+                case "no_show":
+                    action = "No-show"
+                    type = "warning"
+                    break
+                case "pending":
+                case "unconfirmed":
+                    action = "Pending / unconfirmed"
+                    type = "info"
                     break
                 default:
                     action = `Appointment ${appt.status}`
@@ -126,10 +149,14 @@ export async function GET(request: Request) {
             }
 
             activity.push({
+                id: appt.id,
+                entityType: "appointment",
                 name: patientName,
                 action,
-                time: appt.created_at,
-                type
+                time: appt.updated_at || appt.created_at,
+                type,
+                treatment_type: appt.treatment_type,
+                start_time: appt.start_time,
             })
         })
 

@@ -10,16 +10,16 @@ import { WorkloadOverview } from "@/components/team-planner/workload-overview"
 
 export default function TeamPlannerPage() {
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900">Team Planner</h1>
+            <div className="min-w-0">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Team Planner</h1>
                 <p className="text-slate-500 mt-1">Manage staff schedules, time-off requests, and workload distribution</p>
             </div>
 
             {/* Tabs Navigation */}
-            <Tabs defaultValue="rota" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
+            <Tabs defaultValue="rota" className="w-full min-w-0">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
                     <TabsTrigger
                         value="rota"
                         className="flex items-center gap-2 data-[state=active]:bg-teal-600 data-[state=active]:text-white"

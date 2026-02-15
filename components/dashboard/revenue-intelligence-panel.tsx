@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { formatCurrency, calculateUnscheduledTreatmentValue, calculateTreatmentAcceptanceRate } from "@/lib/financial-utils"
+import { fetchWithAuth } from "@/lib/fetch-client"
 
 interface TreatmentPlan {
     id: string
@@ -39,7 +40,7 @@ export function RevenueIntelligencePanel() {
     const fetchData = async () => {
         try {
             setLoading(true)
-            const res = await fetch("/api/treatment-plans")
+            const res = await fetchWithAuth("/api/treatment-plans")
             if (res.ok) {
                 const json = await res.json()
                 setTreatmentPlans(json)

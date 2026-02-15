@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/financial-utils"
+import { fetchWithAuth } from "@/lib/fetch-client"
 
 interface InsurancePanelData {
     claimsSubmitted: {
@@ -42,31 +43,41 @@ interface InsurancePanelData {
     }>
 }
 
-export function InsuranceClaimsPanel() {
+interface InsuranceClaimsPanelProps {
+    refreshKey?: number
+}
+
+export function InsuranceClaimsPanel({ refreshKey = 0 }: InsuranceClaimsPanelProps) {
     const [data, setData] = useState<InsurancePanelData | null>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const router = useRouter()
-
-    useEffect(() => {
-        fetchData()
-    }, [])
 
     const fetchData = async () => {
         try {
             setLoading(true)
-            const res = await fetch("/api/dashboard/insurance-panel")
-            if (res.ok) {
-                const json = await res.json()
-                setData(json)
+            setError(null)
+            const res = await fetchWithAuth("/api/dashboard/insurance-panel")
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                throw new Error(err.error || `Failed to load: ${res.status}`)
             }
-        } catch (error) {
-            console.error("Error fetching insurance panel data:", error)
+            const json = await res.json()
+            setData(json)
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to load insurance data"
+            setError(message)
+            setData(null)
         } finally {
             setLoading(false)
         }
     }
 
-    if (loading) {
+    useEffect(() => {
+        fetchData()
+    }, [refreshKey])
+
+    if (loading && !data) {
         return (
             <div className="dashboard-panel">
                 <div className="dashboard-panel-body flex justify-center py-16">
@@ -76,9 +87,24 @@ export function InsuranceClaimsPanel() {
         )
     }
 
+    if (error && !data) {
+        return (
+            <div className="dashboard-panel">
+                <div className="dashboard-panel-body flex flex-col items-center justify-center py-16 gap-4">
+                    <AlertCircle className="h-10 w-10 text-amber-500" />
+                    <p className="text-sm text-slate-600 text-center">{error}</p>
+                    <Button variant="outline" size="sm" onClick={fetchData}>Try again</Button>
+                </div>
+            </div>
+        )
+    }
+
     if (!data) {
         return null
     }
+
+    const reimbursementRate = Number(data.expectedVsActual?.reimbursementRate) ?? 0
+    const avgDaysToPayment = Number(data.avgDaysToPayment) ?? 0
 
     return (
         <div className="dashboard-panel">
@@ -163,7 +189,7 @@ export function InsuranceClaimsPanel() {
                         <div className="p-6 rounded-xl bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100 text-center">
                             <Clock className="h-10 w-10 mx-auto text-teal-600 mb-3" />
                             <p className="text-4xl font-bold text-teal-900 mb-2">
-                                {data.avgDaysToPayment}
+                                {avgDaysToPayment}
                             </p>
                             <p className="text-sm font-medium text-teal-700">
                                 Average Days to Payment
@@ -179,20 +205,20 @@ export function InsuranceClaimsPanel() {
                             </div>
                             <div className="flex items-baseline gap-2">
                                 <p className="text-3xl font-bold text-emerald-900">
-                                    {data.expectedVsActual.reimbursementRate.toFixed(1)}%
+                                    {reimbursementRate.toFixed(1)}%
                                 </p>
                             </div>
                             <div className="mt-3 pt-3 border-t border-emerald-200 space-y-1 text-xs text-emerald-700">
                                 <div className="flex justify-between">
                                     <span>Total Claimed:</span>
                                     <span className="font-semibold">
-                                        {formatCurrency(data.expectedVsActual.totalClaimed)}
+                                        {formatCurrency(data.expectedVsActual?.totalClaimed ?? 0)}
                                     </span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span>Total Paid:</span>
                                     <span className="font-semibold">
-                                        {formatCurrency(data.expectedVsActual.totalPaid)}
+                                        {formatCurrency(data.expectedVsActual?.totalPaid ?? 0)}
                                     </span>
                                 </div>
                             </div>
@@ -205,7 +231,7 @@ export function InsuranceClaimsPanel() {
                             Alert Indicators
                         </h3>
                         
-                        {data.alerts.length === 0 ? (
+                        {(data.alerts?.length ?? 0) === 0 ? (
                             <div className="p-6 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-100 text-center">
                                 <ShieldCheck className="h-12 w-12 mx-auto text-emerald-600 mb-3" />
                                 <p className="text-sm font-medium text-emerald-900">
@@ -217,7 +243,7 @@ export function InsuranceClaimsPanel() {
                             </div>
                         ) : (
                             <div className="space-y-3">
-                                {data.alerts.map((alert, index) => (
+                                {(data.alerts ?? []).map((alert, index) => (
                                     <div
                                         key={index}
                                         className={`p-4 rounded-xl border ${

@@ -132,10 +132,10 @@ export default function MessagesPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900">Messages</h2>
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="min-w-0">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Messages</h2>
                     <p className="text-slate-500 mt-1">Communicate with your practice clinic members</p>
                 </div>
                 <Dialog open={isNewMessageOpen} onOpenChange={setIsNewMessageOpen}>
@@ -212,10 +212,10 @@ export default function MessagesPage() {
                 </Dialog>
             </div>
 
-            <Card className="shadow-sm h-[650px] overflow-hidden border-slate-200">
-                <div className="grid grid-cols-12 h-full">
+            <Card className="shadow-sm h-[650px] overflow-hidden border-slate-200 min-w-0 w-full">
+                <div className="grid grid-cols-1 md:grid-cols-12 h-full min-w-0">
                     {/* Conversations List */}
-                    <div className="col-span-4 border-r border-slate-200 bg-white">
+                    <div className="md:col-span-4 border-r border-slate-200 bg-white min-w-0 flex flex-col">
                         <div className="p-4 border-b border-slate-200">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -268,7 +268,7 @@ export default function MessagesPage() {
                     </div>
 
                     {/* Chat Area */}
-                    <div className="col-span-8 flex flex-col bg-slate-50/30">
+                    <div className="md:col-span-8 flex flex-col bg-slate-50/30 min-w-0">
                         {selectedConversation ? (
                             <>
                                 <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm">

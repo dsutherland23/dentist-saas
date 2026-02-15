@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Stethoscope, Sparkles, ArrowRight, ShieldCheck, Mail, Lock } from "lucide-react"
 
 import { toast } from "sonner"
@@ -108,15 +107,6 @@ export default function LoginPage() {
                                             className="pl-10 bg-white/50 border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
                                         />
                                     </div>
-                                </div>
-                                <div className="flex items-center space-x-2 ml-1">
-                                    <Checkbox id="remember" className="border-slate-300 data-[state=checked]:bg-teal-600 data-[state=checked]:border-teal-600" />
-                                    <label
-                                        htmlFor="remember"
-                                        className="text-sm text-slate-600 cursor-pointer select-none"
-                                    >
-                                        Remember me for 30 days
-                                    </label>
                                 </div>
                                 <Button
                                     className="w-full min-h-[44px] h-12 gradient-primary text-white font-bold rounded-xl shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/40 transition-all group"

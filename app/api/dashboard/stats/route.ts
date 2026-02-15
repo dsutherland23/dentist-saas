@@ -35,20 +35,22 @@ export async function GET() {
             totalRevenueResult,
             lastMonthRevenueResult,
             patientsResult,
-            lastMonthPatientsResult,
+            newPatientsThisMonthResult,
             appointmentsResult,
             completedAppointmentsResult,
             todayAppointmentsResult,
             lastMonthAppointmentsResult,
             lastMonthCompletedAppointmentsResult,
             todayPaymentsResult,
+            mtdPaymentsResult,
+            mtdInvoicesResult,
             outstandingInvoicesResult,
             pendingClaimsResult,
             treatmentsResult,
             todayAppointmentsDetailResult,
             mtdAppointmentsDetailResult
         ] = await Promise.all([
-            // Total revenue this month
+            // Total revenue this month (paid invoices)
             supabase
                 .from("invoices")
                 .select("total_amount")
@@ -134,6 +136,20 @@ export async function GET() {
                     .lte("payment_date", end.toISOString())
             })(),
 
+            // MTD payments (for collection rate: collected this month)
+            supabase
+                .from("payments")
+                .select("amount_paid")
+                .eq("clinic_id", clinicId)
+                .gte("payment_date", monthStart.toISOString()),
+
+            // MTD invoices total_amount (for collection rate: billed this month)
+            supabase
+                .from("invoices")
+                .select("total_amount")
+                .eq("clinic_id", clinicId)
+                .gte("created_at", monthStart.toISOString()),
+
             // Outstanding invoices (for AR total)
             supabase
                 .from("invoices")
@@ -182,7 +198,7 @@ export async function GET() {
         const revenueChange = lastMonthRevenue > 0 ? ((totalRevenue - lastMonthRevenue) / lastMonthRevenue * 100) : 0
 
         const totalPatients = patientsResult.count || 0
-        const newPatients = lastMonthPatientsResult.count || 0
+        const newPatients = newPatientsThisMonthResult.count || 0
 
         const totalAppointments = appointmentsResult.count || 0
         const completedAppointments = completedAppointmentsResult.count || 0
@@ -267,8 +283,18 @@ export async function GET() {
             0
         ) || 0
 
-        // Collection rate (MTD collected / MTD revenue)
-        const collectionRate = totalRevenue > 0 ? (totalRevenue / mtdProduction * 100) : 0
+        // Collection rate: MTD payments collected / MTD invoiced (billed)
+        const totalCollectedMTD = mtdPaymentsResult.data?.reduce(
+            (sum, pay: any) => sum + parseFloat(pay.amount_paid || 0),
+            0
+        ) || 0
+        const totalBilledMTD = mtdInvoicesResult.data?.reduce(
+            (sum, inv: any) => sum + parseFloat(inv.total_amount || 0),
+            0
+        ) || 0
+        const collectionRate = totalBilledMTD > 0
+            ? (totalCollectedMTD / totalBilledMTD) * 100
+            : 0
 
         // Outstanding claims
         const outstandingClaims = pendingClaimsResult.data?.reduce(

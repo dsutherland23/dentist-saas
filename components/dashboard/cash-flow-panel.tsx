@@ -7,10 +7,12 @@ import {
     TrendingUp,
     Clock,
     CreditCard,
-    Wallet,
-    Loader2
+    Loader2,
+    AlertCircle
 } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { formatCurrency } from "@/lib/financial-utils"
+import { fetchWithAuth } from "@/lib/fetch-client"
 
 interface CashFlowData {
     arAging: {
@@ -36,30 +38,40 @@ interface CashFlowData {
     }
 }
 
-export function CashFlowPanel() {
+interface CashFlowPanelProps {
+    refreshKey?: number
+}
+
+export function CashFlowPanel({ refreshKey = 0 }: CashFlowPanelProps) {
     const [data, setData] = useState<CashFlowData | null>(null)
     const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-        fetchData()
-    }, [])
+    const [error, setError] = useState<string | null>(null)
 
     const fetchData = async () => {
         try {
             setLoading(true)
-            const res = await fetch("/api/dashboard/financial-metrics")
-            if (res.ok) {
-                const json = await res.json()
-                setData(json)
+            setError(null)
+            const res = await fetchWithAuth("/api/dashboard/financial-metrics")
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                throw new Error(err.error || `Failed to load: ${res.status}`)
             }
-        } catch (error) {
-            console.error("Error fetching cash flow data:", error)
+            const json = await res.json()
+            setData(json)
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to load financial metrics"
+            setError(message)
+            setData(null)
         } finally {
             setLoading(false)
         }
     }
 
-    if (loading) {
+    useEffect(() => {
+        fetchData()
+    }, [refreshKey])
+
+    if (loading && !data) {
         return (
             <div className="dashboard-panel">
                 <div className="dashboard-panel-body flex justify-center py-16">
@@ -69,9 +81,27 @@ export function CashFlowPanel() {
         )
     }
 
+    if (error && !data) {
+        return (
+            <div className="dashboard-panel">
+                <div className="dashboard-panel-body flex flex-col items-center justify-center py-16 gap-4">
+                    <AlertCircle className="h-10 w-10 text-amber-500" />
+                    <p className="text-sm text-slate-600 text-center">{error}</p>
+                    <Button variant="outline" size="sm" onClick={fetchData}>Try again</Button>
+                </div>
+            </div>
+        )
+    }
+
     if (!data) {
         return null
     }
+
+    const collectionRate = Number(data.collectionMetrics?.collectionRate) ?? 0
+    const avgTurnaround = Number(data.avgPaymentTurnaround) ?? 0
+    const paymentMethods = data.paymentMethodBreakdown && typeof data.paymentMethodBreakdown === "object"
+        ? Object.entries(data.paymentMethodBreakdown)
+        : []
 
     const getBucketColor = (bucket: string) => {
         switch (bucket) {
@@ -104,7 +134,7 @@ export function CashFlowPanel() {
                             Accounts Receivable Aging
                         </h3>
                         <div className="space-y-3">
-                            {data.arAging.buckets.map((bucket) => (
+                            {(data.arAging?.buckets ?? []).map((bucket) => (
                                 <div key={bucket.bucket} className="flex items-center justify-between">
                                     <div className="flex items-center gap-3">
                                         <Badge variant="outline" className={`${getBucketColor(bucket.bucket)} font-mono text-xs`}>
@@ -122,7 +152,7 @@ export function CashFlowPanel() {
                             <div className="pt-3 mt-3 border-t border-slate-200 flex items-center justify-between">
                                 <span className="text-sm font-bold text-slate-900">Total Outstanding</span>
                                 <span className="text-lg font-bold text-teal-600">
-                                    {formatCurrency(data.arAging.totalOutstanding)}
+                                    {formatCurrency(data.arAging?.totalOutstanding ?? 0)}
                                 </span>
                             </div>
                         </div>
@@ -138,10 +168,10 @@ export function CashFlowPanel() {
                                 </p>
                             </div>
                             <p className="text-3xl font-bold text-teal-900 mb-1">
-                                {data.collectionMetrics.collectionRate.toFixed(1)}%
+                                {collectionRate.toFixed(1)}%
                             </p>
                             <p className="text-xs text-teal-700">
-                                {formatCurrency(data.collectionMetrics.totalCollected)} collected
+                                {formatCurrency(data.collectionMetrics?.totalCollected ?? 0)} collected
                             </p>
                         </div>
 
@@ -153,7 +183,7 @@ export function CashFlowPanel() {
                                 </p>
                             </div>
                             <p className="text-3xl font-bold text-blue-900 mb-1">
-                                {data.avgPaymentTurnaround}
+                                {avgTurnaround}
                             </p>
                             <p className="text-xs text-blue-700">
                                 days to payment
@@ -171,14 +201,18 @@ export function CashFlowPanel() {
                                 </p>
                             </div>
                             <div className="space-y-2">
-                                {Object.entries(data.paymentMethodBreakdown).map(([method, amount]) => (
-                                    <div key={method} className="flex items-center justify-between text-xs">
-                                        <span className="text-purple-700 capitalize">{method}:</span>
-                                        <span className="font-semibold text-purple-900">
-                                            {formatCurrency(amount as number)}
-                                        </span>
-                                    </div>
-                                ))}
+                                {paymentMethods.length === 0 ? (
+                                    <p className="text-xs text-purple-600">No payments this month</p>
+                                ) : (
+                                    paymentMethods.map(([method, amount]) => (
+                                        <div key={method} className="flex items-center justify-between text-xs">
+                                            <span className="text-purple-700 capitalize">{method}:</span>
+                                            <span className="font-semibold text-purple-900">
+                                                {formatCurrency(Number(amount) || 0)}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 
@@ -190,10 +224,10 @@ export function CashFlowPanel() {
                                 </p>
                             </div>
                             <p className="text-2xl font-bold text-emerald-900 mb-1">
-                                {formatCurrency(data.cashFlowForecast.next30Days)}
+                                {formatCurrency(Number(data.cashFlowForecast?.next30Days) ?? 0)}
                             </p>
                             <p className="text-xs text-emerald-700">
-                                {data.cashFlowForecast.scheduledAppointments} scheduled appointments
+                                {Number(data.cashFlowForecast?.scheduledAppointments) ?? 0} scheduled appointments
                             </p>
                         </div>
                     </div>

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Phone, Clock, CalendarCheck } from "lucide-react"
+import { fetchWithAuth } from "@/lib/fetch-client"
 
 const REMINDER_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
 const DISMISSED_KEY = "appointment-reminders-dismissed"
@@ -31,7 +32,7 @@ export function AppointmentReminderModal() {
 
     const fetchReminders = useCallback(async () => {
         try {
-            const res = await fetch("/api/dashboard/reminders")
+            const res = await fetchWithAuth("/api/dashboard/reminders")
             if (!res.ok) return
             const data = await res.json()
             const list = data.reminders || []

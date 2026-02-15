@@ -217,7 +217,7 @@ export default function ClinicalReferralsPage() {
     const handleRefreshData = () => fetchSpecialists()
 
     return (
-        <div className="min-h-[50vh] h-[calc(100vh-4rem)] sm:h-[calc(100vh-64px)] flex flex-col bg-white overflow-hidden max-w-full">
+        <div className="min-h-[50vh] h-[calc(100vh-4rem)] sm:h-[calc(100vh-64px)] flex flex-col bg-white overflow-hidden max-w-full w-full min-w-0">
             {/* Header */}
             <div className="border-b border-slate-200 bg-white px-3 sm:px-6 md:px-8 py-4 sm:py-6 shrink-0">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">

@@ -276,7 +276,7 @@ export function TimeOffRequests() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
             {/* Stats Cards */}
             <div className="grid gap-4 md:grid-cols-4">
                 <Card className="shadow-sm border-l-4 border-l-amber-500">
@@ -327,10 +327,10 @@ export function TimeOffRequests() {
             </div>
 
             {/* Requests Table */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm min-w-0 overflow-hidden">
                 <CardHeader>
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className="min-w-0">
                             <CardTitle>Time-Off Requests</CardTitle>
                             <CardDescription>
                                 {isAdmin
@@ -497,7 +497,8 @@ export function TimeOffRequests() {
                             </Select>
                         </div>
                     )}
-                    <Table>
+                    <div className="overflow-x-auto min-w-0 -mx-6 sm:mx-0">
+                        <Table className="min-w-[600px]">
                         <TableHeader>
                             <TableRow>
                                 {isAdmin && <TableHead>Staff Member</TableHead>}
@@ -586,6 +587,7 @@ export function TimeOffRequests() {
                             )}
                         </TableBody>
                     </Table>
+                    </div>
                 </CardContent>
             </Card>
         </div>
