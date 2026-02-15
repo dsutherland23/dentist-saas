@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog"
 import { differenceInMinutes, addMinutes, isAfter } from "date-fns"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
+import { CheckoutPaymentModal } from "@/components/calendar/checkout-payment-modal"
 import { useRouter } from "next/navigation"
 import { QueueReceiptDialog, type QueueReceiptData } from "@/components/calendar/queue-receipt-dialog"
 
@@ -104,6 +105,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const [isUnblocking, setIsUnblocking] = useState(false)
     const [receiptData, setReceiptData] = useState<QueueReceiptData | null>(null)
     const [isReceiptOpen, setIsReceiptOpen] = useState(false)
+    const [checkoutAppt, setCheckoutAppt] = useState<{ id: string; patientName: string; treatment_type: string; patient_id: string } | null>(null)
 
     const closeContextMenu = useCallback(() => setContextMenuBlock(null), [])
 
@@ -496,7 +498,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             <Button
                                 className="h-8 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60"
                                 disabled={updatingStatusId === appt.id}
-                                onClick={() => handleStatusChange(appt.id, "completed")}
+                                onClick={() => setCheckoutAppt({ id: appt.id, patientName: appt.patientName, treatment_type: appt.treatment_type || "Appointment", patient_id: appt.patient_id })}
                             >
                                 {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Complete / Check out"}
                             </Button>
@@ -593,6 +595,18 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     return (
         <div className="flex flex-col min-h-[400px] h-[calc(100vh-8rem)] sm:h-[calc(100vh-100px)] bg-slate-50 p-3 sm:p-4 md:p-6 max-w-full w-full min-w-0 overflow-hidden">
+            <CheckoutPaymentModal
+                open={!!checkoutAppt}
+                onOpenChange={(o) => !o && setCheckoutAppt(null)}
+                appointment={checkoutAppt ?? { id: "", patientName: "", treatment_type: "", patient_id: "" }}
+                onConfirmPaid={async () => {
+                    if (checkoutAppt) {
+                        setCheckoutAppt(null)
+                        await handleStatusChange(checkoutAppt.id, "completed")
+                        router.refresh()
+                    }
+                }}
+            />
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 shrink-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
                     <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">

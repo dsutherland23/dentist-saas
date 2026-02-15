@@ -24,9 +24,17 @@ interface Treatment {
     category?: string
 }
 
+interface InvoiceItem {
+    description: string
+    quantity: number
+    unit_price: number
+}
+
 interface NewInvoiceDialogProps {
     patients?: any[]
     defaultPatientId?: string
+    defaultItems?: InvoiceItem[]
+    appointmentId?: string
     treatments?: Treatment[]
     onSuccess?: (invoice?: { id: string; invoice_number: string; total_amount: number }) => void
     trigger?: React.ReactNode
@@ -34,7 +42,7 @@ interface NewInvoiceDialogProps {
     onOpenChange?: (open: boolean) => void
 }
 
-export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, treatments: initialTreatments, onSuccess, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: NewInvoiceDialogProps) {
+export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, defaultItems, appointmentId, treatments: initialTreatments, onSuccess, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: NewInvoiceDialogProps) {
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = controlledOpen !== undefined
     const open = isControlled ? controlledOpen : internalOpen
@@ -45,7 +53,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
     const [newInvoice, setNewInvoice] = useState({
         patient_id: defaultPatientId || "",
         due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        items: [{ description: "", quantity: 1, unit_price: 0 }]
+        items: (defaultItems && defaultItems.length > 0) ? defaultItems : [{ description: "", quantity: 1, unit_price: 0 }]
     })
 
     useEffect(() => {
@@ -79,15 +87,24 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
     }, [open, initialTreatments])
 
     useEffect(() => {
-        if (open && defaultPatientId) {
-            setNewInvoice(prev => ({ ...prev, patient_id: defaultPatientId }))
+        if (open) {
+            setNewInvoice(prev => ({
+                ...prev,
+                patient_id: defaultPatientId || prev.patient_id,
+                items: (defaultItems && defaultItems.length > 0) ? defaultItems : prev.items
+            }))
         }
-    }, [open, defaultPatientId])
+    }, [open, defaultPatientId, defaultItems])
 
     const hasAutoFilled = useRef(false)
     useEffect(() => {
         if (!open) {
             hasAutoFilled.current = false
+            return
+        }
+        // Skip auto-fill if defaultItems were provided (e.g. from checkout)
+        if (defaultItems && defaultItems.length > 0 && defaultItems[0].description) {
+            hasAutoFilled.current = true
             return
         }
         if (treatments.length > 0 && !hasAutoFilled.current) {
@@ -100,7 +117,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
                     : prev.items
             }))
         }
-    }, [open, treatments])
+    }, [open, treatments, defaultItems])
 
     const applyTreatmentToItem = (index: number, treatmentId: string) => {
         const t = treatments.find(x => x.id === treatmentId)
@@ -121,7 +138,10 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
             const res = await fetch('/api/invoices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newInvoice)
+                body: JSON.stringify({
+                    ...newInvoice,
+                    ...(appointmentId && { appointment_id: appointmentId })
+                })
             })
 
             if (res.ok) {

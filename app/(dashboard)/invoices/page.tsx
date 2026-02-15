@@ -394,7 +394,11 @@ export default function InvoicesPage() {
                         </TableHeader>
                         <TableBody>
                             {filteredInvoices.map((invoice) => (
-                                <TableRow key={invoice.id} className="hover:bg-slate-50 transition-colors">
+                                <TableRow
+                                    key={invoice.id}
+                                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                                    onClick={() => handleViewDetails(invoice.id)}
+                                >
                                     <TableCell className="font-medium text-slate-900">
                                         {invoice.invoice_number}
                                     </TableCell>
@@ -418,7 +422,7 @@ export default function InvoicesPage() {
                                             {invoice.status.toUpperCase()}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0">

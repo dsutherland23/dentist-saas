@@ -56,7 +56,6 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { NewInvoiceDialog } from "../../invoices/new-invoice-dialog"
 import { NewAppointmentDialog } from "../../calendar/new-appointment-dialog"
@@ -118,7 +117,6 @@ interface PatientProfileClientProps {
 
 export default function PatientProfileClient({ patient, appointments, treatments, files, availableTreatments, dentists, currentUserId }: PatientProfileClientProps) {
     const router = useRouter()
-    const supabase = createClient()
     const [isAlertsOpen, setIsAlertsOpen] = useState(false)
     const [isInsuranceOpen, setIsInsuranceOpen] = useState(false)
     const [isContactOpen, setIsContactOpen] = useState(false)
@@ -298,33 +296,26 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
         setIsUploading(true)
         try {
-            const fileExt = fileData.file.name.split('.').pop()
-            const fileName = `${Math.random()}.${fileExt}`
-            const filePath = `${patient.id}/${fileName}`
+            const formData = new FormData()
+            formData.append("file", fileData.file)
+            formData.append("name", fileData.name || fileData.file.name)
+            formData.append("type", fileData.type || "document")
 
-            const { error: uploadError } = await supabase.storage
-                .from('patient-files')
-                .upload(filePath, fileData.file)
-
-            if (uploadError) {
-                const msg = (uploadError as { message?: string }).message || "Storage upload failed"
-                throw new Error(msg)
-            }
-
-            const res = await fetch(`/api/patients/${patient.id}/files`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: fileData.name || fileData.file.name,
-                    type: fileData.type,
-                    file_path: filePath
-                })
+            const res = await fetch(`/api/patients/${patient.id}/files/upload`, {
+                method: "POST",
+                body: formData,
             })
 
-            if (res.ok) {
-                toast.success("File uploaded successfully")
-                router.refresh()
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+                const msg = data?.details || data?.error || "Upload failed"
+                const hint = data?.hint ? ` ${data.hint}` : ""
+                throw new Error(msg + hint)
             }
+            toast.success("File uploaded successfully")
+            router.refresh()
+            setIsFileOpen(false)
+            setFileData({ name: "", type: "document", file: null })
         } catch (error: unknown) {
             console.error(error)
             const err = error as { message?: string; error?: string }
@@ -332,7 +323,6 @@ export default function PatientProfileClient({ patient, appointments, treatments
             toast.error(msg ? `Upload failed: ${msg}` : "Failed to upload file. Check file size (max 10MB) and try again.")
         } finally {
             setIsUploading(false)
-            setIsFileOpen(false)
             setCameraStream(null)
         }
     }

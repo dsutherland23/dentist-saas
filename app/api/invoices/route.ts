@@ -23,6 +23,7 @@ export async function GET(req: Request) {
         const url = new URL(req.url)
         const invoiceId = url.searchParams.get("id")
         const patientId = url.searchParams.get("patient_id")
+        const appointmentId = url.searchParams.get("appointment_id")
 
         if (invoiceId) {
             const { data: invoice, error } = await supabase
@@ -39,6 +40,23 @@ export async function GET(req: Request) {
 
             if (error) throw error
             return NextResponse.json(invoice)
+        }
+
+        if (appointmentId) {
+            const { data: invoice, error } = await supabase
+                .from("invoices")
+                .select(`
+                    *,
+                    patient:patients(first_name, last_name, email),
+                    items:invoice_items(*)
+                `)
+                .eq("clinic_id", userData.clinic_id)
+                .eq("appointment_id", appointmentId)
+                .order("created_at", { ascending: false })
+                .limit(1)
+                .maybeSingle()
+            if (error) throw error
+            return NextResponse.json(invoice || null)
         }
 
         let query = supabase
@@ -85,7 +103,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
-        const { patient_id, items, due_date } = body
+        const { patient_id, items, due_date, appointment_id } = body
 
         if (!patient_id || !items || items.length === 0) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -101,6 +119,7 @@ export async function POST(req: Request) {
             .insert({
                 clinic_id: userData.clinic_id,
                 patient_id,
+                appointment_id: appointment_id || null,
                 invoice_number,
                 total_amount,
                 subtotal,
