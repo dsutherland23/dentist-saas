@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
     DollarSign,
@@ -62,14 +61,11 @@ export function CashFlowPanel() {
 
     if (loading) {
         return (
-            <Card className="card-modern border-0">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Cash Flow & Collections</CardTitle>
-                </CardHeader>
-                <CardContent className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-                </CardContent>
-            </Card>
+            <div className="dashboard-panel">
+                <div className="dashboard-panel-body flex justify-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                </div>
+            </div>
         )
     }
 
@@ -95,19 +91,12 @@ export function CashFlowPanel() {
     }
 
     return (
-        <Card className="card-modern border-0">
-            <CardHeader>
-                <div>
-                    <CardTitle className="text-2xl flex items-center gap-2">
-                        <Wallet className="h-6 w-6 text-teal-600" />
-                        Cash Flow & Collections
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                        Financial health and payment metrics
-                    </CardDescription>
-                </div>
-            </CardHeader>
-            <CardContent>
+        <div className="dashboard-panel">
+            <div className="dashboard-panel-header">
+                <h3 className="text-sm font-semibold text-slate-900">Cash flow & collections</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Financial health and payment metrics</p>
+            </div>
+            <div className="dashboard-panel-body">
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                     {/* AR Aging Breakdown */}
                     <div className="lg:col-span-2 p-6 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100/50 border border-slate-200">
@@ -209,7 +198,7 @@ export function CashFlowPanel() {
                         </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     )
 }

@@ -268,4 +268,47 @@
   .text-gradient-accent {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600;
   }
+
+  /* Dashboard: professional stat cards */
+  .dashboard-stat-card {
+    @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 transition-all duration-200;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  }
+  .dashboard-stat-card:hover {
+    box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.06), 0 2px 6px -2px rgb(0 0 0 / 0.04);
+    border-color: hsl(214 32% 91%);
+  }
+  .dashboard-stat-card .stat-value {
+    @apply font-semibold tabular-nums tracking-tight text-slate-900;
+  }
+  .dashboard-section-title {
+    @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+
+  /* Segmented control (tabs) */
+  .dashboard-segmented {
+    @apply inline-flex rounded-xl bg-slate-100/80 p-1;
+  }
+  .dashboard-segmented-trigger {
+    @apply rounded-lg px-5 py-2.5 text-sm font-medium text-slate-600 transition-all duration-200;
+  }
+  .dashboard-segmented-trigger[data-state="active"] {
+    @apply bg-white text-slate-900 shadow-sm;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+  .dashboard-segmented-trigger:hover:not([data-state="active"]) {
+    @apply text-slate-900;
+  }
+
+  /* Dashboard content panels */
+  .dashboard-panel {
+    @apply rounded-2xl border border-slate-200/80 bg-white overflow-hidden;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  }
+  .dashboard-panel .dashboard-panel-header {
+    @apply border-b border-slate-100 px-6 py-4;
+  }
+  .dashboard-panel .dashboard-panel-body {
+    @apply p-6;
+  }
 }

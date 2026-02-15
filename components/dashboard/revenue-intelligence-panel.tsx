@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -54,14 +53,11 @@ export function RevenueIntelligencePanel() {
 
     if (loading) {
         return (
-            <Card className="card-modern border-0">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Revenue Intelligence</CardTitle>
-                </CardHeader>
-                <CardContent className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-                </CardContent>
-            </Card>
+            <div className="dashboard-panel">
+                <div className="dashboard-panel-body flex justify-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                </div>
+            </div>
         )
     }
 
@@ -87,19 +83,12 @@ export function RevenueIntelligencePanel() {
     }
 
     return (
-        <Card className="card-modern border-0">
-            <CardHeader>
-                <div>
-                    <CardTitle className="text-2xl flex items-center gap-2">
-                        <TrendingUp className="h-6 w-6 text-teal-600" />
-                        Revenue Intelligence
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                        Treatment plan pipeline and opportunities
-                    </CardDescription>
-                </div>
-            </CardHeader>
-            <CardContent>
+        <div className="dashboard-panel">
+            <div className="dashboard-panel-header">
+                <h3 className="text-sm font-semibold text-slate-900">Revenue pipeline</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Treatment plans and opportunities</p>
+            </div>
+            <div className="dashboard-panel-body">
                 <div className="grid gap-6 md:grid-cols-3">
                     {/* Left: Unscheduled Treatment Value */}
                     <div className="p-6 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white shadow-lg">
@@ -246,7 +235,7 @@ export function RevenueIntelligencePanel() {
                         </div>
                     </div>
                 )}
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     )
 }

@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -69,15 +68,11 @@ export function InsuranceClaimsPanel() {
 
     if (loading) {
         return (
-            <Card className="card-modern border-0">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Insurance & Claims</CardTitle>
-                    <CardDescription>Claims status and reimbursement tracking</CardDescription>
-                </CardHeader>
-                <CardContent className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-                </CardContent>
-            </Card>
+            <div className="dashboard-panel">
+                <div className="dashboard-panel-body flex justify-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                </div>
+            </div>
         )
     }
 
@@ -86,30 +81,23 @@ export function InsuranceClaimsPanel() {
     }
 
     return (
-        <Card className="card-modern border-0 overflow-hidden">
-            <CardHeader className="pb-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <CardTitle className="text-2xl flex items-center gap-2">
-                            <ShieldCheck className="h-6 w-6 text-teal-600" />
-                            Insurance & Claims
-                        </CardTitle>
-                        <CardDescription className="mt-1">
-                            Claims status and reimbursement tracking
-                        </CardDescription>
-                    </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={() => router.push("/insurance-claims")}
-                    >
-                        View All Claims
-                        <ExternalLink className="h-3.5 w-3.5" />
-                    </Button>
+        <div className="dashboard-panel">
+            <div className="dashboard-panel-header flex items-center justify-between">
+                <div>
+                    <h3 className="text-sm font-semibold text-slate-900">Insurance & claims</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Status and reimbursement</p>
                 </div>
-            </CardHeader>
-            <CardContent>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-slate-600 hover:text-slate-900 -mr-2"
+                    onClick={() => router.push("/insurance-claims")}
+                >
+                    View all
+                    <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                </Button>
+            </div>
+            <div className="dashboard-panel-body">
                 <div className="grid gap-6 md:grid-cols-3">
                     {/* Left: Claims Overview */}
                     <div className="space-y-4">
@@ -276,7 +264,7 @@ export function InsuranceClaimsPanel() {
                         )}
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     )
 }

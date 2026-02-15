@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
     Calendar,
@@ -58,14 +57,11 @@ export function ChairUtilizationPanel() {
 
     if (loading) {
         return (
-            <Card className="card-modern border-0">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Chair Utilization</CardTitle>
-                </CardHeader>
-                <CardContent className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
-                </CardContent>
-            </Card>
+            <div className="dashboard-panel">
+                <div className="dashboard-panel-body flex justify-center py-16">
+                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                </div>
+            </div>
         )
     }
 
@@ -100,19 +96,12 @@ export function ChairUtilizationPanel() {
     }
 
     return (
-        <Card className="card-modern border-0">
-            <CardHeader>
-                <div>
-                    <CardTitle className="text-2xl flex items-center gap-2">
-                        <Calendar className="h-6 w-6 text-teal-600" />
-                        Appointment & Chair Utilization
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                        Today's schedule and operatory efficiency
-                    </CardDescription>
-                </div>
-            </CardHeader>
-            <CardContent>
+        <div className="dashboard-panel">
+            <div className="dashboard-panel-header">
+                <h3 className="text-sm font-semibold text-slate-900">Appointment & chair utilization</h3>
+                <p className="text-xs text-slate-500 mt-0.5">Today's schedule and operatory efficiency</p>
+            </div>
+            <div className="dashboard-panel-body">
                 <div className="grid gap-6 md:grid-cols-2">
                     {/* Left: Today's Schedule Summary */}
                     <div className="space-y-4">
@@ -265,7 +254,7 @@ export function ChairUtilizationPanel() {
                         </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     )
 }
