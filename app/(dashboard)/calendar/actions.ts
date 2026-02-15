@@ -3,10 +3,23 @@
 import { createClient } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import { getClinicId } from "../patients/actions"
+import { checkLimit } from "@/lib/limit-enforcement"
 
 export async function saveAppointment(formData: FormData) {
     const supabase = await createClient()
     const clinicId = await getClinicId()
+    
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        throw new Error("Unauthorized")
+    }
+
+    // Check appointments_per_month limit
+    const limitCheck = await checkLimit(user.id, "appointments_per_month", 1)
+    if (!limitCheck.allowed) {
+        throw new Error(limitCheck.message || "Monthly appointment limit reached")
+    }
 
     const rawData = {
         patient_id: formData.get("patientId") as string,

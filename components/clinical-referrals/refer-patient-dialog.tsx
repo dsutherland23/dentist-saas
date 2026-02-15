@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Loader2, Copy, Mail, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
+import { buildReferralIntakeEmailContent, REFERRAL_INTAKE_EMAIL_SUBJECT, type ClinicBranding } from "@/lib/branding"
 
 interface Specialist {
     id: string
@@ -36,6 +37,8 @@ interface ReferPatientDialogProps {
     /** When set, after referral is sent we auto-open Email or WhatsApp with the intake link */
     preferredShareChannel?: "email" | "whatsapp" | null
     onSuccess?: () => void
+    /** Clinic branding for message header/footer */
+    clinic?: ClinicBranding | null
 }
 
 export function ReferPatientDialog({
@@ -44,6 +47,7 @@ export function ReferPatientDialog({
     specialist,
     preferredShareChannel,
     onSuccess,
+    clinic,
 }: ReferPatientDialogProps) {
     const [loading, setLoading] = React.useState(false)
     const [intakeLink, setIntakeLink] = React.useState<string | null>(null)
@@ -110,16 +114,17 @@ export function ReferPatientDialog({
             if (data.intake_link) {
                 setIntakeLink(data.intake_link)
                 if (preferredShareChannel === "email") {
-                    const subject = encodeURIComponent("Referral intake – please confirm your practice details")
-                    const body = encodeURIComponent(
-                        `Please use the link below to confirm your practice details and location for the referral.\n\n${data.intake_link}\n\nThis link expires in 48 hours and can only be used once.`
-                    )
-                    window.open(`mailto:?subject=${subject}&body=${body}`, "_blank")
+                    const body = buildReferralIntakeEmailContent(data.intake_link, clinic ?? null)
+                    const subject = encodeURIComponent(REFERRAL_INTAKE_EMAIL_SUBJECT)
+                    window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(body)}`, "_blank")
                 } else if (preferredShareChannel === "whatsapp") {
-                    const text = encodeURIComponent(
-                        `Please confirm your practice details for the referral using this link (expires in 48 hours, one-time use):\n${data.intake_link}`
-                    )
-                    window.open(`https://wa.me/?text=${text}`, "_blank")
+                    const text = [
+                        "We’d like to connect regarding a patient referral. Please use this secure link to enter your practice details and pin your location on the map. Link expires in 48 hours (one-time use).",
+                        "",
+                        data.intake_link,
+                    ].join("\n")
+                    const header = clinic?.name ? `${clinic.name}\n\n` : ""
+                    window.open(`https://wa.me/?text=${encodeURIComponent(header + text)}`, "_blank")
                 }
             } else {
                 onOpenChange(false)
@@ -151,19 +156,20 @@ export function ReferPatientDialog({
 
     const shareEmail = () => {
         if (!intakeLink) return
-        const subject = encodeURIComponent("Referral intake – please confirm your practice details")
-        const body = encodeURIComponent(
-            `Please use the link below to confirm your practice details and location for the referral.\n\n${intakeLink}\n\nThis link expires in 48 hours and can only be used once.`
-        )
-        window.open(`mailto:?subject=${subject}&body=${body}`, "_blank")
+        const body = buildReferralIntakeEmailContent(intakeLink, clinic ?? null)
+        const subject = encodeURIComponent(REFERRAL_INTAKE_EMAIL_SUBJECT)
+        window.open(`mailto:?subject=${subject}&body=${encodeURIComponent(body)}`, "_blank")
     }
 
     const shareWhatsApp = () => {
         if (!intakeLink) return
-        const text = encodeURIComponent(
-            `Please confirm your practice details for the referral using this link (expires in 48 hours, one-time use):\n${intakeLink}`
-        )
-        window.open(`https://wa.me/?text=${text}`, "_blank")
+        const text = [
+            "We’d like to connect regarding a patient referral. Please use this secure link to enter your practice details and pin your location on the map. Link expires in 48 hours (one-time use).",
+            "",
+            intakeLink,
+        ].join("\n")
+        const header = clinic?.name ? `${clinic.name}\n\n` : ""
+        window.open(`https://wa.me/?text=${encodeURIComponent(header + text)}`, "_blank")
     }
 
     if (!specialist) return null
@@ -181,7 +187,7 @@ export function ReferPatientDialog({
                 {intakeLink ? (
                     <div className="space-y-4 mt-4">
                         <p className="text-sm text-slate-600">
-                            Share this secure intake link with {specialist.name}. They can confirm their practice details and location (link expires in 48 hours, one-time use).
+                            Share this secure link with {specialist.name}. They can enter their practice details and pin their location on the map. The link expires in 48 hours and can only be used once.
                         </p>
                         <div className="flex flex-wrap gap-2">
                             <Button type="button" variant="outline" size="sm" onClick={copyIntakeLink}>

@@ -32,8 +32,14 @@ interface Specialist {
     website?: string
 }
 
+interface Specialty {
+    id: string
+    name: string
+}
+
 interface SpecialistMapProps {
     specialists: Specialist[]
+    specialties?: Specialty[]
     onReferClick?: (specialist: Specialist) => void
     className?: string
     searchQuery?: string
@@ -41,7 +47,7 @@ interface SpecialistMapProps {
 
 const defaultCenter: [number, number] = [18.1096, -77.2975] // Jamaica
 
-export function SpecialistMap({ specialists, onReferClick, className, searchQuery }: SpecialistMapProps) {
+export function SpecialistMap({ specialists, specialties = [], onReferClick, className, searchQuery }: SpecialistMapProps) {
     // Calculate center based on specialists if available
     const center: [number, number] = specialists.length > 0
         ? [
@@ -54,6 +60,7 @@ export function SpecialistMap({ specialists, onReferClick, className, searchQuer
         <div className={className}>
             <LeafletMap
                 specialists={specialists}
+                specialties={specialties}
                 onReferClick={onReferClick}
                 center={center}
                 zoom={specialists.length > 0 ? 12 : 9}

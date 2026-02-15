@@ -131,15 +131,38 @@ export async function PATCH(request: Request) {
         }
 
         const body = await request.json()
-        const { id, ...updates } = body
+        const { id, allowed_sections, limits, ...updates } = body
 
         if (!id) {
             return NextResponse.json({ error: "Missing Staff ID" }, { status: 400 })
         }
 
+        // Validate allowed_sections if provided
+        if (allowed_sections !== undefined && allowed_sections !== null && !Array.isArray(allowed_sections)) {
+            return NextResponse.json({ 
+                error: "allowed_sections must be an array or null" 
+            }, { status: 400 })
+        }
+
+        // Validate limits if provided
+        if (limits !== undefined && limits !== null && typeof limits !== 'object') {
+            return NextResponse.json({ 
+                error: "limits must be an object or null" 
+            }, { status: 400 })
+        }
+
+        // Build update object with all fields
+        const updateData: any = { ...updates }
+        if (allowed_sections !== undefined) {
+            updateData.allowed_sections = allowed_sections
+        }
+        if (limits !== undefined) {
+            updateData.limits = limits
+        }
+
         const { data: updatedStaff, error } = await supabase
             .from("users")
-            .update(updates)
+            .update(updateData)
             .eq("id", id)
             .eq("clinic_id", adminData.clinic_id)
             .select()

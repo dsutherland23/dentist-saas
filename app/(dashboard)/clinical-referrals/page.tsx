@@ -15,6 +15,7 @@ import { toast } from "sonner"
 import { SpecialistMap } from "@/components/clinical-referrals/specialist-map"
 import { SpecialistSearch } from "@/components/clinical-referrals/specialist-search"
 import { SpecialtyFilter } from "@/components/clinical-referrals/specialty-filter"
+import { SpecialtyLegend } from "@/components/clinical-referrals/specialty-legend"
 import { SpecialistList } from "@/components/clinical-referrals/specialist-list"
 import { ReferPatientDialog } from "@/components/clinical-referrals/refer-patient-dialog"
 import { AddSpecialistDialog } from "@/components/clinical-referrals/add-specialist-dialog"
@@ -23,6 +24,7 @@ import { AddYourselfSpecialistDialog } from "@/components/clinical-referrals/add
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { UserPlus } from "lucide-react"
+import { buildReferralIntakeEmailContent, REFERRAL_INTAKE_EMAIL_SUBJECT, type ClinicBranding } from "@/lib/branding"
 
 interface Specialist {
     id: string
@@ -37,6 +39,7 @@ interface Specialist {
     email?: string
     website?: string
     bio?: string
+    user_id?: string | null
 }
 
 interface Specialty {
@@ -67,6 +70,7 @@ export default function ClinicalReferralsPage() {
     const [sendLinkLoading, setSendLinkLoading] = React.useState<"email" | "whatsapp" | null>(null)
     const [selectedSpecialist, setSelectedSpecialist] = React.useState<Specialist | null>(null)
     const [preferredShareChannel, setPreferredShareChannel] = React.useState<"email" | "whatsapp" | null>(null)
+    const [clinic, setClinic] = React.useState<ClinicBranding | null>(null)
 
     const openReferFlow = (specialist: Specialist) => {
         setSelectedSpecialist(specialist)
@@ -76,16 +80,17 @@ export default function ClinicalReferralsPage() {
 
     const openWithLink = (intakeLink: string, channel: "email" | "whatsapp") => {
         if (channel === "email") {
-            const subject = encodeURIComponent("Referral intake – please confirm your practice details")
-            const body = encodeURIComponent(
-                `Please use the link below to confirm your practice details and location for the referral.\n\n${intakeLink}\n\nThis link expires in 48 hours and can only be used once.`
-            )
-            window.location.href = `mailto:?subject=${subject}&body=${body}`
+            const body = buildReferralIntakeEmailContent(intakeLink, clinic)
+            const subject = encodeURIComponent(REFERRAL_INTAKE_EMAIL_SUBJECT)
+            window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`
         } else {
-            const text = encodeURIComponent(
-                `Please confirm your practice details for the referral using this link (expires in 48 hours, one-time use):\n${intakeLink}`
-            )
-            window.open(`https://wa.me/?text=${text}`, "_blank")
+            const text = [
+                "We’d like to connect regarding a patient referral. Please use this secure link to enter your practice details and pin your location on the map. Link expires in 48 hours (one-time use).",
+                "",
+                intakeLink,
+            ].join("\n")
+            const header = clinic?.name ? `${clinic.name}\n\n` : ""
+            window.open(`https://wa.me/?text=${encodeURIComponent(header + text)}`, "_blank")
         }
     }
 
@@ -134,6 +139,16 @@ export default function ClinicalReferralsPage() {
             setSendLinkLoading(null)
         }
     }
+
+    // Fetch clinic for branding (receipt/referral header & footer)
+    React.useEffect(() => {
+        fetch("/api/settings/clinic")
+            .then((res) => res.json())
+            .then((data) => {
+                if (data?.name) setClinic({ name: data.name, logo_url: data.logo_url, phone: data.phone, website: data.website, address: data.address, email: data.email })
+            })
+            .catch(() => {})
+    }, [])
 
     // Fetch specialties
     React.useEffect(() => {
@@ -202,16 +217,17 @@ export default function ClinicalReferralsPage() {
     const handleRefreshData = () => fetchSpecialists()
 
     return (
-        <div className="h-[calc(100vh-64px)] flex flex-col bg-white overflow-hidden">
+        <div className="min-h-[50vh] h-[calc(100vh-4rem)] sm:h-[calc(100vh-64px)] flex flex-col bg-white overflow-hidden max-w-full">
             {/* Header */}
-            <div className="border-b border-slate-200 bg-white px-8 py-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h1 className="text-3xl font-bold text-slate-900">Clinical Referrals</h1>
-                    <div className="flex items-center gap-2 flex-wrap">
+            <div className="border-b border-slate-200 bg-white px-3 sm:px-6 md:px-8 py-4 sm:py-6 shrink-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                    <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 truncate">Clinical Referrals</h1>
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
                         <Button
                             onClick={() => setAddSpecialistChoiceOpen(true)}
                             variant="outline"
-                            className="border-teal-600 text-teal-600 hover:bg-teal-50"
+                            size="sm"
+                            className="border-teal-600 text-teal-600 hover:bg-teal-50 text-sm"
                         >
                             <UserPlus className="h-4 w-4 mr-2" />
                             Add Specialist
@@ -220,16 +236,16 @@ export default function ClinicalReferralsPage() {
                 </div>
 
                 {/* Tabs */}
-                <Tabs defaultValue="find" className="w-full">
-                    <TabsList className="bg-slate-100">
-                        <TabsTrigger value="find">Find Specialist</TabsTrigger>
-                        <TabsTrigger value="received" onClick={() => router.push("/clinical-referrals/received")}>
+                <Tabs defaultValue="find" className="w-full min-w-0">
+                    <TabsList className="bg-slate-100 w-full flex flex-wrap h-auto gap-1 p-1">
+                        <TabsTrigger value="find" className="text-xs sm:text-sm flex-1 sm:flex-none">Find Specialist</TabsTrigger>
+                        <TabsTrigger value="received" onClick={() => router.push("/clinical-referrals/received")} className="text-xs sm:text-sm flex-1 sm:flex-none">
                             Received
                         </TabsTrigger>
-                        <TabsTrigger value="sent" onClick={() => router.push("/clinical-referrals/sent")}>
+                        <TabsTrigger value="sent" onClick={() => router.push("/clinical-referrals/sent")} className="text-xs sm:text-sm flex-1 sm:flex-none">
                             Sent
                         </TabsTrigger>
-                        <TabsTrigger value="settings" onClick={() => router.push("/clinical-referrals/settings")}>
+                        <TabsTrigger value="settings" onClick={() => router.push("/clinical-referrals/settings")} className="text-xs sm:text-sm flex-1 sm:flex-none">
                             Settings
                         </TabsTrigger>
                     </TabsList>
@@ -237,8 +253,8 @@ export default function ClinicalReferralsPage() {
             </div>
 
             {/* Search and Filters */}
-            <div className="px-8 py-4 border-b border-slate-200 bg-slate-50">
-                <div className="flex gap-4">
+            <div className="px-3 sm:px-6 md:px-8 py-3 sm:py-4 border-b border-slate-200 bg-slate-50 shrink-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 min-w-0">
                     <SpecialistSearch value={searchQuery} onChange={setSearchQuery} />
                     <SpecialtyFilter
                         specialties={specialties}
@@ -246,15 +262,18 @@ export default function ClinicalReferralsPage() {
                         onChange={setSelectedSpecialty}
                     />
                 </div>
-                <p className="text-sm text-slate-500 mt-2">
-                    {filteredSpecialists.length} specialist{filteredSpecialists.length !== 1 ? "s" : ""} found
-                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                    <p className="text-xs sm:text-sm text-slate-500">
+                        {filteredSpecialists.length} specialist{filteredSpecialists.length !== 1 ? "s" : ""} found
+                    </p>
+                    <SpecialtyLegend specialties={specialties} />
+                </div>
             </div>
 
             {/* Map and List Layout */}
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
                 {/* Map - 75% on desktop */}
-                <div className="w-full md:w-3/4 h-[400px] md:h-auto border-b md:border-b-0 md:border-r border-slate-200 order-2 md:order-1">
+                <div className="w-full md:w-3/4 h-[280px] sm:h-[360px] md:h-auto min-h-[200px] border-b md:border-b-0 md:border-r border-slate-200 order-2 md:order-1 shrink-0 md:shrink">
                     {loading ? (
                         <div className="flex items-center justify-center h-full bg-slate-50">
                             <Loader2 className="h-8 w-8 animate-spin text-teal-600" />
@@ -262,6 +281,7 @@ export default function ClinicalReferralsPage() {
                     ) : (
                         <SpecialistMap
                             specialists={filteredSpecialists}
+                            specialties={specialties}
                             onReferClick={handleReferClick}
                             className="h-full w-full"
                             searchQuery={searchQuery}
@@ -270,12 +290,16 @@ export default function ClinicalReferralsPage() {
                 </div>
 
                 {/* List - 25% on desktop */}
-                <div className="w-full md:w-1/4 bg-slate-50 order-1 md:order-2 flex flex-col overflow-hidden">
-                    <div className="flex-1 min-h-0 p-4 md:p-6 overflow-hidden">
+                <div className="w-full md:w-1/4 bg-slate-50 order-1 md:order-2 flex flex-col overflow-hidden min-h-0 min-w-0">
+                    <div className="flex-1 min-h-0 p-3 sm:p-4 md:p-6 overflow-auto">
                         <SpecialistList
                             specialists={filteredSpecialists}
                             loading={loading}
                             onReferClick={handleReferClick}
+                            currentUserId={profile?.id}
+                            isAdmin={isAdmin}
+                            specialties={specialties}
+                            onEditSuccess={handleRefreshData}
                         />
                     </div>
                 </div>
@@ -296,6 +320,7 @@ export default function ClinicalReferralsPage() {
                 onOpenChange={setAddYourselfDialogOpen}
                 specialties={specialties}
                 userDisplayName={[profile?.first_name, profile?.last_name].filter(Boolean).join(" ") || ""}
+                isAdmin={isAdmin}
                 onSuccess={handleRefreshData}
             />
 
@@ -304,7 +329,7 @@ export default function ClinicalReferralsPage() {
                     <DialogHeader>
                         <DialogTitle>Send Referrals link</DialogTitle>
                         <DialogDescription>
-                            Choose how to send the intake link. Your email or WhatsApp will open with the link ready to send.
+                            Send a professional message with the secure intake link. The recipient can enter their practice details and pin their location on a map. Your email or WhatsApp app will open with the message ready to send.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-3 mt-4">
@@ -359,6 +384,10 @@ export default function ClinicalReferralsPage() {
                             specialists={filteredSpecialists}
                             loading={loading}
                             onReferClick={openReferFlow}
+                            currentUserId={profile?.id}
+                            isAdmin={isAdmin}
+                            specialties={specialties}
+                            onEditSuccess={handleRefreshData}
                         />
                     </div>
                 </DialogContent>
@@ -377,6 +406,7 @@ export default function ClinicalReferralsPage() {
                 specialist={selectedSpecialist}
                 preferredShareChannel={preferredShareChannel}
                 onSuccess={() => setPreferredShareChannel(null)}
+                clinic={clinic}
             />
         </div>
     )

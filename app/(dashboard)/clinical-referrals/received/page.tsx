@@ -22,7 +22,7 @@ interface Referral {
         first_name: string
         last_name: string
         email: string
-    }
+    } | null
     referring_provider_name?: string
     referring_organization?: string
     referring_contact?: string
@@ -135,7 +135,12 @@ export default function ReceivedReferralsPage() {
                                             {referral.patient_first_name} {referral.patient_last_name}
                                         </h3>
                                         <div className="flex items-center text-xs text-slate-500 mt-0.5">
-                                            From: <span className="font-semibold ml-1 text-slate-700">{referral.referring_provider_name || `${referral.referring_user.first_name} ${referral.referring_user.last_name}`}</span>
+                                            From: <span className="font-semibold ml-1 text-slate-700">
+                                                {referral.referring_provider_name || 
+                                                 (referral.referring_user 
+                                                   ? `${referral.referring_user.first_name} ${referral.referring_user.last_name}` 
+                                                   : "Unknown Provider")}
+                                            </span>
                                         </div>
                                     </div>
 

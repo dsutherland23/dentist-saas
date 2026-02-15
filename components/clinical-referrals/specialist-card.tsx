@@ -2,11 +2,10 @@
 
 import React from "react"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { MapPin, Phone, Mail, ExternalLink, ChevronRight, Stethoscope } from "lucide-react"
+import { ChevronRight, Stethoscope } from "lucide-react"
 import { SpecialistDetailsDialog } from "./specialist-details-dialog"
+import { getSpecialtyColor } from "@/lib/specialty-colors"
 
 interface Specialist {
     id: string
@@ -22,14 +21,24 @@ interface Specialist {
     website?: string
     bio?: string
     status?: string
+    user_id?: string | null
+}
+
+interface Specialty {
+    id: string
+    name: string
 }
 
 interface SpecialistCardProps {
     specialist: Specialist
     onReferClick?: (specialist: Specialist) => void
+    currentUserId?: string | null
+    isAdmin?: boolean
+    specialties?: Specialty[]
+    onEditSuccess?: () => void
 }
 
-export function SpecialistCard({ specialist, onReferClick }: SpecialistCardProps) {
+export function SpecialistCard({ specialist, onReferClick, currentUserId, isAdmin, specialties = [], onEditSuccess }: SpecialistCardProps) {
     const [detailsOpen, setDetailsOpen] = React.useState(false)
 
     const initials = specialist.name
@@ -63,8 +72,15 @@ export function SpecialistCard({ specialist, onReferClick }: SpecialistCardProps
                         </div>
 
                         <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs font-semibold text-teal-600 truncate flex items-center gap-1">
-                                <Stethoscope className="h-3 w-3 opacity-70" />
+                            <span
+                                className="text-xs font-semibold truncate flex items-center gap-1"
+                                style={{ color: getSpecialtyColor(specialist.specialty?.id ?? "", specialties) }}
+                            >
+                                <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{ backgroundColor: getSpecialtyColor(specialist.specialty?.id ?? "", specialties) }}
+                                    aria-hidden
+                                />
                                 {specialist.specialty.name}
                             </span>
                             {specialist.city && (
@@ -83,6 +99,10 @@ export function SpecialistCard({ specialist, onReferClick }: SpecialistCardProps
                 onOpenChange={setDetailsOpen}
                 specialist={specialist}
                 onReferClick={onReferClick}
+                currentUserId={currentUserId}
+                isAdmin={isAdmin}
+                specialties={specialties}
+                onEditSuccess={onEditSuccess}
             />
         </>
     )

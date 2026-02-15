@@ -18,7 +18,7 @@ import {
     parseISO,
     startOfDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
@@ -79,12 +79,14 @@ interface CalendarClientProps {
     initialBlockedSlots?: BlockedSlot[]
     patients: { id: string; first_name: string; last_name: string }[]
     dentists: { id: string; first_name: string; last_name: string }[]
+    clinic?: { name: string; logo_url?: string | null; phone?: string | null; website?: string | null } | null
 }
 
-export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists }: CalendarClientProps) {
+export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists, clinic }: CalendarClientProps) {
     const router = useRouter()
     const [currentDate, setCurrentDate] = useState(new Date())
-    const [view, setView] = useState<"day" | "week" | "month">("week")
+    const [view, setView] = useState<"day" | "week" | "month" | "staff">("week")
+    const [staffFilterId, setStaffFilterId] = useState<string | null>(null)
     const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
     const [pendingReschedule, setPendingReschedule] = useState<{
         appointment: any,
@@ -194,9 +196,19 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         dentistName: dentists.find(d => d.id === blk.staff_id) ? `Dr. ${dentists.find(d => d.id === blk.staff_id)?.last_name}` : "Staff"
     }))
 
+    const filteredDentists = staffFilterId
+        ? dentists.filter(d => d.id === staffFilterId)
+        : dentists
+    const filteredAppointments = staffFilterId
+        ? appointments.filter(a => a.dentist_id === staffFilterId)
+        : appointments
+    const filteredBlockedSlots = staffFilterId
+        ? blockedSlots.filter(b => b.staff_id === staffFilterId)
+        : blockedSlots
+
     // Dynamic date calculations based on view
     let startDate: Date, endDate: Date
-    if (view === "day") {
+    if (view === "day" || view === "staff") {
         startDate = startOfDay(currentDate)
         endDate = startOfDay(currentDate)
     } else if (view === "week") {
@@ -207,21 +219,21 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         endDate = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 })
     }
 
-    const apptHours = appointments.map(a => a.start.getHours())
+    const apptHours = filteredAppointments.map(a => a.start.getHours())
     const minHour = Math.min(7, ...apptHours.length ? apptHours : [8])
     const maxHour = Math.max(19, ...apptHours.length ? apptHours : [17])
 
-    const days = eachDayOfInterval({ start: startDate, end: endDate })
+    const days = view === "staff" ? [currentDate] : eachDayOfInterval({ start: startDate, end: endDate })
     const hours = Array.from({ length: maxHour - minHour + 1 }, (_, i) => i + minHour)
 
     const nextPeriod = () => {
-        if (view === "day") setCurrentDate(current => addDays(current, 1))
+        if (view === "day" || view === "staff") setCurrentDate(current => addDays(current, 1))
         else if (view === "week") setCurrentDate(current => addWeeks(current, 1))
         else setCurrentDate(current => addMonths(current, 1))
     }
 
     const prevPeriod = () => {
-        if (view === "day") setCurrentDate(current => addDays(current, -1))
+        if (view === "day" || view === "staff") setCurrentDate(current => addDays(current, -1))
         else if (view === "week") setCurrentDate(current => addWeeks(current, -1))
         else setCurrentDate(current => addMonths(current, -1))
     }
@@ -234,7 +246,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     // Helper to format the period label
     const getPeriodLabel = () => {
-        if (view === "day") return format(currentDate, "MMMM d, yyyy")
+        if (view === "day" || view === "staff") return format(currentDate, "MMMM d, yyyy")
         if (view === "week") {
             const start = startOfWeek(currentDate, { weekStartsOn: 1 })
             const end = endOfWeek(currentDate, { weekStartsOn: 1 })
@@ -580,31 +592,45 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     }
 
     return (
-        <div className="flex flex-col h-[calc(100vh-100px)] bg-slate-50 p-6">
-            <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-4">
-                    <h2 className="text-2xl font-bold text-slate-800 min-w-[280px]">
+        <div className="flex flex-col min-h-[400px] h-[calc(100vh-8rem)] sm:h-[calc(100vh-100px)] bg-slate-50 p-3 sm:p-4 md:p-6 max-w-full overflow-hidden">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 shrink-0">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
+                    <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
                         {getPeriodLabel()}
                     </h2>
                     <div className="flex items-center rounded-md border bg-white shadow-sm overflow-hidden border-slate-200">
-                        <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-9 w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronLeft className="h-4 w-4" /></Button>
-                        <Button variant="ghost" onClick={today} className="px-4 font-bold rounded-none border-r border-slate-100 h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600 transition-colors">Today</Button>
-                        <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-9 w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronRight className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronLeft className="h-4 w-4" /></Button>
+                        <Button variant="ghost" onClick={today} className="px-2 sm:px-4 font-bold rounded-none border-r border-slate-100 h-8 sm:h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600 transition-colors">Today</Button>
+                        <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronRight className="h-4 w-4" /></Button>
                     </div>
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <Select value={staffFilterId ?? "all"} onValueChange={(v) => setStaffFilterId(v === "all" ? null : v)}>
+                        <SelectTrigger className="w-[140px] sm:w-[160px] h-8 sm:h-9 text-xs border-slate-200 bg-white">
+                            <Users className="h-3.5 w-3.5 text-slate-400 mr-1.5 shrink-0" />
+                            <SelectValue placeholder="All staff" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all" className="text-xs">All staff</SelectItem>
+                            {dentists.map((d) => (
+                                <SelectItem key={d.id} value={d.id} className="text-xs">
+                                    Dr. {d.last_name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <div className="flex bg-slate-100 p-1 rounded-lg">
-                        {(["day", "week", "month"] as const).map((v) => (
+                        {(["day", "week", "staff", "month"] as const).map((v) => (
                             <button
                                 key={v}
                                 onClick={() => setView(v)}
                                 className={cn(
-                                    "px-4 py-1.5 text-sm font-semibold rounded-md transition-all capitalize",
+                                    "px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all capitalize",
                                     view === v ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
                                 )}
                             >
-                                {v}
+                                {v === "staff" ? "By staff" : v}
                             </button>
                         ))}
                     </div>
@@ -613,13 +639,14 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                         dentists={dentists}
                         trigger={
                             <Button
-                                className="bg-teal-600 hover:bg-teal-700"
+                                size="sm"
+                                className="bg-teal-600 hover:bg-teal-700 text-xs sm:text-sm shrink-0"
                                 onClick={() => {
                                     setNewAppointmentStart(undefined)
                                     setIsNewAppointmentOpen(true)
                                 }}
                             >
-                                <Plus className="mr-2 h-4 w-4" /> New Appointment
+                                <Plus className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> New Appointment
                             </Button>
                         }
                         open={isNewAppointmentOpen}
@@ -632,25 +659,96 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 </div>
             </div>
 
-            <div className="flex-1 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col border-slate-200">
-                {view !== "month" ? (
+            <div className="flex-1 min-h-0 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col border-slate-200">
+                {view === "staff" ? (
+                    /* Staff view: one day, one column per dentist – see who is scheduled at a glance */
                     <>
-                        <div className={cn("grid border-b border-slate-100", view === "day" ? "grid-cols-[100px_1fr]" : "grid-cols-[100px_repeat(7,1fr)]")}>
-                            <div className="p-4 bg-slate-50/50 text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center border-r border-slate-100">
-                                TIME (EST)
+                        <div className="overflow-x-auto overflow-y-hidden border-b border-slate-100 shrink-0">
+                            <div
+                                className="grid border-b border-slate-100 min-w-0"
+                                style={{ gridTemplateColumns: `70px repeat(${filteredDentists.length}, minmax(120px, 1fr))` }}
+                            >
+                                <div className="p-2 sm:p-4 bg-slate-50/50 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center border-r border-slate-100 shrink-0">
+                                    TIME
+                                </div>
+                                {filteredDentists.map((d) => (
+                                    <div key={d.id} className="p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 min-w-0 bg-slate-50/30">
+                                        <span className="text-[10px] font-bold text-slate-600 truncate w-full">Dr. {d.last_name}</span>
+                                        <span className="text-[9px] text-slate-400">
+                                            {filteredAppointments.filter(a => a.dentist_id === d.id && isSameDay(a.start, currentDate)).length} apps
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-                            {days.map(day => (
-                                <div key={day.toString()} className={cn("p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-1", isSameDay(day, new Date()) ? "bg-teal-50/30" : "")}>
-                                    <div className={cn("text-[10px] font-bold uppercase", isSameDay(day, new Date()) ? "text-teal-600" : "text-slate-400")}>{format(day, "EEE")}</div>
-                                    <div className={cn("text-xl font-bold h-8 w-8 flex items-center justify-center rounded-full", isSameDay(day, new Date()) ? "bg-teal-600 text-white" : "text-slate-700")}>{format(day, "d")}</div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto overflow-x-auto relative scrollbar-thin min-h-0">
+                            {hours.map((hour) => (
+                                <div
+                                    key={hour}
+                                    className="grid h-14 sm:h-[80px] shrink-0"
+                                    style={{ gridTemplateColumns: `70px repeat(${filteredDentists.length}, minmax(120px, 1fr))` }}
+                                >
+                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[9px] sm:text-[10px] text-slate-400 font-bold p-1 sm:p-2 text-center sticky left-0 bg-slate-50/30 z-[1] flex items-start justify-center pt-2 sm:pt-3 h-14 sm:h-[80px] shrink-0">
+                                        {format(setHours(new Date(), hour), "h a")}
+                                    </div>
+                                    {filteredDentists.map((dentist) => {
+                                        const day = currentDate
+                                        const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === hour
+                                        return (
+                                            <div
+                                                key={dentist.id}
+                                                onDragOver={handleDragOver(day, hour)}
+                                                onDragLeave={handleDragLeave(day, hour)}
+                                                onDrop={handleDrop(day, hour)}
+                                                onClick={(e) => {
+                                                    if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
+                                                    const slotStart = setHours(startOfDay(day), hour)
+                                                    setNewAppointmentStart(slotStart)
+                                                    setIsNewAppointmentOpen(true)
+                                                }}
+                                                className={cn(
+                                                    "border-r border-b border-slate-100 relative group transition-all p-1 cursor-pointer min-h-[80px] overflow-visible",
+                                                    isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
+                                                )}
+                                            >
+                                                {filteredBlockedSlots.filter(
+                                                    (blk) => blk.staff_id === dentist.id && isSameDay(blk.start, day) && blk.start.getHours() === hour
+                                                ).map((blk) => (
+                                                    <BlockedSlotCard key={blk.id} blk={blk} />
+                                                ))}
+                                                {filteredAppointments.filter(
+                                                    (appt) =>
+                                                        appt.dentist_id === dentist.id && isSameDay(appt.start, day) && appt.start.getHours() === hour
+                                                ).map((appt) => (
+                                                    <AppointmentCard key={appt.id} appt={appt} />
+                                                ))}
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             ))}
                         </div>
+                    </>
+                ) : view !== "month" ? (
+                    <>
+                        <div className="overflow-x-auto overflow-y-hidden">
+                        <div className={cn("grid border-b border-slate-100 min-w-[min(100%,600px)] sm:min-w-0", view === "day" ? "grid-cols-[70px_1fr] sm:grid-cols-[100px_1fr]" : "grid-cols-[70px_repeat(7,minmax(0,1fr))] sm:grid-cols-[100px_repeat(7,1fr)]")}>
+                            <div className="p-2 sm:p-4 bg-slate-50/50 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center border-r border-slate-100 shrink-0">
+                                TIME
+                            </div>
+                            {days.map(day => (
+                                <div key={day.toString()} className={cn("p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0", isSameDay(day, new Date()) ? "bg-teal-50/30" : "")}>
+                                    <div className={cn("text-[9px] sm:text-[10px] font-bold uppercase", isSameDay(day, new Date()) ? "text-teal-600" : "text-slate-400")}>{format(day, "EEE")}</div>
+                                    <div className={cn("text-base sm:text-xl font-bold h-6 w-6 sm:h-8 sm:w-8 flex items-center justify-center rounded-full shrink-0", isSameDay(day, new Date()) ? "bg-teal-600 text-white" : "text-slate-700")}>{format(day, "d")}</div>
+                                </div>
+                            ))}
+                        </div>
+                        </div>
 
-                        <div className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-thin">
+                        <div className="flex-1 overflow-y-auto overflow-x-auto relative scrollbar-thin min-h-0">
                             {hours.map(hour => (
-                                <div key={hour} className={cn("grid h-[80px] shrink-0", view === "day" ? "grid-cols-[100px_1fr]" : "grid-cols-[100px_repeat(7,1fr)]")}>
-                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[10px] text-slate-400 font-bold p-2 text-center sticky left-0 flex items-start justify-center pt-3 h-[80px]">
+                                <div key={hour} className={cn("grid h-14 sm:h-[80px] shrink-0 min-w-[min(100%,600px)] sm:min-w-0", view === "day" ? "grid-cols-[70px_1fr] sm:grid-cols-[100px_1fr]" : "grid-cols-[70px_repeat(7,minmax(0,1fr))] sm:grid-cols-[100px_repeat(7,1fr)]")}>
+                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[9px] sm:text-[10px] text-slate-400 font-bold p-1 sm:p-2 text-center sticky left-0 bg-slate-50/30 z-[1] flex items-start justify-center pt-2 sm:pt-3 h-14 sm:h-[80px] shrink-0">
                                         {format(setHours(new Date(), hour), "h a")}
                                     </div>
 
@@ -673,13 +771,13 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                                     isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
                                                 )}
                                             >
-                                                {blockedSlots.filter(blk =>
+                                                {filteredBlockedSlots.filter(blk =>
                                                     isSameDay(blk.start, day) &&
                                                     blk.start.getHours() === hour
                                                 ).map(blk => (
                                                     <BlockedSlotCard key={blk.id} blk={blk} />
                                                 ))}
-                                                {appointments.filter(appt =>
+                                                {filteredAppointments.filter(appt =>
                                                     isSameDay(appt.start, day) &&
                                                     appt.start.getHours() === hour
                                                 ).map(appt => (
@@ -692,17 +790,18 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             ))}
                         </div>
                     </>
-                ) : (
+                ) : null}
+                {view === "month" ? (
                     /* Month View Grid */
-                    <div className="grid grid-cols-7 h-full">
+                    <div className="grid grid-cols-7 h-full min-w-0 overflow-auto">
                         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
-                            <div key={d} className="p-3 bg-slate-50/50 border-b border-r border-slate-100 text-[10px] font-bold text-slate-400 uppercase text-center">
+                            <div key={d} className="p-1.5 sm:p-3 bg-slate-50/50 border-b border-r border-slate-100 text-[8px] sm:text-[10px] font-bold text-slate-400 uppercase text-center shrink-0">
                                 {d}
                             </div>
                         ))}
                         {days.map(day => {
-                            const dayApps = appointments.filter(a => isSameDay(a.start, day))
-                            const dayBlocks = blockedSlots.filter(blk => isSameDay(blk.start, day))
+                            const dayApps = filteredAppointments.filter(a => isSameDay(a.start, day))
+                            const dayBlocks = filteredBlockedSlots.filter(blk => isSameDay(blk.start, day))
                             const isCurrentMonth = isSameMonth(day, currentDate)
                             const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === undefined
 
@@ -718,7 +817,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                         setIsNewAppointmentOpen(true)
                                     }}
                                     className={cn(
-                                        "min-h-[120px] border-r border-b border-slate-100 p-2 transition-all cursor-pointer",
+                                        "min-h-[80px] sm:min-h-[120px] border-r border-b border-slate-100 p-1 sm:p-2 transition-all cursor-pointer min-w-0",
                                         !isCurrentMonth ? "bg-slate-50/30 opacity-40" : "",
                                         isSameDay(day, new Date()) ? "bg-teal-50/20" : "",
                                         isOver ? "bg-teal-500/5 ring-2 ring-inset ring-teal-500/30 z-10" : "hover:bg-slate-50/30"
@@ -754,7 +853,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             )
                         })}
                     </div>
-                )}
+                ) : null}
             </div>
 
             {contextMenuBlock && typeof document !== "undefined" && createPortal(
@@ -836,6 +935,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 open={isReceiptOpen}
                 onOpenChange={setIsReceiptOpen}
                 data={receiptData}
+                clinic={clinic ?? undefined}
             />
         </div>
     )

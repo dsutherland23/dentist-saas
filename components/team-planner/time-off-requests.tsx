@@ -24,10 +24,18 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
-import { Plus, Loader2, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon } from "lucide-react"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
+import { Plus, Loader2, CheckCircle2, XCircle, Clock, Calendar as CalendarIcon, UserCheck } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { createClient } from "@/lib/supabase"
+import { useAuth } from "@/lib/auth-context"
 
 interface TimeOffRequest {
     id: string
@@ -49,15 +57,33 @@ interface TimeOffRequest {
     }
 }
 
+interface StaffOption {
+    id: string
+    first_name: string
+    last_name: string
+    role: string
+}
+
 export function TimeOffRequests() {
     const supabase = createClient()
+    const { profile } = useAuth()
+    const isAdmin = profile?.role === "clinic_admin" || profile?.role === "super_admin"
+
     const [requests, setRequests] = useState<TimeOffRequest[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isDialogOpen, setIsDialogOpen] = useState(false)
+    const [isGrantDialogOpen, setIsGrantDialogOpen] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [filterStatus, setFilterStatus] = useState<string>("all")
+    const [staffList, setStaffList] = useState<StaffOption[]>([])
 
     const [newRequest, setNewRequest] = useState({
+        start_date: "",
+        end_date: "",
+        reason: ""
+    })
+    const [grantRequest, setGrantRequest] = useState({
+        staff_id: "",
         start_date: "",
         end_date: "",
         reason: ""
@@ -66,6 +92,15 @@ export function TimeOffRequests() {
     useEffect(() => {
         fetchRequests()
     }, [filterStatus])
+
+    useEffect(() => {
+        if (isAdmin && isGrantDialogOpen) {
+            fetch("/api/staff")
+                .then((res) => res.ok ? res.json() : [])
+                .then((data) => setStaffList(Array.isArray(data) ? data.filter((u: { role: string }) => u.role !== "patient") : []))
+                .catch(() => setStaffList([]))
+        }
+    }, [isAdmin, isGrantDialogOpen])
 
     const fetchRequests = async () => {
         setIsLoading(true)
@@ -133,10 +168,12 @@ export function TimeOffRequests() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id, status: 'approved' })
             })
-
             if (res.ok) {
                 toast.success('Request approved')
                 fetchRequests()
+            } else {
+                const data = await res.json()
+                toast.error(data.error || 'Failed to approve')
             }
         } catch (error) {
             toast.error('Failed to approve request')
@@ -154,9 +191,69 @@ export function TimeOffRequests() {
             if (res.ok) {
                 toast.success('Request rejected')
                 fetchRequests()
+            } else {
+                const data = await res.json()
+                toast.error(data.error || 'Failed to reject')
             }
         } catch (error) {
             toast.error('Failed to reject request')
+        }
+    }
+
+    const handleCancel = async (id: string) => {
+        try {
+            const res = await fetch('/api/time-off-requests', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, status: 'cancelled' })
+            })
+            if (res.ok) {
+                toast.success('Request cancelled')
+                fetchRequests()
+            } else {
+                const data = await res.json()
+                toast.error(data.error || 'Failed to cancel')
+            }
+        } catch (error) {
+            toast.error('Failed to cancel request')
+        }
+    }
+
+    const handleGrantTimeOff = async () => {
+        if (!grantRequest.staff_id || !grantRequest.start_date || !grantRequest.end_date) {
+            toast.error('Please select staff and dates')
+            return
+        }
+        if (new Date(grantRequest.end_date) < new Date(grantRequest.start_date)) {
+            toast.error('End date must be on or after start date')
+            return
+        }
+        setIsSubmitting(true)
+        try {
+            const res = await fetch('/api/time-off-requests', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    staff_id: grantRequest.staff_id,
+                    start_date: grantRequest.start_date,
+                    end_date: grantRequest.end_date,
+                    reason: grantRequest.reason,
+                    status: 'approved'
+                })
+            })
+            if (res.ok) {
+                toast.success('Time off granted')
+                setIsGrantDialogOpen(false)
+                setGrantRequest({ staff_id: "", start_date: "", end_date: "", reason: "" })
+                fetchRequests()
+            } else {
+                const data = await res.json()
+                toast.error(data.error || 'Failed to grant time off')
+            }
+        } catch (error) {
+            toast.error('Failed to grant time off')
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -232,18 +329,23 @@ export function TimeOffRequests() {
             {/* Requests Table */}
             <Card className="shadow-sm">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                         <div>
                             <CardTitle>Time-Off Requests</CardTitle>
-                            <CardDescription>Review and manage staff time-off requests</CardDescription>
+                            <CardDescription>
+                                {isAdmin
+                                    ? "Review and manage staff time-off requests. Grant time off or approve/reject requests."
+                                    : "Your time-off requests. Submit a request for your manager to review."}
+                            </CardDescription>
                         </div>
-                        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                            <DialogTrigger asChild>
-                                <Button className="bg-teal-600 hover:bg-teal-700">
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Request Time Off
-                                </Button>
-                            </DialogTrigger>
+                        <div className="flex flex-wrap gap-2">
+                            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                                <DialogTrigger asChild>
+                                    <Button variant="outline" className="border-teal-600 text-teal-700 hover:bg-teal-50">
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Request Time Off
+                                    </Button>
+                                </DialogTrigger>
                             <DialogContent>
                                 <DialogHeader>
                                     <DialogTitle>Request Time Off</DialogTitle>
@@ -295,13 +397,110 @@ export function TimeOffRequests() {
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
+                            {isAdmin && (
+                                <Dialog open={isGrantDialogOpen} onOpenChange={setIsGrantDialogOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button className="bg-teal-600 hover:bg-teal-700">
+                                            <UserCheck className="h-4 w-4 mr-2" />
+                                            Grant Time Off
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[425px]">
+                                        <DialogHeader>
+                                            <DialogTitle>Grant time off</DialogTitle>
+                                            <DialogDescription>
+                                                Create approved time off for a staff member. They will not need to request it.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <div className="grid gap-2">
+                                                <Label>Staff member *</Label>
+                                                <Select
+                                                    value={grantRequest.staff_id}
+                                                    onValueChange={(v) => setGrantRequest({ ...grantRequest, staff_id: v })}
+                                                    required
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select staff" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {staffList.map((s) => (
+                                                            <SelectItem key={s.id} value={s.id}>
+                                                                {s.first_name} {s.last_name} ({s.role})
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="grant-start">Start date *</Label>
+                                                <Input
+                                                    id="grant-start"
+                                                    type="date"
+                                                    value={grantRequest.start_date}
+                                                    onChange={(e) => setGrantRequest({ ...grantRequest, start_date: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="grant-end">End date *</Label>
+                                                <Input
+                                                    id="grant-end"
+                                                    type="date"
+                                                    value={grantRequest.end_date}
+                                                    onChange={(e) => setGrantRequest({ ...grantRequest, end_date: e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="grant-reason">Reason (optional)</Label>
+                                                <Textarea
+                                                    id="grant-reason"
+                                                    placeholder="e.g. Annual leave, Conference..."
+                                                    value={grantRequest.reason}
+                                                    onChange={(e) => setGrantRequest({ ...grantRequest, reason: e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <Button variant="outline" onClick={() => setIsGrantDialogOpen(false)}>
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                onClick={handleGrantTimeOff}
+                                                disabled={isSubmitting}
+                                                className="bg-teal-600 hover:bg-teal-700"
+                                            >
+                                                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                                Grant time off
+                                            </Button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
+                            )}
+                        </div>
                     </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                    {(isAdmin || requests.length > 0) && (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Label className="text-slate-600 text-sm">Filter:</Label>
+                            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                <SelectTrigger className="w-[140px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All statuses</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="approved">Approved</SelectItem>
+                                    <SelectItem value="rejected">Rejected</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Staff Member</TableHead>
+                                {isAdmin && <TableHead>Staff Member</TableHead>}
                                 <TableHead>Start Date</TableHead>
                                 <TableHead>End Date</TableHead>
                                 <TableHead>Duration</TableHead>
@@ -318,14 +517,16 @@ export function TimeOffRequests() {
 
                                 return (
                                     <TableRow key={request.id}>
-                                        <TableCell>
-                                            <div className="flex flex-col">
-                                                <span className="font-medium">
-                                                    {request.staff?.first_name} {request.staff?.last_name}
-                                                </span>
-                                                <span className="text-xs text-slate-500">{request.staff?.role}</span>
-                                            </div>
-                                        </TableCell>
+                                        {isAdmin && (
+                                            <TableCell>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">
+                                                        {request.staff?.first_name} {request.staff?.last_name}
+                                                    </span>
+                                                    <span className="text-xs text-slate-500">{request.staff?.role}</span>
+                                                </div>
+                                            </TableCell>
+                                        )}
                                         <TableCell>{format(new Date(request.start_date), 'MMM dd, yyyy')}</TableCell>
                                         <TableCell>{format(new Date(request.end_date), 'MMM dd, yyyy')}</TableCell>
                                         <TableCell>{duration} day{duration !== 1 ? 's' : ''}</TableCell>
@@ -337,25 +538,39 @@ export function TimeOffRequests() {
                                         </TableCell>
                                         <TableCell className="text-right">
                                             {request.status === 'pending' && (
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleApprove(request.id)}
-                                                        className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
-                                                    >
-                                                        <CheckCircle2 className="h-4 w-4 mr-1" />
-                                                        Approve
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleReject(request.id)}
-                                                        className="text-rose-600 border-rose-200 hover:bg-rose-50"
-                                                    >
-                                                        <XCircle className="h-4 w-4 mr-1" />
-                                                        Reject
-                                                    </Button>
+                                                <div className="flex justify-end gap-2 flex-wrap">
+                                                    {isAdmin && (
+                                                        <>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleApprove(request.id)}
+                                                                className="text-emerald-600 border-emerald-200 hover:bg-emerald-50"
+                                                            >
+                                                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                                                Approve
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleReject(request.id)}
+                                                                className="text-rose-600 border-rose-200 hover:bg-rose-50"
+                                                            >
+                                                                <XCircle className="h-4 w-4 mr-1" />
+                                                                Reject
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {(isAdmin || request.staff_id === profile?.id) && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleCancel(request.id)}
+                                                            className="text-slate-600 hover:bg-slate-100"
+                                                        >
+                                                            Cancel request
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             )}
                                         </TableCell>
@@ -364,8 +579,8 @@ export function TimeOffRequests() {
                             })}
                             {requests.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center text-slate-500">
-                                        No time-off requests found.
+                                    <TableCell colSpan={isAdmin ? 7 : 6} className="h-24 text-center text-slate-500">
+                                        {isAdmin ? "No time-off requests found." : "You have no time-off requests. Use \"Request time off\" to submit one."}
                                     </TableCell>
                                 </TableRow>
                             )}

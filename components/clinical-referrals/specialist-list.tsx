@@ -18,15 +18,25 @@ interface Specialist {
     email?: string
     website?: string
     bio?: string
+    user_id?: string | null
+}
+
+interface Specialty {
+    id: string
+    name: string
 }
 
 interface SpecialistListProps {
     specialists: Specialist[]
     loading?: boolean
     onReferClick?: (specialist: Specialist) => void
+    currentUserId?: string | null
+    isAdmin?: boolean
+    specialties?: Specialty[]
+    onEditSuccess?: () => void
 }
 
-export function SpecialistList({ specialists, loading, onReferClick }: SpecialistListProps) {
+export function SpecialistList({ specialists, loading, onReferClick, currentUserId, isAdmin, specialties = [], onEditSuccess }: SpecialistListProps) {
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -54,6 +64,10 @@ export function SpecialistList({ specialists, loading, onReferClick }: Specialis
                         key={specialist.id}
                         specialist={specialist}
                         onReferClick={onReferClick}
+                        currentUserId={currentUserId}
+                        isAdmin={isAdmin}
+                        specialties={specialties}
+                        onEditSuccess={onEditSuccess}
                     />
                 ))}
             </div>

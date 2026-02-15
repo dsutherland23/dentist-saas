@@ -368,8 +368,8 @@ export default function InvoicesPage() {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0">
-                    <Table>
+                <CardContent className="p-0 overflow-x-auto">
+                    <Table className="min-w-[500px]">
                         <TableHeader className="bg-slate-50/50">
                             <TableRow>
                                 <TableHead className="w-[120px]">Invoice #</TableHead>

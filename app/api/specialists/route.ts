@@ -146,6 +146,9 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
         }
 
+        // Admins adding themselves are auto-approved; others go to pending
+        const status = isAdmin ? "approved" : "pending"
+
         const { data: newSpecialist, error } = await supabase
             .from("specialists")
             .insert({
@@ -165,7 +168,7 @@ export async function POST(request: Request) {
                 website: website || null,
                 bio: bio || null,
                 credentials_url: credentials_url || null,
-                status: "pending",
+                status,
             })
             .select(`
                 *,

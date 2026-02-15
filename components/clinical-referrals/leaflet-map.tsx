@@ -5,6 +5,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import L from "leaflet"
 import { Button } from "@/components/ui/button"
+import { getSpecialtyColor } from "@/lib/specialty-colors"
 
 // Helper component to update map view when specialists change
 function SetBounds({ specialists }: { specialists: Specialist[] }) {
@@ -31,21 +32,6 @@ L.Icon.Default.mergeOptions({
     iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
     shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 })
-
-// Color mapping for specialties
-const getSpecialtyColor = (specialtyName: string) => {
-    const name = specialtyName.toLowerCase();
-    if (name.includes('ortho')) return '#3b82f6'; // Blue
-    if (name.includes('surgery')) return '#ef4444'; // Red
-    if (name.includes('periodo')) return '#f59e0b'; // Amber
-    if (name.includes('endo')) return '#8b5cf6'; // Purple
-    if (name.includes('prosth')) return '#ec4899'; // Pink
-    if (name.includes('pediatr')) return '#fb7185'; // Rose
-    if (name.includes('cosmetic')) return '#10b981'; // Emerald
-    if (name.includes('cardio')) return '#dc2626'; // Deep Red
-    if (name.includes('dermato')) return '#6366f1'; // Indigo
-    return '#14b8a6'; // Teal (Default)
-};
 
 // Custom marker styling with dynamic color
 const createCustomIcon = (name: string, shouldAnimate: boolean, color: string) => {
@@ -127,15 +113,21 @@ interface Specialist {
     website?: string
 }
 
+interface Specialty {
+    id: string
+    name: string
+}
+
 interface LeafletMapProps {
     specialists: Specialist[]
+    specialties?: Specialty[]
     onReferClick?: (specialist: Specialist) => void
     center: [number, number]
     zoom: number
     searchQuery?: string
 }
 
-export default function LeafletMap({ specialists, onReferClick, center, zoom, searchQuery }: LeafletMapProps) {
+export default function LeafletMap({ specialists, specialties = [], onReferClick, center, zoom, searchQuery }: LeafletMapProps) {
     return (
         <MapContainer
             center={center}
@@ -157,7 +149,7 @@ export default function LeafletMap({ specialists, onReferClick, center, zoom, se
                     specialist.specialty.name.toLowerCase().includes(searchQuery.toLowerCase())
                 ) : false;
 
-                const markerColor = getSpecialtyColor(specialist.specialty.name);
+                const markerColor = getSpecialtyColor(specialist.specialty?.id ?? "", specialties);
 
                 return (
                     <Marker

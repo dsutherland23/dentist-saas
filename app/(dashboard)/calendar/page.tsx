@@ -21,8 +21,8 @@ export default async function CalendarPage() {
     const rangeEnd = new Date(now)
     rangeEnd.setDate(rangeEnd.getDate() + 60)
 
-    // Parallel fetching
-    const [patientsRes, dentistsRes, appsRes, blocksRes] = await Promise.all([
+    // Parallel fetching (incl. clinic for receipt/referral branding)
+    const [patientsRes, dentistsRes, appsRes, blocksRes, clinicRes] = await Promise.all([
         supabase.from("patients").select("id, first_name, last_name").eq("clinic_id", clinicId),
         supabase.from("users").select("id, first_name, last_name, role").eq("clinic_id", clinicId),
         supabase.from("appointments")
@@ -38,7 +38,8 @@ export default async function CalendarPage() {
             .eq("clinic_id", clinicId)
             .gte("end_time", rangeStart.toISOString())
             .lte("start_time", rangeEnd.toISOString())
-            .order("start_time", { ascending: true })
+            .order("start_time", { ascending: true }),
+        supabase.from("clinics").select("name, logo_url, phone, website").eq("id", clinicId).single()
     ])
 
     if (patientsRes.error || dentistsRes.error || appsRes.error) {
@@ -53,12 +54,22 @@ export default async function CalendarPage() {
     const dentists = dentistsRes.data?.filter(u => u.role === 'dentist' || u.role === 'clinic_admin') || []
     const blockedSlots = blocksRes.error ? [] : (blocksRes.data || [])
 
+    const clinic = clinicRes.data && !clinicRes.error
+        ? {
+            name: clinicRes.data.name ?? "",
+            logo_url: clinicRes.data.logo_url ?? null,
+            phone: clinicRes.data.phone ?? null,
+            website: clinicRes.data.website ?? null,
+        }
+        : null
+
     return (
         <CalendarClient
             initialAppointments={appsRes.data || []}
             initialBlockedSlots={blockedSlots}
             patients={patientsRes.data || []}
             dentists={dentists}
+            clinic={clinic}
         />
     )
 }

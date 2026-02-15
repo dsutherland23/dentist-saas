@@ -16,10 +16,11 @@ export async function GET() {
 
         if (!userData?.clinic_id) return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
 
+        // Per-user notifications: only rows addressed to this user (user_id = current user).
         const { data: notifications, error } = await supabase
             .from("notifications")
             .select("*")
-            .eq("clinic_id", userData.clinic_id)
+            .eq("user_id", user.id)
             .order("created_at", { ascending: false })
             .limit(20)
 
@@ -42,10 +43,12 @@ export async function PATCH(req: Request) {
         const body = await req.json()
         const { id, is_read } = body
 
+        // Only allow marking own notifications as read
         const { error } = await supabase
             .from("notifications")
             .update({ is_read })
             .eq("id", id)
+            .eq("user_id", user.id)
 
         if (error) throw error
 

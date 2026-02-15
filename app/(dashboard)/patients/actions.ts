@@ -28,6 +28,19 @@ export async function getClinicId() {
 export async function savePatient(formData: FormData) {
     const supabase = await createClient()
     const clinicId = await getClinicId()
+    
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        throw new Error("Unauthorized")
+    }
+
+    // Check patients limit before creating
+    const { checkLimit } = await import("@/lib/limit-enforcement")
+    const limitCheck = await checkLimit(user.id, "patients", 1)
+    if (!limitCheck.allowed) {
+        throw new Error(limitCheck.message || "Patient limit reached")
+    }
 
     const rawData = {
         first_name: formData.get("firstName") as string,

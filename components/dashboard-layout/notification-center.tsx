@@ -59,10 +59,29 @@ export function NotificationCenter() {
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'success': return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            case 'warning': return <AlertCircle className="h-4 w-4 text-amber-500" />
-            case 'error': return <AlertCircle className="h-4 w-4 text-rose-500" />
-            default: return <Info className="h-4 w-4 text-blue-500" />
+            case 'success':
+            case 'time_off_approved':
+            case 'time_off_granted':
+            case 'referral_status_updated':
+            case 'staff_joined':
+            case 'invoice_paid':
+                return <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            case 'warning':
+            case 'time_off_rejected':
+            case 'invoice_overdue':
+                return <AlertCircle className="h-4 w-4 text-amber-500" />
+            case 'error':
+                return <AlertCircle className="h-4 w-4 text-rose-500" />
+            case 'time_off_requested':
+            case 'referral_received':
+            case 'referral_intake_submitted':
+            case 'appointment_assigned':
+            case 'appointment_cancelled':
+            case 'appointment_rescheduled':
+            case 'staff_invited':
+            case 'new_message':
+            default:
+                return <Info className="h-4 w-4 text-blue-500" />
         }
     }
 

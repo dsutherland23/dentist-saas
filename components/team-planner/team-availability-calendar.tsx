@@ -208,7 +208,9 @@ export function TeamAvailabilityCalendar() {
                     ))}
 
                     {calendarDays.map((day, idx) => {
-                        const staffOff = getStaffOnOff(day)
+                        const dailyStatus = getDailyStatus(day)
+                        const staffWorking = dailyStatus.filter(m => m.status === 'working')
+                        const staffOff = dailyStatus.filter(m => m.status === 'leave')
                         const isToday = isSameDay(day, new Date())
                         const isCurrentMonth = isSameMonth(day, monthStart)
 
@@ -232,23 +234,39 @@ export function TeamAvailabilityCalendar() {
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    {isCurrentMonth && staffOff.slice(0, 2).map((req, i) => (
-                                        <div key={i} className="text-[10px] bg-rose-50/60 text-rose-700 px-2 py-0.5 rounded-md border border-rose-100 truncate flex items-center gap-1">
-                                            <div className="h-1 w-1 rounded-full bg-rose-400 shrink-0" />
-                                            <span className="truncate">{req.staff?.first_name} {req.staff?.last_name[0]}.</span>
-                                        </div>
-                                    ))}
-                                    {staffOff.length > 2 && (
-                                        <div className="text-[9px] text-slate-400 font-medium pl-1">
-                                            +{staffOff.length - 2} more...
+                                    {isCurrentMonth && staffWorking.length > 0 && (
+                                        <div className="space-y-1">
+                                            {staffWorking.slice(0, 3).map((m) => (
+                                                <div key={m.id} className="text-[10px] bg-teal-50/70 text-teal-700 px-2 py-0.5 rounded-md border border-teal-100 truncate flex items-center gap-1">
+                                                    <div className="h-1 w-1 rounded-full bg-teal-500 shrink-0" />
+                                                    <span className="truncate font-medium">{m.role === 'dentist' ? 'Dr.' : ''} {m.first_name} {m.last_name[0]}.</span>
+                                                </div>
+                                            ))}
+                                            {staffWorking.length > 3 && (
+                                                <div className="text-[9px] text-slate-500 font-medium pl-1">+{staffWorking.length - 3} more</div>
+                                            )}
                                         </div>
                                     )}
-
-                                    {isCurrentMonth && staffOff.length === 0 && (
-                                        <div className="mt-3 text-[10px] text-emerald-600 font-medium flex items-center gap-1.5 opacity-60">
-                                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                            Full Team
+                                    {isCurrentMonth && staffOff.length > 0 && (
+                                        <>
+                                            {staffOff.slice(0, 2).map((m) => (
+                                                <div key={m.id} className="text-[10px] bg-rose-50/60 text-rose-700 px-2 py-0.5 rounded-md border border-rose-100 truncate flex items-center gap-1">
+                                                    <div className="h-1 w-1 rounded-full bg-rose-400 shrink-0" />
+                                                    <span className="truncate">{m.first_name} {m.last_name[0]}.</span>
+                                                </div>
+                                            ))}
+                                            {staffOff.length > 2 && (
+                                                <div className="text-[9px] text-slate-400 font-medium pl-1">+{staffOff.length - 2} off</div>
+                                            )}
+                                        </>
+                                    )}
+                                    {isCurrentMonth && staffWorking.length === 0 && staffOff.length === 0 && (
+                                        <div className="mt-3 text-[10px] text-slate-400 font-medium flex items-center gap-1.5 opacity-60">
+                                            <span>No one scheduled</span>
                                         </div>
+                                    )}
+                                    {isCurrentMonth && staffWorking.length === 0 && staffOff.length > 0 && (
+                                        <div className="text-[10px] text-slate-500 font-medium pl-1">All off / leave</div>
                                     )}
                                 </div>
                             </div>
@@ -258,18 +276,21 @@ export function TeamAvailabilityCalendar() {
 
                 {/* Legend */}
                 <div className="mt-8 flex items-center justify-between text-xs text-slate-500 border-t pt-5 border-slate-100">
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-6 flex-wrap">
                         <div className="flex items-center gap-2">
                             <div className="h-2.5 w-2.5 rounded-full bg-teal-600 shadow-sm" />
                             <span className="font-medium">Today</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full bg-rose-100 border border-rose-200" />
-                            <span className="font-medium">Staff on Leave</span>
+                            <div className="h-2.5 w-2.5 rounded-full bg-teal-500/80" />
+                            <span className="font-medium">Scheduled (rota)</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className="h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-sm" />
-                            <span className="font-medium">Full Presence</span>
+                            <div className="h-2.5 w-2.5 rounded-full bg-rose-100 border border-rose-200" />
+                            <span className="font-medium">On Leave</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-slate-400 italic">No one scheduled</span>
                         </div>
                     </div>
                 </div>

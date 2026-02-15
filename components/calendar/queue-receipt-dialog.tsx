@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { format } from "date-fns"
 import { Printer } from "lucide-react"
+import { APP_NAME, CREATED_BY, type ClinicBranding } from "@/lib/branding"
 
 export interface QueueReceiptData {
     queueNumber: number
@@ -25,15 +26,31 @@ interface QueueReceiptDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     data: QueueReceiptData | null
+    /** Clinic branding for header (logo, name, website) and footer */
+    clinic?: ClinicBranding | null
 }
 
-export function QueueReceiptDialog({ open, onOpenChange, data }: QueueReceiptDialogProps) {
+export function QueueReceiptDialog({ open, onOpenChange, data, clinic }: QueueReceiptDialogProps) {
     const dobFormatted = data?.dateOfBirth
         ? format(new Date(data.dateOfBirth), "MMM d, yyyy")
         : "—"
 
     const handlePrint = () => {
         if (!data) return
+        const logoHtml = clinic?.logo_url
+            ? `<img src="${clinic.logo_url.replace(/"/g, "&quot;")}" alt="Logo" style="height:28px;max-width:120px;object-fit:contain;margin-bottom:6px;" />`
+            : ""
+        const headerHtml = clinic
+            ? `<div class="receipt-header" style="text-align:center;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e2e8f0;">
+  ${logoHtml}
+  <div style="font-size:12px;font-weight:700;color:#0f172a;">${(clinic.name || "").replace(/</g, "&lt;")}</div>
+  ${clinic.phone ? `<div style="font-size:9px;color:#64748b;">${String(clinic.phone).replace(/</g, "&lt;")}</div>` : ""}
+  ${clinic.website ? `<div style="font-size:9px;color:#0d9488;"><a href="${String(clinic.website).replace(/"/g, "&quot;")}" style="color:inherit;">${String(clinic.website).replace(/</g, "&lt;")}</a></div>` : ""}
+</div>`
+            : ""
+        const footerHtml = `<div class="receipt-footer" style="margin-top:12px;padding-top:8px;border-top:1px solid #e2e8f0;font-size:8px;color:#94a3b8;text-align:center;">
+  ${APP_NAME} — ${CREATED_BY}
+</div>`
         const printWindow = window.open("", "_blank")
         if (!printWindow) return
         printWindow.document.write(`
@@ -55,6 +72,7 @@ export function QueueReceiptDialog({ open, onOpenChange, data }: QueueReceiptDia
 </head>
 <body>
   <div class="receipt">
+    ${headerHtml}
     <span class="label">Your Queue #</span>
     <span class="queue">${data.queueNumber}</span>
     <hr style="width:100%;border:none;border-top:1px solid #cbd5e1;margin:4px 0" />
@@ -62,6 +80,7 @@ export function QueueReceiptDialog({ open, onOpenChange, data }: QueueReceiptDia
     <span class="detail">DOB: ${dobFormatted}</span>
     <span class="detail">${data.doctorName}</span>
     <span class="detail">${data.dateTime}</span>
+    ${footerHtml}
   </div>
 </body>
 </html>`)
@@ -77,7 +96,7 @@ export function QueueReceiptDialog({ open, onOpenChange, data }: QueueReceiptDia
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-xs">
+            <DialogContent className="w-[95vw] max-w-xs sm:max-w-xs">
                 <DialogHeader>
                     <DialogTitle>Queue Receipt</DialogTitle>
                     <DialogDescription>
@@ -86,15 +105,34 @@ export function QueueReceiptDialog({ open, onOpenChange, data }: QueueReceiptDia
                 </DialogHeader>
                 <div className="flex justify-center py-4">
                     <div
-                        className="receipt-preview w-[180px] min-h-[270px] rounded-lg border-2 border-slate-200 bg-slate-50 flex flex-col items-center justify-center gap-3 p-4 text-center"
+                        className="receipt-preview w-[200px] min-h-[320px] rounded-lg border-2 border-slate-200 bg-slate-50 flex flex-col items-center justify-between gap-2 p-4 text-center"
                     >
-                        <p className="text-[10px] text-slate-500 uppercase tracking-wider">Your Queue #</p>
-                        <p className="text-4xl font-extrabold text-teal-700 leading-none">{data.queueNumber}</p>
-                        <div className="w-full border-t border-slate-200 my-1" />
-                        <p className="text-sm font-bold text-slate-900">{data.patientName}</p>
-                        <p className="text-xs text-slate-600">DOB: {dobFormatted}</p>
-                        <p className="text-xs text-slate-600">{data.doctorName}</p>
-                        <p className="text-xs text-slate-600">{data.dateTime}</p>
+                        {clinic && (
+                            <div className="w-full border-b border-slate-200 pb-2 mb-1 space-y-1">
+                                {clinic.logo_url && (
+                                    <img src={clinic.logo_url} alt="" className="h-7 max-w-[120px] object-contain mx-auto" />
+                                )}
+                                <p className="text-xs font-bold text-slate-900">{clinic.name}</p>
+                                {clinic.phone && <p className="text-[10px] text-slate-500">{clinic.phone}</p>}
+                                {clinic.website && (
+                                    <a href={clinic.website} target="_blank" rel="noopener noreferrer" className="text-[10px] text-teal-600 block truncate">
+                                        {clinic.website.replace(/^https?:\/\//, "")}
+                                    </a>
+                                )}
+                            </div>
+                        )}
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">Your Queue #</p>
+                            <p className="text-4xl font-extrabold text-teal-700 leading-none">{data.queueNumber}</p>
+                            <div className="w-full border-t border-slate-200 my-1" />
+                            <p className="text-sm font-bold text-slate-900">{data.patientName}</p>
+                            <p className="text-xs text-slate-600">DOB: {dobFormatted}</p>
+                            <p className="text-xs text-slate-600">{data.doctorName}</p>
+                            <p className="text-xs text-slate-600">{data.dateTime}</p>
+                        </div>
+                        <div className="w-full border-t border-slate-200 pt-2 mt-1 text-[9px] text-slate-400 text-center">
+                            {APP_NAME} — {CREATED_BY}
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>

@@ -128,7 +128,7 @@ export function Topbar() {
 
     return (
         <div className="sticky top-0 z-40 backdrop-blur-xl bg-white/80 border-b border-slate-200/50 shadow-sm">
-            <div className="flex h-16 items-center gap-4 px-6">
+            <div className="flex h-14 sm:h-16 items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 min-w-0">
                 {/* Sidebar Toggle (Desktop) */}
                 <Button
                     variant="ghost"
@@ -158,21 +158,21 @@ export function Topbar() {
                 </Sheet>
 
                 {/* Search Bar */}
-                <form className="flex-1 max-w-xl" onSubmit={handleSearchSubmit}>
+                <form className="flex-1 min-w-0 max-w-md sm:max-w-xl" onSubmit={handleSearchSubmit}>
                     <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                        <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
                         <Input
                             name="search"
-                            placeholder="Search patients, invoices, records..."
+                            placeholder="Search patients, invoices..."
                             value={searchValue}
                             onChange={handleSearchChange}
-                            className="pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-10"
+                            className="pl-8 sm:pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-9 sm:h-10 text-sm"
                         />
                     </div>
                 </form>
 
                 {/* Right Section */}
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                     {/* Quick Actions */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

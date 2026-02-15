@@ -12,6 +12,8 @@ type Profile = {
     last_name: string
     email: string
     role: string
+    allowed_sections?: string[] | null
+    limits?: Record<string, number> | null
     clinic?: {
         name: string
     }

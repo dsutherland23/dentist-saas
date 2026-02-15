@@ -211,8 +211,8 @@ export default function PatientsClient({
                 <Button variant="outline"><Filter className="mr-2 h-4 w-4" /> Filter</Button>
             </div>
 
-            <div className="rounded-md border bg-white shadow-sm overflow-hidden">
-                <Table>
+            <div className="rounded-md border bg-white shadow-sm overflow-x-auto overflow-hidden">
+                <Table className="min-w-[600px]">
                     <TableHeader className="bg-slate-50">
                         <TableRow>
                             <TableHead className="w-[80px]">Avatar</TableHead>

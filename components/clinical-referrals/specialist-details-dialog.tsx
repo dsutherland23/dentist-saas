@@ -1,6 +1,6 @@
 "use client"
 
-import React from "react"
+import React, { useState } from "react"
 import {
     Dialog,
     DialogContent,
@@ -11,7 +11,8 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { MapPin, Phone, Mail, ExternalLink, Globe, Stethoscope } from "lucide-react"
+import { MapPin, Phone, Mail, ExternalLink, Globe, Stethoscope, Pencil } from "lucide-react"
+import { EditSpecialistDialog } from "./edit-specialist-dialog"
 
 interface Specialist {
     id: string
@@ -27,6 +28,12 @@ interface Specialist {
     website?: string
     bio?: string
     status?: string
+    user_id?: string | null
+}
+
+interface Specialty {
+    id: string
+    name: string
 }
 
 interface SpecialistDetailsDialogProps {
@@ -34,6 +41,10 @@ interface SpecialistDetailsDialogProps {
     onOpenChange: (open: boolean) => void
     specialist: Specialist | null
     onReferClick?: (specialist: Specialist) => void
+    currentUserId?: string | null
+    isAdmin?: boolean
+    specialties?: Specialty[]
+    onEditSuccess?: () => void
 }
 
 export function SpecialistDetailsDialog({
@@ -41,8 +52,22 @@ export function SpecialistDetailsDialog({
     onOpenChange,
     specialist,
     onReferClick,
+    currentUserId,
+    isAdmin,
+    specialties = [],
+    onEditSuccess,
 }: SpecialistDetailsDialogProps) {
+    const [editOpen, setEditOpen] = useState(false)
     if (!specialist) return null
+
+    const canEdit =
+        (specialist.user_id && currentUserId && specialist.user_id === currentUserId) || isAdmin
+
+    const handleEditSuccess = () => {
+        onEditSuccess?.()
+        setEditOpen(false)
+        onOpenChange(false)
+    }
 
     const initials = specialist.name
         .split(" ")
@@ -52,6 +77,7 @@ export function SpecialistDetailsDialog({
         .slice(0, 2)
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl p-0 overflow-hidden rounded-3xl border-none shadow-2xl">
                 <DialogHeader className="sr-only">
@@ -151,20 +177,31 @@ export function SpecialistDetailsDialog({
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="flex gap-4 pt-4 border-t border-slate-100 mt-4">
+                    <div className="flex flex-wrap gap-3 pt-4 border-t border-slate-100 mt-4">
+                        {canEdit && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-12 px-5 rounded-xl border-teal-200 hover:bg-teal-50 text-teal-700 font-semibold"
+                                onClick={() => setEditOpen(true)}
+                            >
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit my card
+                            </Button>
+                        )}
                         <Button
                             onClick={() => {
                                 onReferClick?.(specialist)
                                 onOpenChange(false)
                             }}
-                            className="flex-1 bg-teal-600 hover:bg-teal-700 h-14 text-lg font-bold shadow-lg shadow-teal-600/20"
+                            className="flex-1 min-w-[140px] bg-teal-600 hover:bg-teal-700 h-12 text-base font-bold shadow-lg shadow-teal-600/20"
                         >
                             Refer New Patient
                         </Button>
                         <Button
                             variant="outline"
-                            className="h-14 px-6 rounded-xl border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold"
-                            onClick={() => window.open(specialist.website, "_blank")}
+                            className="h-12 px-5 rounded-xl border-slate-200 hover:bg-slate-50 text-slate-600 font-semibold"
+                            onClick={() => specialist.website && window.open(specialist.website, "_blank")}
                             disabled={!specialist.website}
                         >
                             <ExternalLink className="h-5 w-5" />
@@ -173,5 +210,14 @@ export function SpecialistDetailsDialog({
                 </div>
             </DialogContent>
         </Dialog>
+
+        <EditSpecialistDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            specialist={specialist}
+            specialties={specialties}
+            onSuccess={handleEditSuccess}
+        />
+        </>
     )
 }

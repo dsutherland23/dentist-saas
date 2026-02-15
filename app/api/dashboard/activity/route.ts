@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase-server"
 import { NextResponse } from "next/server"
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const supabase = await createClient()
 
@@ -22,46 +22,81 @@ export async function GET() {
 
         const clinicId = userData.clinic_id
 
+        // Parse query parameters for pagination and filtering
+        const { searchParams } = new URL(request.url)
+        const limit = Math.min(parseInt(searchParams.get('limit') || '5'), 50) // Max 50 items
+        const offset = parseInt(searchParams.get('offset') || '0')
+        const type = searchParams.get('type') // optional filter: 'appointment', 'payment', 'patient'
+
         // Fetch recent activity from multiple sources
-        const [appointmentsData, paymentsData, patientsData] = await Promise.all([
-            // Recent appointments
-            supabase
-                .from("appointments")
-                .select(`
-                    id,
-                    status,
-                    created_at,
-                    start_time,
-                    patients (first_name, last_name)
-                `)
-                .eq("clinic_id", clinicId)
-                .order("created_at", { ascending: false })
-                .limit(5),
+        const promises = []
 
-            // Recent payments
-            supabase
-                .from("payments")
-                .select(`
-                    id,
-                    amount_paid,
-                    created_at,
-                    payment_date,
-                    invoices (
+        if (!type || type === 'appointment') {
+            promises.push(
+                supabase
+                    .from("appointments")
+                    .select(`
+                        id,
+                        status,
+                        created_at,
+                        start_time,
                         patients (first_name, last_name)
-                    )
-                `)
-                .eq("clinic_id", clinicId)
-                .order("created_at", { ascending: false })
-                .limit(5),
+                    `)
+                    .eq("clinic_id", clinicId)
+                    .order("created_at", { ascending: false })
+                    .limit(limit)
+                    .range(offset, offset + limit - 1)
+            )
+        }
 
-            // New patients
-            supabase
-                .from("patients")
-                .select("id, first_name, last_name, created_at")
-                .eq("clinic_id", clinicId)
-                .order("created_at", { ascending: false })
-                .limit(5)
-        ])
+        if (!type || type === 'payment') {
+            promises.push(
+                supabase
+                    .from("payments")
+                    .select(`
+                        id,
+                        amount_paid,
+                        created_at,
+                        payment_date,
+                        invoices (
+                            patients (first_name, last_name)
+                        )
+                    `)
+                    .eq("clinic_id", clinicId)
+                    .order("created_at", { ascending: false })
+                    .limit(limit)
+                    .range(offset, offset + limit - 1)
+            )
+        }
+
+        if (!type || type === 'patient') {
+            promises.push(
+                supabase
+                    .from("patients")
+                    .select("id, first_name, last_name, created_at")
+                    .eq("clinic_id", clinicId)
+                    .order("created_at", { ascending: false })
+                    .limit(limit)
+                    .range(offset, offset + limit - 1)
+            )
+        }
+
+        const results = await Promise.all(promises)
+
+        let appointmentsData: any = { data: [], error: null }
+        let paymentsData: any = { data: [], error: null }
+        let patientsData: any = { data: [], error: null }
+
+        let resultIndex = 0
+        if (!type || type === 'appointment') {
+            appointmentsData = results[resultIndex++]
+        }
+        if (!type || type === 'payment') {
+            paymentsData = results[resultIndex++]
+        }
+        if (!type || type === 'patient') {
+            patientsData = results[resultIndex++]
+        }
 
         // Combine and format activity
         const activity: any[] = []
@@ -122,9 +157,11 @@ export async function GET() {
             })
         })
 
-        // Sort by time and limit to 10
+        // Sort by time
         activity.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-        const recentActivity = activity.slice(0, 10)
+        
+        // Limit results if no pagination (dashboard request)
+        const finalActivity = offset === 0 && limit === 5 ? activity.slice(0, 10) : activity
 
         // Format time to relative
         const formatTime = (timestamp: string) => {
@@ -143,12 +180,16 @@ export async function GET() {
             return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
         }
 
-        const formattedActivity = recentActivity.map(item => ({
+        const formattedActivity = finalActivity.map(item => ({
             ...item,
-            time: formatTime(item.time)
+            time: formatTime(item.time),
+            timestamp: item.time // Keep original for sorting/filtering
         }))
 
-        return NextResponse.json({ activity: formattedActivity })
+        return NextResponse.json({ 
+            activity: formattedActivity,
+            hasMore: finalActivity.length === limit && offset + limit < 100 // Rough estimate
+        })
 
     } catch (error) {
         console.error("Dashboard activity error:", error)

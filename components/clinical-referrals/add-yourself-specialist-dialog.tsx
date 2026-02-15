@@ -63,6 +63,7 @@ interface AddYourselfSpecialistDialogProps {
     onOpenChange: (open: boolean) => void
     specialties: Specialty[]
     userDisplayName: string
+    isAdmin?: boolean
     onSuccess?: () => void
 }
 
@@ -71,6 +72,7 @@ export function AddYourselfSpecialistDialog({
     onOpenChange,
     specialties,
     userDisplayName,
+    isAdmin = false,
     onSuccess,
 }: AddYourselfSpecialistDialogProps) {
     const [loading, setLoading] = useState(false)
@@ -215,7 +217,9 @@ export function AddYourselfSpecialistDialog({
                         Add yourself as a specialist
                     </DialogTitle>
                     <DialogDescription>
-                        We’ll use your practice information from Settings and your location to add a pin to the map. Please complete this at your place of practice or office so your location pin is accurate. You can edit any field below.
+                        {isAdmin
+                            ? "Add your practice to the specialist map. As an admin, you’ll be listed immediately. We’ll use your practice info from Settings and your location for the pin."
+                            : "We’ll use your practice information from Settings and your location to add a pin to the map. Your registration will be reviewed by an administrator. Please complete this at your place of practice so your pin is accurate."}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -400,7 +404,7 @@ export function AddYourselfSpecialistDialog({
                             </Button>
                             <Button type="submit" disabled={loading} className="bg-teal-600 hover:bg-teal-700">
                                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Submit for approval
+                                {isAdmin ? "Add to map" : "Submit for approval"}
                             </Button>
                         </div>
                     </form>

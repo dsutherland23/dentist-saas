@@ -26,6 +26,8 @@ import {
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useSidebar } from "@/lib/hooks/use-sidebar-context"
+import { getSectionByPath } from "@/lib/access-config"
+import { canAccessSection } from "@/lib/permissions"
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
 
@@ -37,86 +39,102 @@ export function Sidebar({ className }: SidebarProps) {
 
     const isActualCollapsed = isCollapsed && !isHovering
 
-    const routes = [
+    const allRoutes = [
         {
             label: "Dashboard",
             icon: LayoutDashboard,
             href: "/dashboard",
             gradient: "from-sky-500 to-blue-600",
+            key: "dashboard"
         },
         {
             label: "Calendar",
             icon: Calendar,
             href: "/calendar",
             gradient: "from-violet-500 to-purple-600",
+            key: "calendar"
         },
         {
             label: "Patients",
             icon: Users,
             href: "/patients",
             gradient: "from-pink-500 to-rose-600",
+            key: "patients"
         },
         {
             label: "Treatments",
             icon: Stethoscope,
             href: "/treatments",
             gradient: "from-orange-500 to-amber-600",
+            key: "treatments"
         },
         {
             label: "Clinical Referrals",
             icon: Stethoscope,
             href: "/clinical-referrals",
             gradient: "from-purple-500 to-pink-600",
+            key: "clinical-referrals"
         },
         {
             label: "Invoices",
             icon: FileText,
             href: "/invoices",
             gradient: "from-emerald-500 to-teal-600",
+            key: "invoices"
         },
         {
             label: "Insurance Claims",
             icon: ShieldCheck,
             href: "/insurance-claims",
             gradient: "from-blue-500 to-indigo-600",
+            key: "insurance-claims"
         },
         {
             label: "Payments",
             icon: CreditCard,
             href: "/payments",
             gradient: "from-green-500 to-emerald-600",
+            key: "payments"
         },
         {
             label: "Messages",
             icon: MessageSquare,
             href: "/messages",
             gradient: "from-blue-500 to-cyan-600",
+            key: "messages"
         },
         {
             label: "Reports",
             icon: BarChart3,
             href: "/reports",
             gradient: "from-indigo-500 to-purple-600",
+            key: "reports"
         },
         {
             label: "Staff",
             icon: UserCircle,
             href: "/staff",
             gradient: "from-teal-500 to-cyan-600",
+            key: "staff"
         },
         {
             label: "Team Planner",
             icon: UserCheck,
             href: "/team-planner",
             gradient: "from-teal-500 to-emerald-600",
+            key: "team-planner"
         },
         {
             label: "Settings",
             icon: Settings,
             href: "/settings",
             gradient: "from-slate-500 to-gray-600",
+            key: "settings"
         },
     ]
+
+    // Filter routes based on user's allowed_sections
+    const routes = allRoutes.filter(route => canAccessSection(profile, route.key))
 
     return (
         <div

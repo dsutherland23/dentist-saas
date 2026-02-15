@@ -23,7 +23,7 @@ interface Referral {
         name: string
         clinic_name: string
         specialty: { name: string }
-    }
+    } | null
 }
 
 export default function SentReferralsPage() {
@@ -139,7 +139,7 @@ export default function SentReferralsPage() {
                                             {referral.patient_first_name} {referral.patient_last_name}
                                         </h3>
                                         <div className="flex items-center text-xs text-teal-600 font-medium mt-0.5">
-                                            To: <span className="ml-1">{referral.specialist.name}</span>
+                                            To: <span className="ml-1">{referral.specialist?.name || "Unknown Specialist"}</span>
                                         </div>
                                     </div>
 
