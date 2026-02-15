@@ -32,9 +32,11 @@ import { canAccessSection } from "@/lib/permissions"
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
     /** When true (e.g. inside mobile sheet), always show expanded and ignore collapse state */
     forceExpanded?: boolean
+    /** Optional callback to close mobile menu when a nav link is clicked */
+    onCloseMenu?: () => void
 }
 
-export function Sidebar({ className, forceExpanded = false }: SidebarProps) {
+export function Sidebar({ className, forceExpanded = false, onCloseMenu }: SidebarProps) {
     const pathname = usePathname()
     const { signOut, profile } = useAuth()
     const { isCollapsed, isHovering, setIsHovering, toggle } = useSidebar()
@@ -136,13 +138,15 @@ export function Sidebar({ className, forceExpanded = false }: SidebarProps) {
         },
     ]
 
-    // Filter routes based on user's allowed_sections
-    const routes = allRoutes.filter(route => canAccessSection(profile, route.key))
+    // Filter routes based on user's allowed_sections; show all routes when profile is loading or list would be empty
+    const filtered = allRoutes.filter(route => canAccessSection(profile, route.key))
+    const routes = filtered.length > 0 ? filtered : allRoutes
 
     return (
         <div
             className={cn(
-                "pb-12 h-screen bg-[#0F172A] text-white border-r border-slate-800 shadow-2xl flex flex-col transition-all duration-300 ease-in-out",
+                "pb-12 bg-[#0F172A] text-white border-r border-slate-800 shadow-2xl flex flex-col transition-all duration-300 ease-in-out",
+                forceExpanded ? "h-full min-h-0" : "h-screen",
                 isActualCollapsed ? "w-20" : "w-72",
                 className
             )}
@@ -184,6 +188,7 @@ export function Sidebar({ className, forceExpanded = false }: SidebarProps) {
                                     <Link
                                         key={route.href}
                                         href={route.href}
+                                        onClick={onCloseMenu}
                                         className={cn(
                                             "group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all relative overflow-hidden",
                                             isActualCollapsed ? "justify-center px-0" : "px-4",

@@ -167,8 +167,8 @@ export function Topbar() {
                                 Access clinic dashboard, patients, calendar, and more.
                             </SheetDescription>
                         </SheetHeader>
-                        <div className="h-full w-full overflow-y-auto">
-                            <Sidebar className="w-full h-full" forceExpanded />
+                        <div className="h-full w-full overflow-y-auto flex flex-col min-h-0">
+                            <Sidebar className="w-full flex-1 min-h-0" forceExpanded onCloseMenu={() => setMobileMenuOpen(false)} />
                         </div>
                     </SheetContent>
                 </Sheet>

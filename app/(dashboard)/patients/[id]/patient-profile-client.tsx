@@ -23,7 +23,8 @@ import {
     FileIcon,
     ImageIcon,
     X,
-    Loader2
+    Loader2,
+    ChevronDown
 } from "lucide-react"
 import { format } from "date-fns"
 import {
@@ -45,6 +46,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
@@ -113,6 +120,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [isInsuranceOpen, setIsInsuranceOpen] = useState(false)
     const [isContactOpen, setIsContactOpen] = useState(false)
     const [isTreatmentOpen, setIsTreatmentOpen] = useState(false)
+    const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false)
     const [isFileOpen, setIsFileOpen] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
@@ -311,7 +319,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
@@ -333,15 +341,27 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     </div>
                 </div>
                 <div className="flex items-center space-x-2 flex-wrap gap-2">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button className="bg-teal-600 hover:bg-teal-700 shadow-teal-100 shadow-lg">
+                                <Plus className="mr-2 h-4 w-4" /> Add <ChevronDown className="ml-1.5 h-4 w-4 opacity-80" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-52">
+                            <DropdownMenuItem onSelect={() => setAppointmentDialogOpen(true)}>
+                                <Calendar className="mr-2 h-4 w-4" /> New Appointment
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => setIsTreatmentOpen(true)}>
+                                <Plus className="mr-2 h-4 w-4" /> Add Treatment
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <NewAppointmentDialog
                         patients={[{ id: patient.id, first_name: patient.first_name, last_name: patient.last_name }]}
                         dentists={dentists.map(d => ({ id: d.id, first_name: d.first_name, last_name: d.last_name }))}
                         defaultPatientId={patient.id}
-                        trigger={
-                            <Button className="bg-teal-600 hover:bg-teal-700 shadow-teal-100 shadow-lg">
-                                <Calendar className="mr-2 h-4 w-4" /> New Appointment
-                            </Button>
-                        }
+                        open={appointmentDialogOpen}
+                        onOpenChange={setAppointmentDialogOpen}
                     />
                     <Button variant="outline" onClick={() => router.push(`/messages?patientId=${patient.id}`)}>
                         <MessageSquare className="mr-2 h-4 w-4" /> Message
@@ -355,11 +375,6 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         }
                     />
                     <Dialog open={isTreatmentOpen} onOpenChange={setIsTreatmentOpen}>
-                        <DialogTrigger asChild>
-                            <Button className="bg-teal-600 hover:bg-teal-700 shadow-teal-100 shadow-lg">
-                                <Plus className="mr-2 h-4 w-4" /> Add Treatment
-                            </Button>
-                        </DialogTrigger>
                         <DialogContent>
                             <form onSubmit={handleAddTreatment}>
                                 <DialogHeader>
@@ -455,7 +470,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 min-w-0">
 
                 {/* Left Column: Info */}
                 <div className="space-y-6">
@@ -669,12 +684,12 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 </div>
 
                 {/* Right Column: Tabs */}
-                <div className="md:col-span-2">
-                    <Tabs defaultValue="appointments" className="w-full">
-                        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent space-x-8">
-                            <TabsTrigger value="appointments" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600">Appointments</TabsTrigger>
-                            <TabsTrigger value="history" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600">Treatment History</TabsTrigger>
-                            <TabsTrigger value="files" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600">Files & X-Rays</TabsTrigger>
+                <div className="md:col-span-2 min-w-0">
+                    <Tabs defaultValue="appointments" className="w-full min-w-0">
+                        <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent gap-6 overflow-x-auto flex-nowrap scrollbar-thin pb-px min-w-0">
+                            <TabsTrigger value="appointments" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Appointments</TabsTrigger>
+                            <TabsTrigger value="history" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Treatment History</TabsTrigger>
+                            <TabsTrigger value="files" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0 whitespace-nowrap">Files & X-Rays</TabsTrigger>
                         </TabsList>
 
                         <TabsContent value="appointments" className="mt-8 space-y-4">
@@ -768,8 +783,8 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             )}
                         </TabsContent>
 
-                        <TabsContent value="files" className="mt-8">
-                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                        <TabsContent value="files" className="mt-8 min-w-0 overflow-x-hidden">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 min-w-0">
                                 <Dialog open={isFileOpen} onOpenChange={setIsFileOpen}>
                                     <DialogTrigger asChild>
                                         <div className="group border-2 border-dashed border-slate-200 rounded-2xl p-6 hover:bg-teal-50 hover:border-teal-200 cursor-pointer transition-all flex flex-col items-center justify-center text-slate-400 hover:text-teal-600 aspect-square text-center">

@@ -21,7 +21,6 @@ import { InsuranceClaimsPanel } from "@/components/dashboard/insurance-claims-pa
 import { CashFlowPanel } from "@/components/dashboard/cash-flow-panel"
 import { RevenueIntelligencePanel } from "@/components/dashboard/revenue-intelligence-panel"
 import { ChairUtilizationPanel } from "@/components/dashboard/chair-utilization-panel"
-import { AlertCenter } from "@/components/dashboard/alert-center"
 import { formatCurrency } from "@/lib/financial-utils"
 
 interface DashboardStats {
@@ -121,7 +120,6 @@ export default function DashboardPage() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <AlertCenter />
                         <Button
                             variant="outline"
                             size="sm"

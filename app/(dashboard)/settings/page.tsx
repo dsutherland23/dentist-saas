@@ -308,45 +308,48 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900">Settings</h2>
-                    <p className="text-slate-500 mt-1">Manage your practice settings and preferences</p>
+            <div className="flex items-center justify-between min-w-0">
+                <div className="min-w-0">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Settings</h2>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage your practice settings and preferences</p>
                 </div>
             </div>
 
-            <Tabs defaultValue="general" className="space-y-6">
-                <TabsList className="bg-white border border-slate-200 p-1">
-                    <TabsTrigger value="general" className="gap-2">
-                        <Building2 className="h-4 w-4" />
-                        General
-                    </TabsTrigger>
-                    <TabsTrigger value="notifications" className="gap-2">
-                        <Bell className="h-4 w-4" />
-                        Notifications
-                    </TabsTrigger>
-                    <TabsTrigger value="security" className="gap-2">
-                        <Shield className="h-4 w-4" />
-                        Security
-                    </TabsTrigger>
-                    <TabsTrigger value="billing" className="gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        Billing
-                    </TabsTrigger>
-                    <TabsTrigger value="team" className="gap-2">
-                        <Users className="h-4 w-4" />
-                        Team
-                    </TabsTrigger>
-                    <TabsTrigger value="support" className="gap-2">
-                        <LifeBuoy className="h-4 w-4" />
-                        Support
-                    </TabsTrigger>
-                </TabsList>
+            <Tabs defaultValue="general" className="space-y-6 min-w-0">
+                {/* Scrollable tab list on small screens so all sections are reachable */}
+                <div className="w-full min-w-0 overflow-x-auto scrollbar-thin -mx-1 px-1 pb-1">
+                    <TabsList className="inline-flex h-10 w-max min-h-[2.5rem] items-center justify-start gap-0.5 bg-white border border-slate-200 p-1 rounded-md">
+                        <TabsTrigger value="general" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <Building2 className="h-4 w-4 shrink-0" />
+                            General
+                        </TabsTrigger>
+                        <TabsTrigger value="notifications" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <Bell className="h-4 w-4 shrink-0" />
+                            Notifications
+                        </TabsTrigger>
+                        <TabsTrigger value="security" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <Shield className="h-4 w-4 shrink-0" />
+                            Security
+                        </TabsTrigger>
+                        <TabsTrigger value="billing" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <CreditCard className="h-4 w-4 shrink-0" />
+                            Billing
+                        </TabsTrigger>
+                        <TabsTrigger value="team" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <Users className="h-4 w-4 shrink-0" />
+                            Team
+                        </TabsTrigger>
+                        <TabsTrigger value="support" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <LifeBuoy className="h-4 w-4 shrink-0" />
+                            Support
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
                 {/* General Settings */}
-                <TabsContent value="general" className="space-y-4">
+                <TabsContent value="general" className="space-y-4 min-w-0 overflow-x-hidden">
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Practice Information</CardTitle>
@@ -559,7 +562,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 {/* Notifications Settings */}
-                <TabsContent value="notifications" className="space-y-4">
+                <TabsContent value="notifications" className="space-y-4 min-w-0 overflow-x-hidden">
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Notification Preferences</CardTitle>
@@ -635,7 +638,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 {/* Security Settings */}
-                <TabsContent value="security" className="space-y-4">
+                <TabsContent value="security" className="space-y-4 min-w-0 overflow-x-hidden">
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Password & Authentication</CardTitle>
@@ -711,7 +714,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 {/* Billing Settings */}
-                <TabsContent value="billing" className="space-y-4">
+                <TabsContent value="billing" className="space-y-4 min-w-0 overflow-x-hidden">
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Subscription Plan</CardTitle>
@@ -788,7 +791,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 {/* Team Settings */}
-                <TabsContent value="team" className="space-y-4">
+                <TabsContent value="team" className="space-y-4 min-w-0 overflow-x-hidden">
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Team Members</CardTitle>
@@ -854,7 +857,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 {/* Support & Legal */}
-                <TabsContent value="support" className="space-y-6">
+                <TabsContent value="support" className="space-y-6 min-w-0 overflow-x-hidden">
                     <div className="grid gap-6 md:grid-cols-2">
                         <Card className="shadow-sm border-l-4 border-l-teal-500">
                             <CardHeader>
