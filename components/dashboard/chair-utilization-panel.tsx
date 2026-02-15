@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { fetchWithAuth } from "@/lib/fetch-client"
 import { Badge } from "@/components/ui/badge"
 import {
     Calendar,
