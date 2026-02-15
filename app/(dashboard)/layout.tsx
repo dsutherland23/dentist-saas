@@ -36,7 +36,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     isCollapsed && !isHovering ? "md:pl-20" : "md:pl-72"
                 )}>
                     <Topbar />
-                    <div className="p-3 sm:p-4 md:p-6 max-w-[100vw]">
+                    <div className="p-3 sm:p-4 md:p-6 min-w-0 w-full overflow-x-hidden box-border">
                         {children}
                     </div>
                 </main>

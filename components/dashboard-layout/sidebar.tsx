@@ -29,15 +29,18 @@ import { useSidebar } from "@/lib/hooks/use-sidebar-context"
 import { getSectionByPath } from "@/lib/access-config"
 import { canAccessSection } from "@/lib/permissions"
 
-interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> { }
+interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
+    /** When true (e.g. inside mobile sheet), always show expanded and ignore collapse state */
+    forceExpanded?: boolean
+}
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, forceExpanded = false }: SidebarProps) {
     const pathname = usePathname()
     const { signOut, profile } = useAuth()
     const { isCollapsed, isHovering, setIsHovering, toggle } = useSidebar()
     const clinicName = profile?.clinic?.name || "DentalCare Pro"
 
-    const isActualCollapsed = isCollapsed && !isHovering
+    const isActualCollapsed = !forceExpanded && isCollapsed && !isHovering
 
     const allRoutes = [
         {
@@ -213,8 +216,8 @@ export function Sidebar({ className }: SidebarProps) {
                     </ScrollArea>
                 </div>
 
-                {/* Collapse Toggle (Desktop Only) */}
-                <div className="px-3 mb-2 hidden md:block">
+                {/* Collapse Toggle (Desktop only; hide when force expanded e.g. mobile) */}
+                <div className={cn("px-3 mb-2", (forceExpanded ? "hidden" : "hidden md:block"))}>
                     <Button
                         onClick={toggle}
                         variant="ghost"

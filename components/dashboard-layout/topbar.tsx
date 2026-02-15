@@ -38,6 +38,7 @@ export function Topbar() {
     const { isCollapsed, toggle } = useSidebar()
     const router = useRouter()
     const pathname = usePathname()
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     const searchParams = useSearchParams()
     const [patients, setPatients] = useState<any[]>([])
     const [dentists, setDentists] = useState<any[]>([])
@@ -104,6 +105,11 @@ export function Topbar() {
         }
     }, [])
 
+    // Close mobile menu when route changes (user tapped a nav link)
+    useEffect(() => {
+        setMobileMenuOpen(false)
+    }, [pathname])
+
     const fullName = profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : "Loading..."
     const initial = profile?.first_name?.[0] || user?.email?.[0]?.toUpperCase() || "U"
     const role = profile?.role || "user"
@@ -128,7 +134,7 @@ export function Topbar() {
 
     return (
         <div className="sticky top-0 z-40 backdrop-blur-xl bg-white/80 border-b border-slate-200/50 shadow-sm">
-            <div className="flex h-14 sm:h-16 items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 min-w-0">
+            <div className="flex h-14 sm:h-16 items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 min-w-0 w-full overflow-hidden">
                 {/* Sidebar Toggle (Desktop) */}
                 <Button
                     variant="ghost"
@@ -139,34 +145,44 @@ export function Topbar() {
                     {isCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
                 </Button>
 
-                {/* Mobile Menu */}
-                <Sheet>
+                {/* Mobile Menu: hamburger visible on small screens, sheet slides in from left */}
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                     <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon" className="md:hidden text-slate-500">
-                            <Menu className="h-5 w-5" />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="md:hidden shrink-0 h-10 w-10 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                            aria-label="Open menu"
+                        >
+                            <Menu className="h-6 w-6" />
                         </Button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="p-0 w-72 bg-[#0F172A] border-none">
+                    <SheetContent
+                        side="left"
+                        className="p-0 w-[min(288px,85vw)] max-w-[288px] bg-[#0F172A] border-r border-slate-800 rounded-none [&>button]:text-white [&>button]:hover:bg-white/10 [&>button]:right-3 [&>button]:top-3"
+                    >
                         <SheetHeader className="sr-only">
                             <SheetTitle>Navigation Menu</SheetTitle>
                             <SheetDescription>
                                 Access clinic dashboard, patients, calendar, and more.
                             </SheetDescription>
                         </SheetHeader>
-                        <Sidebar className="w-full relative fixed-none" />
+                        <div className="h-full w-full overflow-y-auto">
+                            <Sidebar className="w-full h-full" forceExpanded />
+                        </div>
                     </SheetContent>
                 </Sheet>
 
-                {/* Search Bar */}
-                <form className="flex-1 min-w-0 max-w-md sm:max-w-xl" onSubmit={handleSearchSubmit}>
-                    <div className="relative">
-                        <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                {/* Search Bar: shrink on small screens */}
+                <form className="flex-1 min-w-0 max-w-[180px] sm:max-w-md md:max-w-xl w-full" onSubmit={handleSearchSubmit}>
+                    <div className="relative min-w-0">
+                        <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none shrink-0" />
                         <Input
                             name="search"
-                            placeholder="Search patients, invoices..."
+                            placeholder="Search..."
                             value={searchValue}
                             onChange={handleSearchChange}
-                            className="pl-8 sm:pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-9 sm:h-10 text-sm"
+                            className="w-full min-w-0 pl-8 sm:pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-9 sm:h-10 text-sm"
                         />
                     </div>
                 </form>

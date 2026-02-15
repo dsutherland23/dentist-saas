@@ -182,14 +182,14 @@ export default function PaymentsPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Payments & Transactions</h1>
-                    <p className="text-slate-500 mt-1">Monitor revenue and manage patient transactions</p>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Payments & Transactions</h1>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Monitor revenue and manage patient transactions</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-2 sm:gap-3">
                     <Button
                         variant="outline"
                         className="backdrop-blur-sm bg-white/50 border-slate-200 text-slate-700"
@@ -348,26 +348,26 @@ export default function PaymentsPage() {
             </div>
 
             {/* Transactions Table */}
-            <Card className="shadow-sm overflow-hidden">
+            <Card className="shadow-sm overflow-hidden min-w-0">
                 <CardHeader className="bg-white border-b border-slate-100">
-                    <div className="flex items-center justify-between">
-                        <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="min-w-0">
                             <CardTitle className="text-lg">Recent Transactions</CardTitle>
                             <CardDescription>A list of all processed payments and their current status</CardDescription>
                         </div>
-                        <div className="relative w-72">
+                        <div className="relative w-full min-w-0 sm:w-72">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                             <Input
                                 placeholder="Search by patient, invoice or ID..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
+                                className="pl-10 w-full min-w-0"
                             />
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0">
-                    <Table>
+                <CardContent className="p-0 overflow-x-auto min-w-0">
+                    <Table className="min-w-[600px]">
                         <TableHeader>
                             <TableRow className="bg-slate-50 border-none">
                                 <TableHead className="font-semibold text-slate-700">Patient</TableHead>

@@ -104,7 +104,7 @@ export default function DashboardPage() {
         <div className="min-h-[calc(100vh-4rem)] bg-[#f8fafc]">
             <AppointmentReminderModal />
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10 min-w-0 w-full overflow-x-hidden box-border">
                 {/* Header */}
                 <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6 mb-10">
                     <div>

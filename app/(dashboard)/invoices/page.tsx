@@ -300,14 +300,14 @@ export default function InvoicesPage() {
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-slate-900">Invoices</h1>
-                    <p className="text-slate-500 mt-1">Manage billing, track payments, and generate reports</p>
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Invoices</h1>
+                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage billing, track payments, and generate reports</p>
                 </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" className="backdrop-blur-sm bg-white/50" onClick={exportToCSV}>
+                <div className="flex flex-wrap gap-2 sm:gap-3">
+                    <Button variant="outline" size="sm" className="backdrop-blur-sm bg-white/50 shrink-0" onClick={exportToCSV}>
                         <Download className="mr-2 h-4 w-4" />
                         Export
                     </Button>
@@ -349,26 +349,24 @@ export default function InvoicesPage() {
                 </Card>
             </div>
 
-            <Card className="shadow-sm overflow-hidden border-slate-200">
+            <Card className="shadow-sm overflow-hidden border-slate-200 min-w-0">
                 <CardHeader className="bg-white border-b border-slate-100">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <Input
-                                    placeholder="Search by patient or invoice #..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="pl-10 w-80 bg-slate-50 border-none"
-                                />
-                            </div>
-                            <Button variant="outline" size="sm" className="bg-slate-50 border-none">
-                                <Filter className="mr-2 h-4 w-4 text-slate-500" /> Filter
-                            </Button>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                        <div className="relative w-full min-w-0 sm:w-80">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <Input
+                                placeholder="Search by patient or invoice #..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-10 w-full min-w-0 bg-slate-50 border-none"
+                            />
                         </div>
+                        <Button variant="outline" size="sm" className="bg-slate-50 border-none shrink-0">
+                            <Filter className="mr-2 h-4 w-4 text-slate-500" /> Filter
+                        </Button>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0 overflow-x-auto">
+                <CardContent className="p-0 overflow-x-auto min-w-0">
                     <Table className="min-w-[500px]">
                         <TableHeader className="bg-slate-50/50">
                             <TableRow>

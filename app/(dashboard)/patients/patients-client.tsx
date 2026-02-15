@@ -132,11 +132,11 @@ export default function PatientsClient({
     }
 
     return (
-        <div className="p-8 space-y-8 bg-slate-50 min-h-screen">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-3xl font-bold tracking-tight text-slate-900">Patients</h2>
-                    <p className="text-slate-500">Manage your patient records and history.</p>
+        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="min-w-0">
+                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Patients</h2>
+                    <p className="text-slate-500 text-sm sm:text-base">Manage your patient records and history.</p>
                 </div>
                 <ManagePatientDialog />
             </div>
@@ -211,7 +211,7 @@ export default function PatientsClient({
                 <Button variant="outline"><Filter className="mr-2 h-4 w-4" /> Filter</Button>
             </div>
 
-            <div className="rounded-md border bg-white shadow-sm overflow-x-auto overflow-hidden">
+            <div className="rounded-md border bg-white shadow-sm overflow-x-auto overflow-hidden min-w-0 w-full">
                 <Table className="min-w-[600px]">
                     <TableHeader className="bg-slate-50">
                         <TableRow>
