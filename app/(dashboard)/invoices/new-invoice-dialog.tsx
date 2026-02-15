@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -17,22 +17,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Loader2, FileText } from "lucide-react"
 import { toast } from "sonner"
 
+interface Treatment {
+    id: string
+    name: string
+    price: number
+    category?: string
+}
+
 interface NewInvoiceDialogProps {
     patients?: any[]
     defaultPatientId?: string
-    onSuccess?: () => void
+    treatments?: Treatment[]
+    onSuccess?: (invoice?: { id: string; invoice_number: string; total_amount: number }) => void
     trigger?: React.ReactNode
     open?: boolean
     onOpenChange?: (open: boolean) => void
 }
 
-export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, onSuccess, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: NewInvoiceDialogProps) {
+export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, treatments: initialTreatments, onSuccess, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: NewInvoiceDialogProps) {
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = controlledOpen !== undefined
     const open = isControlled ? controlledOpen : internalOpen
     const setOpen = isControlled ? setControlledOpen! : setInternalOpen
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [patients, setPatients] = useState<any[]>(initialPatients || [])
+    const [treatments, setTreatments] = useState<Treatment[]>(initialTreatments || [])
     const [newInvoice, setNewInvoice] = useState({
         patient_id: defaultPatientId || "",
         due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -59,10 +68,47 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
     }, [initialPatients])
 
     useEffect(() => {
+        if (!initialTreatments && open) {
+            fetch('/api/treatments')
+                .then(res => res.ok ? res.json() : [])
+                .then(data => setTreatments(Array.isArray(data) ? data : []))
+                .catch(() => setTreatments([]))
+        } else if (initialTreatments?.length) {
+            setTreatments(initialTreatments)
+        }
+    }, [open, initialTreatments])
+
+    useEffect(() => {
         if (open && defaultPatientId) {
             setNewInvoice(prev => ({ ...prev, patient_id: defaultPatientId }))
         }
     }, [open, defaultPatientId])
+
+    const hasAutoFilled = useRef(false)
+    useEffect(() => {
+        if (!open) {
+            hasAutoFilled.current = false
+            return
+        }
+        if (treatments.length > 0 && !hasAutoFilled.current) {
+            hasAutoFilled.current = true
+            const first = treatments[0]
+            setNewInvoice(prev => ({
+                ...prev,
+                items: prev.items.length === 1 && !prev.items[0].description
+                    ? [{ description: first.name, quantity: 1, unit_price: Number(first.price) }]
+                    : prev.items
+            }))
+        }
+    }, [open, treatments])
+
+    const applyTreatmentToItem = (index: number, treatmentId: string) => {
+        const t = treatments.find(x => x.id === treatmentId)
+        if (!t) return
+        const newItems = [...newInvoice.items]
+        newItems[index] = { ...newItems[index], description: t.name, unit_price: Number(t.price) }
+        setNewInvoice(prev => ({ ...prev, items: newItems }))
+    }
 
     const handleCreateInvoice = async () => {
         if (!newInvoice.patient_id || newInvoice.items.some(i => !i.description || i.unit_price <= 0)) {
@@ -79,6 +125,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
             })
 
             if (res.ok) {
+                const created = await res.json()
                 toast.success("Invoice created successfully")
                 setOpen(false)
                 setNewInvoice({
@@ -86,7 +133,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
                     due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                     items: [{ description: "", quantity: 1, unit_price: 0 }]
                 })
-                if (onSuccess) onSuccess()
+                onSuccess?.(created)
             } else {
                 throw new Error("Failed to create invoice")
             }
@@ -157,6 +204,26 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
                         </div>
                         {newInvoice.items.map((item, index) => (
                             <div key={index} className="grid grid-cols-12 gap-3 items-end p-3 bg-slate-50 rounded-lg relative group">
+                                {treatments.length > 0 && (
+                                    <div className="col-span-12 space-y-2">
+                                        <Label className="text-xs">From treatment catalog</Label>
+                                        <Select
+                                            value=""
+                                            onValueChange={(val) => applyTreatmentToItem(index, val)}
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue placeholder="Select service from catalog..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {treatments.map(t => (
+                                                    <SelectItem key={t.id} value={t.id}>
+                                                        {t.name} — ${Number(t.price).toFixed(2)}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                                 <div className="col-span-6 space-y-2">
                                     <Label className="text-xs">Description</Label>
                                     <Input
@@ -173,6 +240,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
                                     <Label className="text-xs">Qty</Label>
                                     <Input
                                         type="number"
+                                        min={1}
                                         value={item.quantity}
                                         onChange={(e) => {
                                             const newItems = [...newInvoice.items]
@@ -185,6 +253,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
                                     <Label className="text-xs">Price</Label>
                                     <Input
                                         type="number"
+                                        step="0.01"
                                         value={item.unit_price}
                                         onChange={(e) => {
                                             const newItems = [...newInvoice.items]
@@ -195,6 +264,7 @@ export function NewInvoiceDialog({ patients: initialPatients, defaultPatientId, 
                                 </div>
                                 <div className="col-span-1 pb-1">
                                     <Button
+                                        type="button"
                                         variant="ghost"
                                         size="icon"
                                         className="text-rose-500 hover:text-rose-600 hover:bg-rose-50"

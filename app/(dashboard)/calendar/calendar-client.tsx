@@ -731,63 +731,76 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     </>
                 ) : view !== "month" ? (
                     <>
-                        <div className="overflow-x-auto overflow-y-hidden">
-                        <div className={cn("grid border-b border-slate-100 min-w-[min(100%,600px)] sm:min-w-0", view === "day" ? "grid-cols-[70px_1fr] sm:grid-cols-[100px_1fr]" : "grid-cols-[70px_repeat(7,minmax(0,1fr))] sm:grid-cols-[100px_repeat(7,1fr)]")}>
-                            <div className="p-2 sm:p-4 bg-slate-50/50 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center border-r border-slate-100 shrink-0">
-                                TIME
-                            </div>
-                            {days.map(day => (
-                                <div key={day.toString()} className={cn("p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0", isSameDay(day, new Date()) ? "bg-teal-50/30" : "")}>
-                                    <div className={cn("text-[9px] sm:text-[10px] font-bold uppercase", isSameDay(day, new Date()) ? "text-teal-600" : "text-slate-400")}>{format(day, "EEE")}</div>
-                                    <div className={cn("text-base sm:text-xl font-bold h-6 w-6 sm:h-8 sm:w-8 flex items-center justify-center rounded-full shrink-0", isSameDay(day, new Date()) ? "bg-teal-600 text-white" : "text-slate-700")}>{format(day, "d")}</div>
+                        <div className="flex-1 flex flex-col min-h-0 overflow-auto">
+                            <div className={cn(
+                                "grid border-b border-slate-100 shrink-0",
+                                view === "day"
+                                    ? "grid-cols-[60px_1fr] sm:grid-cols-[80px_1fr] min-w-[320px]"
+                                    : "grid-cols-[60px_repeat(7,minmax(64px,1fr))] sm:grid-cols-[80px_repeat(7,minmax(0,1fr))] min-w-[548px] sm:min-w-0"
+                            )}>
+                                <div className="sticky left-0 z-[2] p-2 sm:p-4 bg-slate-50/50 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center border-r border-slate-100 shrink-0">
+                                    TIME
                                 </div>
-                            ))}
-                        </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto overflow-x-auto relative scrollbar-thin min-h-0">
-                            {hours.map(hour => (
-                                <div key={hour} className={cn("grid h-14 sm:h-[80px] shrink-0 min-w-[min(100%,600px)] sm:min-w-0", view === "day" ? "grid-cols-[70px_1fr] sm:grid-cols-[100px_1fr]" : "grid-cols-[70px_repeat(7,minmax(0,1fr))] sm:grid-cols-[100px_repeat(7,1fr)]")}>
-                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[9px] sm:text-[10px] text-slate-400 font-bold p-1 sm:p-2 text-center sticky left-0 bg-slate-50/30 z-[1] flex items-start justify-center pt-2 sm:pt-3 h-14 sm:h-[80px] shrink-0">
-                                        {format(setHours(new Date(), hour), "h a")}
+                                {days.map(day => (
+                                    <div key={day.toString()} className={cn("p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0", isSameDay(day, new Date()) ? "bg-teal-50/30" : "")}>
+                                        <div className={cn("text-[9px] sm:text-[10px] font-bold uppercase truncate w-full", isSameDay(day, new Date()) ? "text-teal-600" : "text-slate-400")}>{format(day, "EEE")}</div>
+                                        <div className={cn("text-sm sm:text-xl font-bold h-6 w-6 sm:h-8 sm:w-8 flex items-center justify-center rounded-full shrink-0", isSameDay(day, new Date()) ? "bg-teal-600 text-white" : "text-slate-700")}>{format(day, "d")}</div>
                                     </div>
+                                ))}
+                            </div>
 
-                                    {days.map(day => {
-                                        const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === hour
-                                        return (
-                                            <div
-                                                key={day.toString()}
-                                                onDragOver={handleDragOver(day, hour)}
-                                                onDragLeave={handleDragLeave(day, hour)}
-                                                onDrop={handleDrop(day, hour)}
-                                                onClick={(e) => {
-                                                    if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
-                                                    const slotStart = setHours(startOfDay(day), hour)
-                                                    setNewAppointmentStart(slotStart)
-                                                    setIsNewAppointmentOpen(true)
-                                                }}
-                                                className={cn(
-                                                    "border-r border-b border-slate-100 relative group transition-all p-1 cursor-pointer h-[80px] overflow-visible",
-                                                    isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
-                                                )}
-                                            >
-                                                {filteredBlockedSlots.filter(blk =>
-                                                    isSameDay(blk.start, day) &&
-                                                    blk.start.getHours() === hour
-                                                ).map(blk => (
-                                                    <BlockedSlotCard key={blk.id} blk={blk} />
-                                                ))}
-                                                {filteredAppointments.filter(appt =>
-                                                    isSameDay(appt.start, day) &&
-                                                    appt.start.getHours() === hour
-                                                ).map(appt => (
-                                                    <AppointmentCard key={appt.id} appt={appt} />
-                                                ))}
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            ))}
+                            <div className="flex-1 min-h-0">
+                                {hours.map(hour => (
+                                    <div
+                                        key={hour}
+                                        className={cn(
+                                            "grid h-12 sm:h-[80px] shrink-0",
+                                            view === "day"
+                                                ? "grid-cols-[60px_1fr] sm:grid-cols-[80px_1fr] min-w-[320px]"
+                                                : "grid-cols-[60px_repeat(7,minmax(64px,1fr))] sm:grid-cols-[80px_repeat(7,minmax(0,1fr))] min-w-[548px] sm:min-w-0"
+                                        )}
+                                    >
+                                        <div className="sticky left-0 z-[1] border-r border-b border-slate-100 bg-slate-50/30 text-[9px] sm:text-[10px] text-slate-400 font-bold p-1 sm:p-2 text-center flex items-center justify-center h-12 sm:h-[80px] shrink-0">
+                                            {format(setHours(new Date(), hour), "h a")}
+                                        </div>
+
+                                        {days.map(day => {
+                                            const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === hour
+                                            return (
+                                                <div
+                                                    key={day.toString()}
+                                                    onDragOver={handleDragOver(day, hour)}
+                                                    onDragLeave={handleDragLeave(day, hour)}
+                                                    onDrop={handleDrop(day, hour)}
+                                                    onClick={(e) => {
+                                                        if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
+                                                        const slotStart = setHours(startOfDay(day), hour)
+                                                        setNewAppointmentStart(slotStart)
+                                                        setIsNewAppointmentOpen(true)
+                                                    }}
+                                                    className={cn(
+                                                        "border-r border-b border-slate-100 relative group transition-all p-0.5 sm:p-1 cursor-pointer min-h-[48px] sm:min-h-[80px] overflow-hidden",
+                                                        isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
+                                                    )}
+                                                >
+                                                    {filteredBlockedSlots.filter(blk =>
+                                                        isSameDay(blk.start, day) &&
+                                                        blk.start.getHours() === hour
+                                                    ).map(blk => (
+                                                        <BlockedSlotCard key={blk.id} blk={blk} />
+                                                    ))}
+                                                    {filteredAppointments.filter(appt =>
+                                                        isSameDay(appt.start, day) &&
+                                                        appt.start.getHours() === hour
+                                                    ).map(appt => (
+                                                        <AppointmentCard key={appt.id} appt={appt} />
+                                                    ))}
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </>
                 ) : null}

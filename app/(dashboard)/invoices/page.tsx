@@ -81,6 +81,20 @@ export default function InvoicesPage() {
         setSearchQuery(q)
     }, [searchParams])
 
+    useEffect(() => {
+        const id = searchParams?.get("id")
+        if (!id) return
+        fetch(`/api/invoices?id=${id}`)
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) {
+                    setViewingInvoice(data)
+                    setIsDetailsOpen(true)
+                }
+            })
+            .catch(() => toast.error("Error loading invoice details"))
+    }, [searchParams?.get("id")])
+
     const handleArchiveInvoice = async (id: string) => {
         if (!confirm("Are you sure you want to archive this invoice? It will no longer appear in the active list.")) return
 

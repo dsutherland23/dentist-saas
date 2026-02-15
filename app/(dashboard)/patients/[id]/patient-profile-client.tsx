@@ -24,7 +24,10 @@ import {
     ImageIcon,
     X,
     Loader2,
-    ChevronDown
+    ChevronDown,
+    Download,
+    Share2,
+    ExternalLink
 } from "lucide-react"
 import { format } from "date-fns"
 import {
@@ -124,6 +127,9 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [isFileOpen, setIsFileOpen] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
+    const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
+    const [createdInvoice, setCreatedInvoice] = useState<{ id: string; invoice_number: string; total_amount: number } | null>(null)
+    const [patientInvoices, setPatientInvoices] = useState<{ id: string; invoice_number: string; total_amount: number; status: string; created_at: string }[]>([])
 
     // Form States
     const [alertsData, setAlertsData] = useState({
@@ -159,6 +165,10 @@ export default function PatientProfileClient({ patient, appointments, treatments
         type: "document",
         file: null
     })
+    const [cameraStream, setCameraStream] = useState<MediaStream | null>(null)
+    const videoRef = React.useRef<HTMLVideoElement>(null)
+    const [recordDetail, setRecordDetail] = useState<"appointment" | "treatment" | null>(null)
+    const [recordData, setRecordData] = useState<typeof appointments[0] | typeof treatments[0] | null>(null)
 
     // Auto-refresh when user returns to this tab (e.g. after completing appointment on calendar)
     useEffect(() => {
@@ -166,6 +176,20 @@ export default function PatientProfileClient({ patient, appointments, treatments
         window.addEventListener("focus", onFocus)
         return () => window.removeEventListener("focus", onFocus)
     }, [router])
+
+    useEffect(() => {
+        setInsuranceData({
+            insurance_provider: patient.insurance_provider || "",
+            insurance_policy_number: patient.insurance_policy_number || ""
+        })
+    }, [patient.insurance_provider, patient.insurance_policy_number])
+
+    useEffect(() => {
+        fetch(`/api/invoices?patient_id=${patient.id}`)
+            .then(res => res.ok ? res.json() : [])
+            .then(data => setPatientInvoices(Array.isArray(data) ? data : []))
+            .catch(() => setPatientInvoices([]))
+    }, [patient.id])
 
     if (!patient) return <div>Patient not found</div>
 
@@ -222,6 +246,11 @@ export default function PatientProfileClient({ patient, appointments, treatments
             })
             if (res.ok) {
                 toast.success("Insurance information updated")
+                const updated = await res.json()
+                setInsuranceData({
+                    insurance_provider: updated.insurance_provider ?? insuranceData.insurance_provider,
+                    insurance_policy_number: updated.insurance_policy_number ?? insuranceData.insurance_policy_number
+                })
                 router.refresh()
             }
         } catch (error) {
@@ -277,7 +306,10 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 .from('patient-files')
                 .upload(filePath, fileData.file)
 
-            if (uploadError) throw uploadError
+            if (uploadError) {
+                const msg = (uploadError as { message?: string }).message || "Storage upload failed"
+                throw new Error(msg)
+            }
 
             const res = await fetch(`/api/patients/${patient.id}/files`, {
                 method: 'POST',
@@ -293,13 +325,45 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 toast.success("File uploaded successfully")
                 router.refresh()
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error)
-            toast.error("Failed to upload file")
+            const err = error as { message?: string; error?: string }
+            const msg = err?.message || err?.error || ""
+            toast.error(msg ? `Upload failed: ${msg}` : "Failed to upload file. Check file size (max 10MB) and try again.")
         } finally {
             setIsUploading(false)
             setIsFileOpen(false)
+            setCameraStream(null)
         }
+    }
+
+    const startCamera = () => {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => {
+                setCameraStream(stream)
+                if (videoRef.current) videoRef.current.srcObject = stream
+            })
+            .catch(() => toast.error("Camera access denied or unavailable"))
+    }
+
+    const stopCamera = () => {
+        cameraStream?.getTracks().forEach(t => t.stop())
+        setCameraStream(null)
+        if (videoRef.current) videoRef.current.srcObject = null
+    }
+
+    const capturePhoto = () => {
+        if (!videoRef.current || !cameraStream) return
+        const canvas = document.createElement("canvas")
+        canvas.width = videoRef.current.videoWidth
+        canvas.height = videoRef.current.videoHeight
+        canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0)
+        canvas.toBlob(blob => {
+            if (!blob) return
+            const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" })
+            setFileData(prev => ({ ...prev, file, type: prev.type === "xray" ? "xray" : "photo" }))
+            stopCamera()
+        }, "image/jpeg", 0.9)
     }
 
     const handleDeleteTreatment = async (id: string) => {
@@ -320,9 +384,15 @@ export default function PatientProfileClient({ patient, appointments, treatments
         }
     }
 
-    const getFileUrl = (path: string) => {
-        const { data } = supabase.storage.from('patient-files').getPublicUrl(path)
-        return data.publicUrl
+    const openFileUrl = async (path: string) => {
+        try {
+            const res = await fetch(`/api/patients/${patient.id}/file-url?path=${encodeURIComponent(path)}`)
+            if (!res.ok) throw new Error("Failed to get file URL")
+            const { url } = await res.json()
+            if (url) window.open(url, "_blank")
+        } catch {
+            toast.error("Could not open file")
+        }
     }
 
     return (
@@ -375,12 +445,77 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     </Button>
                     <NewInvoiceDialog
                         defaultPatientId={patient.id}
+                        treatments={availableTreatments}
+                        open={invoiceDialogOpen}
+                        onOpenChange={(open) => {
+                            setInvoiceDialogOpen(open)
+                            if (!open) setCreatedInvoice(null)
+                        }}
+                        onSuccess={(inv) => {
+                            if (inv) {
+                                setCreatedInvoice(inv)
+                                setPatientInvoices(prev => [{
+                                    id: inv.id,
+                                    invoice_number: inv.invoice_number,
+                                    total_amount: inv.total_amount,
+                                    status: "sent",
+                                    created_at: new Date().toISOString()
+                                }, ...prev])
+                            }
+                            setInvoiceDialogOpen(false)
+                        }}
                         trigger={
-                            <Button variant="outline">
+                            <Button variant="outline" onClick={() => setInvoiceDialogOpen(true)}>
                                 <FileText className="mr-2 h-4 w-4" /> Invoice
                             </Button>
                         }
                     />
+                    <Dialog open={!!createdInvoice} onOpenChange={(open) => !open && setCreatedInvoice(null)}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Invoice created</DialogTitle>
+                                <DialogDescription>
+                                    {createdInvoice && (
+                                        <>Invoice {createdInvoice.invoice_number} — ${Number(createdInvoice.total_amount).toFixed(2)}</>
+                                    )}
+                                </DialogDescription>
+                            </DialogHeader>
+                            {createdInvoice && (
+                                <div className="flex flex-col gap-3 py-2">
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-start"
+                                        onClick={() => window.open(`/invoices?id=${createdInvoice.id}`, "_blank")}
+                                    >
+                                        <ExternalLink className="mr-2 h-4 w-4" /> View invoice
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-start"
+                                        onClick={() => {
+                                            window.open(`/invoices?id=${createdInvoice.id}`, "_blank")
+                                            setTimeout(() => window.print(), 300)
+                                        }}
+                                    >
+                                        <Download className="mr-2 h-4 w-4" /> Download / Print
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-start"
+                                        onClick={() => {
+                                            const url = typeof window !== "undefined" ? `${window.location.origin}/invoices?id=${createdInvoice.id}` : ""
+                                            navigator.clipboard.writeText(url).then(() => toast.success("Link copied"))
+                                        }}
+                                    >
+                                        <Share2 className="mr-2 h-4 w-4" /> Copy link to share
+                                    </Button>
+                                </div>
+                            )}
+                            <DialogFooter>
+                                <Button onClick={() => setCreatedInvoice(null)}>Close</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                     <Dialog open={isTreatmentOpen} onOpenChange={setIsTreatmentOpen}>
                         <DialogContent>
                             <form onSubmit={handleAddTreatment}>
@@ -617,7 +752,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         </CardContent>
                     </Card>
 
-                    <Card className={`border-none shadow-sm ${!patient.insurance_provider ? 'ring-2 ring-amber-400 ring-offset-2' : ''}`}>
+                    <Card key={`ins-${patient.insurance_provider ?? "none"}`} className={`border-none shadow-sm ${!(patient.insurance_provider || insuranceData.insurance_provider) ? "ring-2 ring-amber-400 ring-offset-2" : ""}`}>
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg">Insurance</CardTitle>
                             <Dialog open={isInsuranceOpen} onOpenChange={setIsInsuranceOpen}>
@@ -663,7 +798,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             </Dialog>
                         </CardHeader>
                         <CardContent className="space-y-2">
-                            {!patient.insurance_provider ? (
+                            {!(patient.insurance_provider || insuranceData.insurance_provider) ? (
                                 <div className="space-y-3">
                                     <div className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm flex items-start border border-amber-100 animate-pulse">
                                         <AlertTriangle className="h-4 w-4 mr-2 mt-0.5 shrink-0" />
@@ -682,8 +817,8 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                 </div>
                             ) : (
                                 <>
-                                    <div className="font-semibold text-slate-900">{patient.insurance_provider}</div>
-                                    <div className="text-sm text-slate-500 italic">Policy #{patient.insurance_policy_number || "N/A"}</div>
+                                    <div className="font-semibold text-slate-900">{patient.insurance_provider || insuranceData.insurance_provider}</div>
+                                    <div className="text-sm text-slate-500 italic">Policy #{patient.insurance_policy_number || insuranceData.insurance_policy_number || "N/A"}</div>
                                 </>
                             )}
                         </CardContent>
@@ -697,7 +832,61 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             <TabsTrigger value="appointments" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Appointments</TabsTrigger>
                             <TabsTrigger value="history" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Treatment History</TabsTrigger>
                             <TabsTrigger value="files" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0 whitespace-nowrap">Files & X-Rays</TabsTrigger>
+                            <TabsTrigger value="invoices" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0 whitespace-nowrap">Invoices</TabsTrigger>
                         </TabsList>
+
+                        <Dialog open={!!recordDetail} onOpenChange={(open) => { if (!open) { setRecordDetail(null); setRecordData(null) } }}>
+                            <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto overflow-x-hidden flex flex-col items-center w-[calc(100vw-2rem)] sm:w-full">
+                                <Button variant="ghost" size="icon" className="absolute right-4 top-4 rounded-full h-8 w-8" onClick={() => { setRecordDetail(null); setRecordData(null) }} aria-label="Close">
+                                    <X className="h-4 w-4" />
+                                </Button>
+                                {recordDetail === "appointment" && recordData && "start_time" in recordData && (
+                                    <div className="space-y-4 pt-6 w-full min-w-0">
+                                        <DialogHeader>
+                                            <DialogTitle>Appointment</DialogTitle>
+                                            <DialogDescription>{format(new Date(recordData.start_time), "PPP 'at' p")}</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="space-y-3 text-sm">
+                                            <p><span className="font-semibold text-slate-700">Treatment:</span> {recordData.treatment_type}</p>
+                                            <p><span className="font-semibold text-slate-700">Status:</span> {getAppointmentStatusLabel(recordData.status)}</p>
+                                            {recordData.checked_in_at && <p><span className="font-semibold text-slate-700">Checked in:</span> {format(new Date(recordData.checked_in_at), "PPp")}</p>}
+                                            {recordData.checked_out_at && <p><span className="font-semibold text-slate-700">Checked out:</span> {format(new Date(recordData.checked_out_at), "PPp")}</p>}
+                                            {recordData.dentists && <p><span className="font-semibold text-slate-700">Provider:</span> Dr. {recordData.dentists.last_name}</p>}
+                                        </div>
+                                        {patient.allergies && (
+                                            <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm">
+                                                <span className="font-bold text-red-800">Allergies:</span> {patient.allergies}
+                                            </div>
+                                        )}
+                                        <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg text-sm">
+                                            <span className="font-semibold text-slate-700">X-ray / images on file:</span> {files.some(f => f.type === "xray" || f.type === "photo") ? "Yes" : "No"}
+                                        </div>
+                                    </div>
+                                )}
+                                {recordDetail === "treatment" && recordData && "procedures_performed" in recordData && (
+                                    <div className="space-y-4 pt-6 w-full min-w-0">
+                                        <DialogHeader>
+                                            <DialogTitle>Treatment record</DialogTitle>
+                                            <DialogDescription>{format(new Date(recordData.created_at), "PPP")}</DialogDescription>
+                                        </DialogHeader>
+                                        <div className="space-y-3 text-sm">
+                                            <p><span className="font-semibold text-slate-700">Procedures:</span> {recordData.procedures_performed}</p>
+                                            <p><span className="font-semibold text-slate-700">Diagnosis:</span> {recordData.diagnosis}</p>
+                                            <p><span className="font-semibold text-slate-700">Notes:</span> {recordData.notes}</p>
+                                            {recordData.dentists && <p><span className="font-semibold text-slate-700">Recorded by:</span> Dr. {recordData.dentists.last_name}</p>}
+                                        </div>
+                                        {patient.allergies && (
+                                            <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm">
+                                                <span className="font-bold text-red-800">Allergies:</span> {patient.allergies}
+                                            </div>
+                                        )}
+                                        <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg text-sm">
+                                            <span className="font-semibold text-slate-700">X-ray / images on file:</span> {files.some(f => f.type === "xray" || f.type === "photo") ? "Yes" : "No"}
+                                        </div>
+                                    </div>
+                                )}
+                            </DialogContent>
+                        </Dialog>
 
                         <TabsContent value="appointments" className="mt-8 space-y-4">
                             <p className="text-sm text-slate-500">Appointments from calendar. Data refreshes when you return to this tab.</p>
@@ -708,7 +897,11 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                 </div>
                             ) : (
                                 appointments.map(apt => (
-                                    <Card key={apt.id} className="shadow-sm border-none bg-white hover:bg-slate-50/50 transition-colors group">
+                                    <Card
+                                        key={apt.id}
+                                        className="shadow-sm border-none bg-white hover:bg-slate-50/50 transition-colors group cursor-pointer"
+                                        onClick={() => { setRecordDetail("appointment"); setRecordData(apt) }}
+                                    >
                                         <CardHeader>
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -756,7 +949,11 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                 </div>
                             ) : (
                                 treatments.map(tx => (
-                                    <Card key={tx.id} className="shadow-sm border-none bg-white">
+                                    <Card
+                                        key={tx.id}
+                                        className="shadow-sm border-none bg-white cursor-pointer hover:bg-slate-50/50"
+                                        onClick={() => { setRecordDetail("treatment"); setRecordData(tx) }}
+                                    >
                                         <CardHeader>
                                             <div className="flex justify-between items-start">
                                                 <div>
@@ -768,7 +965,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                                                    onClick={() => handleDeleteTreatment(tx.id)}
+                                                    onClick={e => { e.stopPropagation(); handleDeleteTreatment(tx.id) }}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
@@ -833,7 +1030,24 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                                     />
                                                 </div>
                                                 <div className="grid gap-2">
-                                                    <Label>File Selection</Label>
+                                                    <Label>File or take picture</Label>
+                                                    {(fileData.type === "xray" || fileData.type === "photo") && (
+                                                        <div className="space-y-2">
+                                                            {!cameraStream ? (
+                                                                <Button type="button" variant="outline" className="w-full" onClick={startCamera}>
+                                                                    <ImageIcon className="mr-2 h-4 w-4" /> Take picture
+                                                                </Button>
+                                                            ) : (
+                                                                <div className="space-y-2">
+                                                                    <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-lg border bg-black max-h-48 object-contain" />
+                                                                    <div className="flex gap-2">
+                                                                        <Button type="button" variant="outline" className="flex-1" onClick={capturePhoto}>Capture</Button>
+                                                                        <Button type="button" variant="ghost" className="flex-1" onClick={stopCamera}>Cancel</Button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     <div className="flex items-center justify-center w-full">
                                                         <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 hover:border-teal-300 transition-all">
                                                             <div className="flex flex-col items-center justify-center pt-5 pb-6">
@@ -845,6 +1059,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                                             <input
                                                                 type="file"
                                                                 className="hidden"
+                                                                accept={fileData.type === "xray" || fileData.type === "photo" ? "image/*" : undefined}
                                                                 onChange={e => setFileData({ ...fileData, file: e.target.files?.[0] || null })}
                                                             />
                                                         </label>
@@ -874,19 +1089,49 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                             <div className="text-xs font-bold text-slate-900 group-hover:text-teal-700 transition-colors line-clamp-1 px-2">{file.name}</div>
                                             <div className="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-semibold">{file.type}</div>
                                         </div>
-                                        <a
-                                            href={getFileUrl(file.file_path)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-teal-600/10 flex items-center justify-center transition-opacity"
+                                        <button
+                                            type="button"
+                                            onClick={() => openFileUrl(file.file_path)}
+                                            className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-teal-600/10 flex items-center justify-center transition-opacity cursor-pointer"
                                         >
                                             <div className="bg-white px-4 py-2 rounded-full text-xs font-bold text-teal-700 shadow-xl border border-teal-100 flex items-center gap-2 transform translate-y-4 group-hover:translate-y-0 transition-transform">
                                                 <FileText className="h-3.5 w-3.5" /> View Record
                                             </div>
-                                        </a>
+                                        </button>
                                     </Card>
                                 ))}
                             </div>
+                        </TabsContent>
+
+                        <TabsContent value="invoices" className="mt-8 space-y-4">
+                            <p className="text-sm text-slate-500">All invoices for this patient. Open an invoice to view or print.</p>
+                            {patientInvoices.length === 0 ? (
+                                <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200 text-slate-500">
+                                    <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                                    No invoices yet.
+                                </div>
+                            ) : (
+                                patientInvoices.map(inv => (
+                                    <Card key={inv.id} className="shadow-sm border-none bg-white hover:bg-slate-50/50 transition-colors">
+                                        <CardHeader className="flex flex-row items-center justify-between py-4">
+                                            <div>
+                                                <CardTitle className="text-lg">{inv.invoice_number}</CardTitle>
+                                                <CardDescription>
+                                                    ${Number(inv.total_amount).toFixed(2)} · {format(new Date(inv.created_at), "PPP")}
+                                                </CardDescription>
+                                            </div>
+                                            <Badge variant="outline" className="shrink-0">{inv.status}</Badge>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => window.open(`/invoices?id=${inv.id}`, "_blank")}
+                                            >
+                                                <ExternalLink className="h-4 w-4 mr-1" /> View
+                                            </Button>
+                                        </CardHeader>
+                                    </Card>
+                                ))
+                            )}
                         </TabsContent>
                     </Tabs>
                 </div>

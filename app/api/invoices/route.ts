@@ -22,6 +22,7 @@ export async function GET(req: Request) {
 
         const url = new URL(req.url)
         const invoiceId = url.searchParams.get("id")
+        const patientId = url.searchParams.get("patient_id")
 
         if (invoiceId) {
             const { data: invoice, error } = await supabase
@@ -40,7 +41,7 @@ export async function GET(req: Request) {
             return NextResponse.json(invoice)
         }
 
-        const { data: invoices, error } = await supabase
+        let query = supabase
             .from("invoices")
             .select(`
                 *,
@@ -48,8 +49,12 @@ export async function GET(req: Request) {
                 clinic:clinics(*)
             `)
             .eq("clinic_id", userData.clinic_id)
-            .neq("status", "cancelled") // Hide cancelled/archived by default
+            .neq("status", "cancelled")
             .order("created_at", { ascending: false })
+        if (patientId) {
+            query = query.eq("patient_id", patientId)
+        }
+        const { data: invoices, error } = await query
 
         if (error) throw error
 
