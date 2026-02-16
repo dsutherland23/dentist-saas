@@ -46,6 +46,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import {
+    Sheet,
+    SheetContent,
+} from "@/components/ui/sheet"
 import { differenceInMinutes, addMinutes, isAfter } from "date-fns"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { CheckoutPaymentModal } from "@/components/calendar/checkout-payment-modal"
@@ -83,12 +87,28 @@ interface CalendarClientProps {
     clinic?: { name: string; logo_url?: string | null; phone?: string | null; website?: string | null } | null
 }
 
+const MOBILE_BREAKPOINT = 768
+
+function useIsMobile() {
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+        setIsMobile(mq.matches)
+        const fn = () => setIsMobile(mq.matches)
+        mq.addEventListener("change", fn)
+        return () => mq.removeEventListener("change", fn)
+    }, [])
+    return isMobile
+}
+
 export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists, clinic }: CalendarClientProps) {
     const router = useRouter()
+    const isMobile = useIsMobile()
     const [currentDate, setCurrentDate] = useState(new Date())
     const [view, setView] = useState<"day" | "week" | "month" | "staff">("week")
     const [staffFilterId, setStaffFilterId] = useState<string | null>(null)
     const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
+    const [mobileAppointment, setMobileAppointment] = useState<any>(null)
     const [pendingReschedule, setPendingReschedule] = useState<{
         appointment: any,
         newStart: Date,
@@ -331,48 +351,60 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
         const cardBaseClass = "text-[10px] px-2 py-1 rounded bg-slate-100/50 text-slate-700 font-medium border border-slate-200/50 cursor-grab active:cursor-grabbing hover:bg-slate-200/50 transition-colors"
 
+        const triggerDiv = isMonthView ? (
+            <div
+                data-appointment
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData("appointmentId", appt.id)
+                    e.dataTransfer.effectAllowed = "move"
+                }}
+                className={cn(cardBaseClass, "w-full truncate")}
+            >
+                <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
+                <span className="truncate">{appt.patientName}</span>
+            </div>
+        ) : (
+            <div
+                data-appointment
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData("appointmentId", appt.id)
+                    e.dataTransfer.effectAllowed = "move"
+                }}
+                className={cn(cardBaseClass, "absolute left-1 right-1 p-2 z-20 group/appt overflow-hidden")}
+                style={{
+                    top: `${(appt.start.getMinutes() / 60) * 100}%`,
+                    height: `${Math.max((appt.end.getTime() - appt.start.getTime()) / 60000 / 60 * 100, 35)}%`,
+                    minHeight: "36px"
+                }}
+            >
+                <div className="truncate flex items-center gap-1">
+                    <span className="font-bold text-teal-600 uppercase text-[8px] shrink-0">{format(appt.start, "h a")}</span>
+                    <span className="truncate">{appt.patientName}</span>
+                </div>
+                <div className="truncate pl-0 mt-0.5 opacity-80 text-[9px]">{appt.treatment_type}</div>
+            </div>
+        )
+
+        const openMobileSheet = () => setMobileAppointment(appt)
+
+        if (isMobile) {
+            return (
+                <div onClick={(e) => { e.stopPropagation(); openMobileSheet() }} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openMobileSheet()}>
+                    {triggerDiv}
+                </div>
+            )
+        }
+
         return (
             <Popover>
                 <PopoverTrigger asChild>
-                    {isMonthView ? (
-                        <div
-                            data-appointment
-                            draggable
-                            onDragStart={(e) => {
-                                e.dataTransfer.setData("appointmentId", appt.id)
-                                e.dataTransfer.effectAllowed = "move"
-                            }}
-                            className={cn(cardBaseClass, "w-full truncate")}
-                        >
-                            <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
-                            <span className="truncate">{appt.patientName}</span>
-                        </div>
-                    ) : (
-                        <div
-                            data-appointment
-                            draggable
-                            onDragStart={(e) => {
-                                e.dataTransfer.setData("appointmentId", appt.id)
-                                e.dataTransfer.effectAllowed = "move"
-                            }}
-                            className={cn(cardBaseClass, "absolute left-1 right-1 p-2 z-20 group/appt overflow-hidden")}
-                            style={{
-                                top: `${(appt.start.getMinutes() / 60) * 100}%`,
-                                height: `${Math.max((appt.end.getTime() - appt.start.getTime()) / 60000 / 60 * 100, 35)}%`,
-                                minHeight: "36px"
-                            }}
-                        >
-                            <div className="truncate flex items-center gap-1">
-                                <span className="font-bold text-teal-600 uppercase text-[8px] shrink-0">{format(appt.start, "h a")}</span>
-                                <span className="truncate">{appt.patientName}</span>
-                            </div>
-                            <div className="truncate pl-0 mt-0.5 opacity-80 text-[9px]">{appt.treatment_type}</div>
-                        </div>
-                    )}
+                    {triggerDiv}
                 </PopoverTrigger>
                 <PopoverContent
                     data-appointment
-                    className="w-80 p-0 overflow-hidden border-slate-200 shadow-xl"
+                    className="w-80 max-w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto p-0 overflow-x-hidden border-slate-200 shadow-xl"
                     side="right"
                     align="start"
                     onClick={(e) => e.stopPropagation()}
@@ -957,6 +989,156 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Mobile: appointment detail in bottom sheet so it doesn't overflow the screen */}
+            <Sheet open={!!mobileAppointment} onOpenChange={(open) => !open && setMobileAppointment(null)}>
+                <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-xl p-0 flex flex-col">
+                    {mobileAppointment && (() => {
+                        const appt = mobileAppointment
+                        const now = new Date()
+                        const oneMinAfterStart = addMinutes(appt.start, 1)
+                        const showStatusDropdown = isAfter(now, oneMinAfterStart) && !["completed"].includes(appt.status)
+                        const colorIndex = dentists.findIndex((d: { id: string }) => d.id === appt.dentist_id) % 5
+                        const colors = [
+                            "bg-teal-50 border-teal-200 text-teal-700",
+                            "bg-blue-50 border-blue-200 text-blue-700",
+                            "bg-purple-50 border-purple-200 text-purple-700",
+                            "bg-amber-50 border-amber-200 text-amber-700",
+                            "bg-rose-50 border-rose-200 text-rose-700"
+                        ]
+                        const colorClass = colors[colorIndex] || colors[0]
+                        return (
+                            <>
+                                <div className={cn("p-4 border-b", colorClass.split(" ")[0])}>
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
+                                            <AvatarFallback className="bg-white/50 text-current font-bold uppercase">
+                                                {appt.patientName.split(" ").map((n: string) => n[0]).join("")}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <h4 className="font-bold text-slate-900">{appt.patientName}</h4>
+                                            <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">Patient Record</p>
+                                            {appt.patientPhone && (
+                                                <a href={`tel:${appt.patientPhone}`} className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-teal-600 hover:underline">
+                                                    <Phone className="h-3 w-3 shrink-0" />
+                                                    {appt.patientPhone}
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Treatment</p>
+                                            <div className="flex items-center gap-2">
+                                                <MapPin className="h-3.5 w-3.5 text-teal-600" />
+                                                <span className="text-sm font-semibold text-slate-700">{appt.treatment_type}</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Dentist</p>
+                                            <div className="flex items-center gap-2">
+                                                <Plus className="h-3.5 w-3.5 text-blue-600" />
+                                                <span className="text-sm font-semibold text-slate-700">{appt.dentistName}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-3.5 w-3.5 text-slate-400" />
+                                            <span className="text-xs font-bold text-slate-600">
+                                                {format(appt.start, "h:mm a")} – {format(appt.end, "h:mm a")}
+                                            </span>
+                                        </div>
+                                        {showStatusDropdown ? (
+                                            <Select
+                                                value={statusToDropdownValue(appt.status)}
+                                                onValueChange={(v) => { handleStatusChange(appt.id, v); setMobileAppointment(null) }}
+                                                disabled={updatingStatusId === appt.id}
+                                            >
+                                                <SelectTrigger className="h-7 w-[100px] text-[9px] font-bold uppercase tracking-tighter px-2 py-0 border-slate-200">
+                                                    <SelectValue placeholder="Status" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {STATUS_DROPDOWN_OPTIONS.map((o) => (
+                                                        <SelectItem key={o.value} value={o.value} className="text-[11px] font-medium">
+                                                            {o.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                    "text-[9px] uppercase tracking-tighter font-bold",
+                                                    (appt.status === "checked_in" || appt.status === "in_treatment")
+                                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                                                        : appt.status === "completed"
+                                                            ? "bg-slate-100 border-slate-200 text-slate-600"
+                                                            : "bg-slate-50 border-slate-200 text-slate-500"
+                                                )}
+                                            >
+                                                {getAppointmentStatusLabel(appt.status)}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    {(appt.checked_in_at || appt.checked_out_at) && (
+                                        <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px] text-slate-500">
+                                            {appt.checked_in_at && (
+                                                <p className="flex items-center gap-1.5">
+                                                    <span className="font-semibold text-emerald-600">In:</span>
+                                                    {format(parseISO(appt.checked_in_at), "h:mm a")}
+                                                </p>
+                                            )}
+                                            {appt.checked_out_at && (
+                                                <p className="flex items-center gap-1.5">
+                                                    <span className="font-semibold text-slate-600">Out:</span>
+                                                    {format(parseISO(appt.checked_out_at), "h:mm a")}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="bg-slate-50 p-3 border-t border-slate-100 flex flex-wrap gap-2 shrink-0">
+                                    <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold">Reschedule</Button>
+                                    {appt.status !== "completed" && appt.status !== "cancelled" && appt.status !== "checked_in" && appt.status !== "in_treatment" && (
+                                        <Button
+                                            className="h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60"
+                                            disabled={updatingStatusId === appt.id}
+                                            onClick={() => { handleStatusChange(appt.id, "checked_in"); setMobileAppointment(null) }}
+                                        >
+                                            {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Check In"}
+                                        </Button>
+                                    )}
+                                    {appt.status === "checked_in" && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-8 text-[11px] font-bold border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                                            disabled={updatingStatusId === appt.id}
+                                            onClick={() => { handleStatusChange(appt.id, "in_treatment"); setMobileAppointment(null) }}
+                                        >
+                                            {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Start treatment"}
+                                        </Button>
+                                    )}
+                                    {(appt.status === "checked_in" || appt.status === "in_treatment") && (
+                                        <Button
+                                            className="h-8 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60"
+                                            disabled={updatingStatusId === appt.id}
+                                            onClick={() => { setCheckoutAppt({ id: appt.id, patientName: appt.patientName, treatment_type: appt.treatment_type || "Appointment", patient_id: appt.patient_id }); setMobileAppointment(null) }}
+                                        >
+                                            {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Complete / Check out"}
+                                        </Button>
+                                    )}
+                                </div>
+                            </>
+                        )
+                    })()}
+                </SheetContent>
+            </Sheet>
 
             <QueueReceiptDialog
                 open={isReceiptOpen}
