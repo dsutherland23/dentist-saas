@@ -261,10 +261,10 @@ export async function GET() {
 
         // Calculate production values (case-insensitive treatment name lookup)
         const treatments = treatmentsResult.data || []
-        const treatmentPriceMap = new Map(
-            treatments.map((t: { name: string; price?: string }) => [
+        const treatmentPriceMap = new Map<string, number>(
+            treatments.map((t: { name: string; price?: string | number }) => [
                 (t.name || "").trim().toLowerCase(),
-                parseFloat(t.price || 0)
+                typeof t.price === "number" ? t.price : parseFloat(String(t.price ?? 0))
             ])
         )
         const getPrice = (treatmentType: string) => {
