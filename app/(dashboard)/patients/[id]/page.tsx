@@ -1,12 +1,15 @@
-import { use } from "react"
 import { createClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import PatientProfileClient from "./patient-profile-client"
 
 export const dynamic = "force-dynamic"
 
-export default function PatientPage(props: { params: Promise<{ id: string }> }) {
-    const { id } = use(props.params)
+export default async function PatientPage({
+    params,
+}: {
+    params: Promise<{ id: string }>
+}) {
+    const { id } = await params
     return <PatientPageContent id={id} />
 }
 

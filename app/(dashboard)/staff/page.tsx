@@ -27,6 +27,8 @@ import { StaffDialog } from "./staff-dialog"
 import { TimeOffDialog } from "./time-off-dialog"
 import { ScheduleViewDialog } from "./schedule-view-dialog"
 import { StaffActivityFeed } from "./staff-activity-feed"
+import { LoginActivityPanel } from "./login-activity-panel"
+import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 import {
     Dialog as ConfirmDialog,
@@ -40,6 +42,8 @@ import Link from "next/link"
 import { format } from "date-fns"
 
 export default function StaffPage() {
+    const { profile } = useAuth()
+    const isAdmin = profile?.role === "clinic_admin" || profile?.role === "super_admin"
     const [searchQuery, setSearchQuery] = useState("")
     const [staff, setStaff] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
@@ -366,6 +370,9 @@ export default function StaffPage() {
                     </Card>
                 </div>
             </div>
+
+            {/* Admin-only Login Activity Section */}
+            {isAdmin && <LoginActivityPanel />}
 
             <StaffDialog
                 open={isDialogOpen}

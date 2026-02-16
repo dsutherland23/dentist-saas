@@ -22,7 +22,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react"
+import { Loader2, ChevronDown, ChevronUp, Copy, CheckCircle2, Key } from "lucide-react"
 import { SECTIONS, LIMIT_TYPES } from "@/lib/access-config"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
@@ -36,6 +36,9 @@ interface StaffDialogProps {
 export function StaffDialog({ open, onOpenChange, staff, onSuccess }: StaffDialogProps) {
     const [isSaving, setIsSaving] = useState(false)
     const [showAdvanced, setShowAdvanced] = useState(false)
+    const [tempCredentials, setTempCredentials] = useState<{ email: string; password: string } | null>(null)
+    const [copied, setCopied] = useState(false)
+    const [isResetting, setIsResetting] = useState(false)
     const [formData, setFormData] = useState({
         first_name: "",
         last_name: "",
@@ -48,6 +51,11 @@ export function StaffDialog({ open, onOpenChange, staff, onSuccess }: StaffDialo
     const [limits, setLimits] = useState<Record<string, number | undefined>>({})
 
     useEffect(() => {
+        if (!open) {
+            setTempCredentials(null)
+            setCopied(false)
+            setIsResetting(false)
+        }
         if (staff) {
             setFormData({
                 first_name: staff.first_name || "",
@@ -142,22 +150,88 @@ export function StaffDialog({ open, onOpenChange, staff, onSuccess }: StaffDialo
 
             if (res.ok) {
                 const result = await res.json()
+                console.log("[STAFF_INVITE_RESPONSE]", result) // Debug log
                 if (staff) {
                     toast.success("Staff updated successfully")
+                    onSuccess()
+                    onOpenChange(false)
                 } else {
-                    toast.success(result.message || "Invitation sent successfully")
+                    toast.success(result.message || "Account created successfully")
+                    onSuccess()
+                    if (result.temp_password) {
+                        console.log("[SETTING_TEMP_CREDENTIALS]", { email: formData.email, password: result.temp_password })
+                        setTempCredentials({ email: formData.email, password: result.temp_password })
+                    } else {
+                        console.warn("[NO_TEMP_PASSWORD_IN_RESPONSE]", result)
+                        onOpenChange(false)
+                    }
                 }
-                onSuccess()
-                onOpenChange(false)
             } else {
-                const error = await res.json()
-                toast.error(error.error || "Something went wrong")
+                const err = await res.json()
+                const msg = err.detail ? `${err.error}: ${err.detail}` : (err.error || "Something went wrong")
+                toast.error(msg)
             }
         } catch (error) {
             toast.error("Failed to save staff member")
         } finally {
             setIsSaving(false)
         }
+    }
+
+    const handleCopyCredentials = () => {
+        if (!tempCredentials) return
+        const text = `Email: ${tempCredentials.email}\nTemporary Password: ${tempCredentials.password}\n\nPlease log in and change your password immediately.`
+        navigator.clipboard.writeText(text).then(() => {
+            setCopied(true)
+            toast.success("Credentials copied to clipboard")
+            setTimeout(() => setCopied(false), 3000)
+        })
+    }
+
+    if (tempCredentials) {
+        console.log("[RENDERING_TEMP_CREDENTIALS_DIALOG]", tempCredentials)
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="sm:max-w-[480px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                            Staff Account Created
+                        </DialogTitle>
+                        <DialogDescription>
+                            Share these temporary credentials with the new staff member. They will be required to change their password on first login.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                            <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Temporary Login Credentials</p>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-amber-700">Email:</span>
+                                    <span className="text-sm font-mono font-semibold text-amber-900">{tempCredentials.email}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-amber-700">Password:</span>
+                                    <span className="text-sm font-mono font-semibold text-amber-900">{tempCredentials.password}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                            This password is shown only once and cannot be retrieved later. The staff member will be required to set a new password on their first login.
+                        </p>
+                    </div>
+                    <DialogFooter className="flex gap-2 sm:gap-2">
+                        <Button type="button" variant="outline" onClick={handleCopyCredentials} className="gap-2">
+                            {copied ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                            {copied ? "Copied" : "Copy credentials"}
+                        </Button>
+                        <Button type="button" onClick={() => onOpenChange(false)} className="bg-teal-600 hover:bg-teal-700">
+                            Done
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        )
     }
 
     return (
@@ -359,14 +433,49 @@ export function StaffDialog({ open, onOpenChange, staff, onSuccess }: StaffDialo
                         </Collapsible>
                     </div>
                     
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                            Cancel
-                        </Button>
-                        <Button type="submit" disabled={isSaving} className="bg-teal-600 hover:bg-teal-700">
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {staff ? "Save Changes" : "Send Invitation"}
-                        </Button>
+                    <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                        {staff && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={async () => {
+                                    setIsResetting(true)
+                                    try {
+                                        const res = await fetch("/api/staff/reset-password", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({ staff_id: staff.id }),
+                                        })
+                                        if (res.ok) {
+                                            const result = await res.json()
+                                            toast.success("Password reset successfully")
+                                            setTempCredentials({ email: result.email, password: result.temp_password })
+                                        } else {
+                                            const err = await res.json()
+                                            toast.error(err.error || "Failed to reset password")
+                                        }
+                                    } catch (error) {
+                                        toast.error("Failed to reset password")
+                                    } finally {
+                                        setIsResetting(false)
+                                    }
+                                }}
+                                disabled={isResetting || isSaving}
+                                className="gap-2"
+                            >
+                                {isResetting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Key className="h-4 w-4" />}
+                                Reset Password & Get Credentials
+                            </Button>
+                        )}
+                        <div className="flex gap-2 sm:ml-auto">
+                            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={isSaving} className="bg-teal-600 hover:bg-teal-700">
+                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {staff ? "Save Changes" : "Send Invitation"}
+                            </Button>
+                        </div>
                     </DialogFooter>
                 </form>
             </DialogContent>

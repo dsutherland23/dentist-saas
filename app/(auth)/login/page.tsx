@@ -33,6 +33,9 @@ export default function LoginPage() {
 
             if (error) throw error
 
+            // Record login event (fire-and-forget)
+            fetch("/api/auth/log-login", { method: "POST" }).catch(() => {})
+
             toast.success("Welcome back!")
             router.push("/dashboard")
         } catch (error) {

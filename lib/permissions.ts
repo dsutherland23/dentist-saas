@@ -2,7 +2,7 @@
  * Permission helpers for access control and limit enforcement
  */
 
-import { getSectionByKey, getSectionByPath } from "./access-config"
+import { getSectionByKey, getSectionByPath, SECTIONS } from "./access-config"
 
 export interface UserProfile {
     id: string
@@ -11,6 +11,20 @@ export interface UserProfile {
     allowed_sections?: string[] | null
     limits?: Record<string, number> | null
     [key: string]: any
+}
+
+/**
+ * Get the first path the user is allowed to access (for post-login or denied redirect).
+ * If user has no restrictions, returns /dashboard. Otherwise returns the first allowed section path in order.
+ */
+export function getFirstAllowedPath(profile: UserProfile | null): string {
+    if (!profile) return "/dashboard"
+    if (!profile.allowed_sections || profile.allowed_sections.length === 0) {
+        return "/dashboard"
+    }
+    const allowed = profile.allowed_sections
+    const first = SECTIONS.find(s => allowed.includes(s.key))
+    return first?.path ?? "/dashboard"
 }
 
 /**

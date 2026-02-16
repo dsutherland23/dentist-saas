@@ -14,6 +14,7 @@ type Profile = {
     role: string
     allowed_sections?: string[] | null
     limits?: Record<string, number> | null
+    must_change_password?: boolean
     clinic?: {
         name: string
     }
@@ -45,7 +46,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .single()
 
         if (!error && data) {
-            setProfile(data as Profile)
+            const p = data as Profile
+            setProfile(p)
+            if (p.must_change_password && typeof window !== 'undefined' && !window.location.pathname.startsWith('/set-password')) {
+                router.replace('/set-password')
+            }
         }
     }
 
@@ -83,11 +88,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [router, supabase])
 
     const signOut = async () => {
-        await supabase.auth.signOut()
         setProfile(null)
         setUser(null)
         setSession(null)
-        router.push("/login")
+        try {
+            await supabase.auth.signOut()
+        } catch (e) {
+            console.error("[AUTH] signOut error:", e)
+        }
+        // Hard redirect so cookies and cache are cleared on the next request
+        window.location.href = "/login"
     }
 
     return (

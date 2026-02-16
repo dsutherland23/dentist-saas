@@ -3,12 +3,13 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { canAccessPath } from "@/lib/permissions"
+import { canAccessPath, getFirstAllowedPath } from "@/lib/permissions"
 import { toast } from "sonner"
 
 /**
- * RouteGuard component that enforces section access control
- * Redirects users to /dashboard if they try to access a restricted section
+ * RouteGuard enforces section access control.
+ * If the user cannot access the current path, redirects to their first allowed section
+ * (e.g. receptionist with dashboard disabled goes to calendar or patients, not dashboard).
  */
 export function RouteGuard({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
@@ -16,14 +17,14 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     const { profile, isLoading } = useAuth()
 
     useEffect(() => {
-        // Don't check while loading
         if (isLoading || !profile) return
 
-        // Check if user can access current path
         if (!canAccessPath(profile, pathname)) {
-            console.warn(`[RouteGuard] Access denied to ${pathname} for user ${profile.id}`)
-            toast.error("You don't have access to this section")
-            router.replace("/dashboard")
+            const target = getFirstAllowedPath(profile)
+            if (pathname !== target) {
+                toast.error("You don't have access to this section")
+                router.replace(target)
+            }
         }
     }, [pathname, profile, isLoading, router])
 
