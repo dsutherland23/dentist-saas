@@ -170,7 +170,7 @@ export async function GET() {
                 .select("*")
                 .eq("clinic_id", clinicId),
 
-            // Today's appointments detail (for production)
+            // Today's appointments detail (for production - include completed so work done today counts)
             (() => {
                 const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
                 const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
@@ -178,7 +178,7 @@ export async function GET() {
                     .from("appointments")
                     .select("treatment_type")
                     .eq("clinic_id", clinicId)
-                    .in("status", ["scheduled", "confirmed", "checked_in", "in_treatment"])
+                    .in("status", ["scheduled", "confirmed", "checked_in", "in_treatment", "completed"])
                     .gte("start_time", start.toISOString())
                     .lte("start_time", end.toISOString())
             })(),
@@ -259,22 +259,31 @@ export async function GET() {
         )
         const appointmentTrend = appointmentTrendResults.map(r => r.count || 0)
 
-        // Calculate production values
+        // Calculate production values (case-insensitive treatment name lookup)
         const treatments = treatmentsResult.data || []
         const treatmentPriceMap = new Map(
-            treatments.map(t => [t.name, parseFloat(t.price || 0)])
+            treatments.map((t: { name: string; price?: string }) => [
+                (t.name || "").trim().toLowerCase(),
+                parseFloat(t.price || 0)
+            ])
         )
+        const getPrice = (treatmentType: string) => {
+            if (!treatmentType) return 0
+            const key = treatmentType.trim().toLowerCase()
+            return treatmentPriceMap.get(key) ??
+                [...treatmentPriceMap.entries()].find(([name]) =>
+                    name.includes(key) || key.includes(name)
+                )?.[1] ?? 0
+        }
 
         // Today's production
         const todayProduction = (todayAppointmentsDetailResult.data || []).reduce((sum: number, apt: any) => {
-            const price = treatmentPriceMap.get(apt.treatment_type) || 0
-            return sum + price
+            return sum + getPrice(apt.treatment_type)
         }, 0)
 
         // MTD production
         const mtdProduction = (mtdAppointmentsDetailResult.data || []).reduce((sum: number, apt: any) => {
-            const price = treatmentPriceMap.get(apt.treatment_type) || 0
-            return sum + price
+            return sum + getPrice(apt.treatment_type)
         }, 0)
 
         // Collected today

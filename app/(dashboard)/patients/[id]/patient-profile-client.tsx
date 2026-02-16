@@ -121,6 +121,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [isInsuranceOpen, setIsInsuranceOpen] = useState(false)
     const [isContactOpen, setIsContactOpen] = useState(false)
     const [isTreatmentOpen, setIsTreatmentOpen] = useState(false)
+    const [treatmentDialogTab, setTreatmentDialogTab] = useState<"plan" | "record">("plan")
     const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false)
     const [isFileOpen, setIsFileOpen] = useState(false)
     const [isSaving, setIsSaving] = useState(false)
@@ -147,11 +148,9 @@ export default function PatientProfileClient({ patient, appointments, treatments
     })
 
     const [treatmentData, setTreatmentData] = useState({
-        procedures_performed: "",
-        diagnosis: "",
-        notes: "",
         dentist_id: currentUserId,
-        appointment_id: ""
+        appointment_id: "",
+        items: [{ procedures_performed: "", diagnosis: "", notes: "" }] as { procedures_performed: string; diagnosis: string; notes: string }[]
     })
 
     const [fileData, setFileData] = useState<{
@@ -167,6 +166,148 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const videoRef = React.useRef<HTMLVideoElement>(null)
     const [recordDetail, setRecordDetail] = useState<"appointment" | "treatment" | null>(null)
     const [recordData, setRecordData] = useState<typeof appointments[0] | typeof treatments[0] | null>(null)
+    const [treatmentPlans, setTreatmentPlans] = useState<any[]>([])
+    const [plansLoading, setPlansLoading] = useState(false)
+    const [updatingPlanId, setUpdatingPlanId] = useState<string | null>(null)
+    const [updatingItemId, setUpdatingItemId] = useState<string | null>(null)
+    const [newPlanData, setNewPlanData] = useState({
+        plan_name: "",
+        notes: "",
+        dentist_id: currentUserId,
+        selectedItems: [] as { treatment_id: string; description: string; quantity: number; unit_price: number; total_price: number }[]
+    })
+
+    const fetchTreatmentPlans = async () => {
+        setPlansLoading(true)
+        try {
+            const res = await fetch(`/api/treatment-plans?patient_id=${patient.id}`)
+            if (res.ok) {
+                const data = await res.json()
+                setTreatmentPlans(Array.isArray(data) ? data : [])
+            }
+        } catch {
+            toast.error("Failed to load treatment plans")
+        } finally {
+            setPlansLoading(false)
+        }
+    }
+
+    const handlePlanStatusChange = async (planId: string, status: string) => {
+        setUpdatingPlanId(planId)
+        try {
+            const res = await fetch("/api/treatment-plans", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id: planId, status })
+            })
+            if (res.ok) {
+                toast.success("Plan status updated")
+                fetchTreatmentPlans()
+                router.refresh()
+            } else {
+                const err = await res.json().catch(() => ({}))
+                toast.error(err?.error || "Failed to update status")
+            }
+        } catch {
+            toast.error("Failed to update plan status")
+        } finally {
+            setUpdatingPlanId(null)
+        }
+    }
+
+    const handleItemAcceptanceChange = async (itemId: string, acceptance_status: string) => {
+        setUpdatingItemId(itemId)
+        try {
+            const res = await fetch(`/api/treatment-plans/items/${itemId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ acceptance_status })
+            })
+            if (res.ok) {
+                toast.success("Item status updated")
+                fetchTreatmentPlans()
+                router.refresh()
+            } else {
+                toast.error("Failed to update item")
+            }
+        } catch {
+            toast.error("Failed to update item status")
+        } finally {
+            setUpdatingItemId(null)
+        }
+    }
+
+    const handleAcceptAllItems = (plan: any) => {
+        const items = plan.items || []
+        items.forEach((it: any) => {
+            if (it.acceptance_status !== "accepted") {
+                handleItemAcceptanceChange(it.id, "accepted")
+            }
+        })
+        handlePlanStatusChange(plan.id, "accepted")
+    }
+    const handleDeclineAllItems = (plan: any) => {
+        const items = plan.items || []
+        items.forEach((it: any) => {
+            if (it.acceptance_status !== "declined") {
+                handleItemAcceptanceChange(it.id, "declined")
+            }
+        })
+        handlePlanStatusChange(plan.id, "declined")
+    }
+
+    const addPlanItem = (t: { id: string; name: string; price: number }) => {
+        const qty = 1
+        const unit = Number(t.price) || 0
+        const total = unit * qty
+        setNewPlanData(prev => ({
+            ...prev,
+            selectedItems: [...prev.selectedItems, { treatment_id: t.id, description: t.name, quantity: qty, unit_price: unit, total_price: total }]
+        }))
+    }
+    const removePlanItem = (idx: number) => {
+        setNewPlanData(prev => ({ ...prev, selectedItems: prev.selectedItems.filter((_, i) => i !== idx) }))
+    }
+
+    const handleCreatePlan = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!newPlanData.plan_name.trim()) {
+            toast.error("Enter a plan name")
+            return
+        }
+        if (newPlanData.selectedItems.length === 0) {
+            toast.error("Add at least one treatment")
+            return
+        }
+        setIsSaving(true)
+        try {
+            const res = await fetch("/api/treatment-plans", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    patient_id: patient.id,
+                    plan_name: newPlanData.plan_name.trim(),
+                    dentist_id: newPlanData.dentist_id || currentUserId,
+                    notes: newPlanData.notes.trim() || undefined,
+                    items: newPlanData.selectedItems.map(i => ({ ...i, notes: "" }))
+                })
+            })
+            if (res.ok) {
+                toast.success("Treatment plan created")
+                setIsTreatmentOpen(false)
+                setNewPlanData({ plan_name: "", notes: "", dentist_id: currentUserId, selectedItems: [] })
+                fetchTreatmentPlans()
+                router.refresh()
+            } else {
+                const err = await res.json().catch(() => ({}))
+                toast.error(err?.error || "Failed to create plan")
+            }
+        } catch {
+            toast.error("Failed to create treatment plan")
+        } finally {
+            setIsSaving(false)
+        }
+    }
 
     // Auto-refresh when user returns to this tab (e.g. after completing appointment on calendar)
     useEffect(() => {
@@ -187,6 +328,10 @@ export default function PatientProfileClient({ patient, appointments, treatments
             .then(res => res.ok ? res.json() : [])
             .then(data => setPatientInvoices(Array.isArray(data) ? data : []))
             .catch(() => setPatientInvoices([]))
+    }, [patient.id])
+
+    useEffect(() => {
+        fetchTreatmentPlans()
     }, [patient.id])
 
     if (!patient) return <div>Patient not found</div>
@@ -261,23 +406,70 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
     const handleAddTreatment = async (e: React.FormEvent) => {
         e.preventDefault()
+        const valid = treatmentData.items.filter(i => (i.procedures_performed || "").trim())
+        if (valid.length === 0) {
+            toast.error("Add at least one treatment with procedures")
+            return
+        }
         setIsSaving(true)
+        let success = 0
+        let failed = 0
         try {
-            const res = await fetch(`/api/patients/${patient.id}/treatments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(treatmentData)
-            })
-            if (res.ok) {
-                toast.success("Treatment record added")
-                router.refresh()
+            for (const item of valid) {
+                const res = await fetch(`/api/patients/${patient.id}/treatments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        procedures_performed: item.procedures_performed.trim(),
+                        diagnosis: item.diagnosis.trim() || undefined,
+                        notes: item.notes.trim() || undefined,
+                        dentist_id: treatmentData.dentist_id,
+                        appointment_id: treatmentData.appointment_id || undefined
+                    })
+                })
+                if (res.ok) success++
+                else failed++
             }
-        } catch (error) {
-            toast.error("Failed to add treatment record")
+            if (success > 0) {
+                toast.success(failed > 0
+                    ? `${success} treatment(s) added. ${failed} failed.`
+                    : `${success} treatment record(s) added`)
+                router.refresh()
+                setTreatmentData({
+                    dentist_id: currentUserId,
+                    appointment_id: "",
+                    items: [{ procedures_performed: "", diagnosis: "", notes: "" }]
+                })
+                setIsTreatmentOpen(false)
+            }
+            if (failed > 0 && success === 0) toast.error("Failed to add treatment records")
+        } catch {
+            toast.error("Failed to add treatment record(s)")
         } finally {
             setIsSaving(false)
-            setIsTreatmentOpen(false)
         }
+    }
+
+    const addTreatmentRow = () => {
+        setTreatmentData(prev => ({
+            ...prev,
+            items: [...prev.items, { procedures_performed: "", diagnosis: "", notes: "" }]
+        }))
+    }
+
+    const removeTreatmentRow = (idx: number) => {
+        if (treatmentData.items.length <= 1) return
+        setTreatmentData(prev => ({
+            ...prev,
+            items: prev.items.filter((_, i) => i !== idx)
+        }))
+    }
+
+    const updateTreatmentItem = (idx: number, field: "procedures_performed" | "diagnosis" | "notes", value: string) => {
+        setTreatmentData(prev => ({
+            ...prev,
+            items: prev.items.map((item, i) => i === idx ? { ...item, [field]: value } : item)
+        }))
     }
 
     const MAX_FILE_SIZE_MB = 10
@@ -410,7 +602,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 <div className="flex items-center space-x-2 flex-wrap gap-2">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button className="bg-teal-600 hover:bg-teal-700 shadow-teal-100 shadow-lg">
+                            <Button variant="outline">
                                 <Plus className="mr-2 h-4 w-4" /> Add <ChevronDown className="ml-1.5 h-4 w-4 opacity-80" />
                             </Button>
                         </DropdownMenuTrigger>
@@ -418,11 +610,17 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             <DropdownMenuItem onSelect={() => setAppointmentDialogOpen(true)}>
                                 <Calendar className="mr-2 h-4 w-4" /> New Appointment
                             </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setIsTreatmentOpen(true)}>
-                                <Plus className="mr-2 h-4 w-4" /> Add Treatment
-                            </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+                    <Button
+                        className="bg-teal-600 hover:bg-teal-700 shadow-teal-100 shadow-lg"
+                        onClick={() => {
+                            setTreatmentDialogTab("plan")
+                            setIsTreatmentOpen(true)
+                        }}
+                    >
+                        <FileText className="mr-2 h-4 w-4" /> Treatment
+                    </Button>
                     <NewAppointmentDialog
                         patients={[{ id: patient.id, first_name: patient.first_name, last_name: patient.last_name }]}
                         dentists={dentists.map(d => ({ id: d.id, first_name: d.first_name, last_name: d.last_name }))}
@@ -506,97 +704,163 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>
-                    <Dialog open={isTreatmentOpen} onOpenChange={setIsTreatmentOpen}>
-                        <DialogContent>
-                            <form onSubmit={handleAddTreatment}>
-                                <DialogHeader>
-                                    <DialogTitle>Add Treatment Record</DialogTitle>
-                                    <DialogDescription>Record a new procedure or diagnosis for this patient.</DialogDescription>
-                                </DialogHeader>
-                                <div className="grid gap-4 py-4">
-                                    <div className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <Label>Procedures Performed</Label>
-                                            {availableTreatments.length > 0 && (
-                                                <Select onValueChange={(val) => {
-                                                    const current = treatmentData.procedures_performed
-                                                    const newValue = current ? `${current}, ${val}` : val
-                                                    setTreatmentData({ ...treatmentData, procedures_performed: newValue })
-                                                }}>
-                                                    <SelectTrigger className="h-8 w-[180px] text-xs">
-                                                        <SelectValue placeholder="Add Preset..." />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {availableTreatments.map(t => (
-                                                            <SelectItem key={t.id} value={t.name}>
-                                                                {t.name}
-                                                            </SelectItem>
+                    {/* Unified Treatment dialog: Plan or Record */}
+                    <Dialog open={isTreatmentOpen} onOpenChange={(open) => {
+                        setIsTreatmentOpen(open)
+                        if (!open) {
+                            setTreatmentData({
+                                dentist_id: currentUserId,
+                                appointment_id: "",
+                                items: [{ procedures_performed: "", diagnosis: "", notes: "" }]
+                            })
+                            setNewPlanData({ plan_name: "", notes: "", dentist_id: currentUserId, selectedItems: [] })
+                        }
+                    }}>
+                        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                            <DialogHeader>
+                                <DialogTitle>Treatment</DialogTitle>
+                                <DialogDescription>Create a treatment plan (proposal) or record treatments performed.</DialogDescription>
+                            </DialogHeader>
+                            <Tabs value={treatmentDialogTab} onValueChange={(v) => setTreatmentDialogTab(v as "plan" | "record")} className="w-full">
+                                <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="plan">Treatment plan</TabsTrigger>
+                                    <TabsTrigger value="record">Record treatment</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="plan" className="mt-4 space-y-4">
+                                    <form id="treatment-plan-form" onSubmit={handleCreatePlan}>
+                                        <div className="grid gap-4">
+                                            <div className="space-y-2">
+                                                <Label>Plan name</Label>
+                                                <Input placeholder="e.g. Comprehensive Care Plan" value={newPlanData.plan_name} onChange={e => setNewPlanData(prev => ({ ...prev, plan_name: e.target.value }))} required />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Add treatments</Label>
+                                                <div className="flex flex-wrap gap-1">
+                                                    {availableTreatments.filter(t => !newPlanData.selectedItems.some(i => i.treatment_id === t.id)).map(t => (
+                                                        <Button key={t.id} type="button" variant="outline" size="sm" onClick={() => addPlanItem(t)}>
+                                                            + {t.name}
+                                                        </Button>
+                                                    ))}
+                                                    {availableTreatments.length === 0 && <p className="text-sm text-slate-500">No treatments in catalog. Add in Settings.</p>}
+                                                </div>
+                                            </div>
+                                            {newPlanData.selectedItems.length > 0 && (
+                                                <div className="space-y-2">
+                                                    <Label>Selected items</Label>
+                                                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                        {newPlanData.selectedItems.map((item, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between p-2 rounded bg-slate-50 text-sm">
+                                                                <span>{item.description} × {item.quantity} — ${item.total_price.toFixed(2)}</span>
+                                                                <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-rose-500" onClick={() => removePlanItem(idx)}><X className="h-3 w-3" /></Button>
+                                                            </div>
                                                         ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            <div className="space-y-2">
+                                                <Label>Dentist</Label>
+                                                <Select value={newPlanData.dentist_id} onValueChange={val => setNewPlanData(prev => ({ ...prev, dentist_id: val }))}>
+                                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)}
                                                     </SelectContent>
                                                 </Select>
-                                            )}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Notes (optional)</Label>
+                                                <Textarea placeholder="Notes..." value={newPlanData.notes} onChange={e => setNewPlanData(prev => ({ ...prev, notes: e.target.value }))} rows={2} />
+                                            </div>
                                         </div>
-                                        <Input
-                                            placeholder="Ex: Teeth cleaning, Filling..."
-                                            value={treatmentData.procedures_performed}
-                                            onChange={e => setTreatmentData({ ...treatmentData, procedures_performed: e.target.value })}
-                                            required
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Diagnosis</Label>
-                                        <Input
-                                            placeholder="Ex: Slight gingivitis..."
-                                            value={treatmentData.diagnosis}
-                                            onChange={e => setTreatmentData({ ...treatmentData, diagnosis: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label>Notes</Label>
-                                        <Textarea
-                                            placeholder="Additional clinical notes..."
-                                            value={treatmentData.notes}
-                                            onChange={e => setTreatmentData({ ...treatmentData, notes: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label>Dentist</Label>
-                                            <Select value={treatmentData.dentist_id} onValueChange={val => setTreatmentData({ ...treatmentData, dentist_id: val })}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select Dentist" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {dentists.map(dentist => (
-                                                        <SelectItem key={dentist.id} value={dentist.id}>
-                                                            Dr. {dentist.last_name} ({dentist.first_name})
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                        <DialogFooter className="mt-4">
+                                            <Button type="submit" disabled={isSaving || newPlanData.selectedItems.length === 0} className="bg-teal-600">
+                                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create plan
+                                            </Button>
+                                        </DialogFooter>
+                                    </form>
+                                </TabsContent>
+                                <TabsContent value="record" className="mt-4">
+                                    <form onSubmit={handleAddTreatment}>
+                                        <div className="grid gap-4 py-2">
+                                            {treatmentData.items.map((item, idx) => (
+                                                <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-sm font-medium text-slate-600">Treatment {idx + 1}</span>
+                                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-rose-600" onClick={() => removeTreatmentRow(idx)} disabled={treatmentData.items.length <= 1} title="Remove">
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Input
+                                                                placeholder="Ex: Teeth cleaning, Filling..."
+                                                                value={item.procedures_performed}
+                                                                onChange={e => updateTreatmentItem(idx, "procedures_performed", e.target.value)}
+                                                            />
+                                                            {availableTreatments.length > 0 && (
+                                                                <Select onValueChange={(val) => {
+                                                                    const current = item.procedures_performed
+                                                                    updateTreatmentItem(idx, "procedures_performed", current ? `${current}, ${val}` : val)
+                                                                }}>
+                                                                    <SelectTrigger className="h-9 w-[110px] shrink-0">
+                                                                        <SelectValue placeholder="Add preset" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {availableTreatments.map(t => (
+                                                                            <SelectItem key={t.id} value={t.name}>{t.name}</SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <Input placeholder="Diagnosis (optional)" value={item.diagnosis} onChange={e => updateTreatmentItem(idx, "diagnosis", e.target.value)} />
+                                                        <Input placeholder="Notes (optional)" value={item.notes} onChange={e => updateTreatmentItem(idx, "notes", e.target.value)} />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <Button type="button" variant="outline" size="sm" className="w-full" onClick={addTreatmentRow}>
+                                                <Plus className="mr-2 h-4 w-4" /> Add another
+                                            </Button>
+                                            <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                                <div className="space-y-2">
+                                                    <Label>Dentist</Label>
+                                                    <Select value={treatmentData.dentist_id} onValueChange={val => setTreatmentData(prev => ({ ...prev, dentist_id: val }))}>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {dentists.map(dentist => (
+                                                                <SelectItem key={dentist.id} value={dentist.id}>Dr. {dentist.last_name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Appointment (optional)</Label>
+                                                    <Select value={treatmentData.appointment_id || "__none__"} onValueChange={val => setTreatmentData(prev => ({ ...prev, appointment_id: val === "__none__" ? "" : val }))}>
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Reference" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="__none__">None</SelectItem>
+                                                            {appointments.map(apt => (
+                                                                <SelectItem key={apt.id} value={apt.id}>{format(new Date(apt.start_time), 'MMM d')}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label>Appointment (Optional)</Label>
-                                            <Select onValueChange={val => setTreatmentData({ ...treatmentData, appointment_id: val })}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Reference Appt." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {appointments.map(apt => (
-                                                        <SelectItem key={apt.id} value={apt.id}>{format(new Date(apt.start_time), 'MMM d')}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                </div>
-                                <DialogFooter>
-                                    <Button type="submit" disabled={isSaving} className="bg-teal-600">
-                                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                        Save Record
-                                    </Button>
-                                </DialogFooter>
-                            </form>
+                                        <DialogFooter className="mt-4">
+                                            <Button type="submit" disabled={isSaving} className="bg-teal-600">
+                                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                Save {treatmentData.items.length > 1 ? `${treatmentData.items.length} records` : "record"}
+                                            </Button>
+                                        </DialogFooter>
+                                    </form>
+                                </TabsContent>
+                            </Tabs>
                         </DialogContent>
                     </Dialog>
                 </div>
@@ -821,6 +1085,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent gap-6 overflow-x-auto flex-nowrap scrollbar-thin pb-px min-w-0">
                             <TabsTrigger value="appointments" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Appointments</TabsTrigger>
                             <TabsTrigger value="history" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Treatment History</TabsTrigger>
+                            <TabsTrigger value="plans" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0">Treatment Plans</TabsTrigger>
                             <TabsTrigger value="files" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0 whitespace-nowrap">Files & X-Rays</TabsTrigger>
                             <TabsTrigger value="invoices" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-teal-600 rounded-none px-0 py-4 text-sm font-semibold text-slate-500 data-[state=active]:text-teal-600 shrink-0 whitespace-nowrap">Invoices</TabsTrigger>
                         </TabsList>
@@ -971,6 +1236,100 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                                     Recorded by Dr. {tx.dentists.last_name}
                                                 </div>
                                             )}
+                                        </CardContent>
+                                    </Card>
+                                ))
+                            )}
+                        </TabsContent>
+
+                        <TabsContent value="plans" className="mt-8 space-y-4 min-w-0">
+                            <div className="flex items-center justify-between gap-4 flex-wrap">
+                                <p className="text-sm text-slate-500">Treatment proposals with status: Draft, Presented, Accepted, Partially Accepted, or Declined.</p>
+                                <Button size="sm" className="bg-teal-600 hover:bg-teal-700" onClick={() => { setTreatmentDialogTab("plan"); setIsTreatmentOpen(true) }}>
+                                    <Plus className="h-4 w-4 mr-2" /> New plan
+                                </Button>
+                            </div>
+                            {plansLoading ? (
+                                <div className="flex justify-center py-12">
+                                    <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
+                                </div>
+                            ) : treatmentPlans.length === 0 ? (
+                                <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200 text-slate-500">
+                                    <FileText className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                                    No treatment plans for this patient.
+                                </div>
+                            ) : (
+                                treatmentPlans.map((plan) => (
+                                    <Card key={plan.id} className="shadow-sm border-none bg-white overflow-hidden">
+                                        <CardHeader>
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                <div>
+                                                    <CardTitle className="text-lg">{plan.plan_name}</CardTitle>
+                                                    <CardDescription>
+                                                        Total: ${Number(plan.total_estimated_cost || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        {plan.dentist_name && ` · Dr. ${plan.dentist_name}`}
+                                                    </CardDescription>
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <Select
+                                                        value={plan.status || "draft"}
+                                                        onValueChange={(val) => handlePlanStatusChange(plan.id, val)}
+                                                        disabled={!!updatingPlanId}
+                                                    >
+                                                        <SelectTrigger className="w-[160px] h-9">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="draft">Draft</SelectItem>
+                                                            <SelectItem value="presented">Presented</SelectItem>
+                                                            <SelectItem value="accepted">Accepted</SelectItem>
+                                                            <SelectItem value="partially_accepted">Partially Accepted</SelectItem>
+                                                            <SelectItem value="declined">Declined</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                    {plan.status === "draft" && (
+                                                        <Button size="sm" variant="outline" onClick={() => handlePlanStatusChange(plan.id, "presented")} disabled={!!updatingPlanId}>
+                                                            Present
+                                                        </Button>
+                                                    )}
+                                                    {(plan.status === "presented" || plan.status === "draft") && (
+                                                        <>
+                                                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleAcceptAllItems(plan)} disabled={!!updatingPlanId}>
+                                                                Accept All
+                                                            </Button>
+                                                            <Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => handleDeclineAllItems(plan)} disabled={!!updatingPlanId}>
+                                                                Decline All
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-0">
+                                            <div className="space-y-2">
+                                                {(plan.items || []).map((item: any) => (
+                                                    <div key={item.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-slate-50 border border-slate-100">
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="font-medium text-slate-900 truncate">{item.description}</p>
+                                                            <p className="text-xs text-slate-500">${Number(item.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                                                        </div>
+                                                        <Select
+                                                            value={item.acceptance_status || "pending"}
+                                                            onValueChange={(val) => handleItemAcceptanceChange(item.id, val)}
+                                                            disabled={!!updatingItemId}
+                                                        >
+                                                            <SelectTrigger className="w-[120px] h-8 text-xs">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="pending">Pending</SelectItem>
+                                                                <SelectItem value="accepted">Accepted</SelectItem>
+                                                                <SelectItem value="declined">Declined</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                ))}
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 ))

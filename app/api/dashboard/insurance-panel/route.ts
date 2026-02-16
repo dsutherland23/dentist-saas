@@ -183,6 +183,18 @@ export async function GET() {
 
     } catch (error) {
         console.error("[INSURANCE_PANEL_GET]", error)
+        // If insurance_claims table doesn't exist, return empty panel (graceful degradation)
+        const msg = String((error as Error)?.message ?? "")
+        if (msg.includes("does not exist") || msg.includes("relation")) {
+            return NextResponse.json({
+                claimsSubmitted: { count: 0, value: 0 },
+                claimsPending14Plus: { count: 0, value: 0 },
+                deniedClaims: { count: 0, value: 0 },
+                avgDaysToPayment: 0,
+                expectedVsActual: { totalClaimed: 0, totalPaid: 0, reimbursementRate: 0 },
+                alerts: []
+            })
+        }
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 }

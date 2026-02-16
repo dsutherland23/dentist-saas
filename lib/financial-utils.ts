@@ -146,6 +146,9 @@ export function forecastUpcomingRevenue(
     }
 }
 
+// Plan statuses in DB: draft, presented, accepted, partially_accepted, declined
+const PLAN_STATUSES_WITH_UNSCHEDULED = ['draft', 'presented', 'accepted', 'partially_accepted']
+
 /**
  * Calculate unscheduled treatment plan value
  */
@@ -159,19 +162,17 @@ export function calculateUnscheduledTreatmentValue(treatmentPlans: any[]): {
     const patientValues = new Map<string, { patient_name: string; value: number; patient_id: string }>()
 
     treatmentPlans.forEach(plan => {
-        // Only count accepted or proposed plans that haven't been scheduled
-        if (plan.status === 'accepted' || plan.status === 'proposed') {
-            // Sum up items that are not_started or not linked to appointments
+        // Count plans that can have unscheduled work: draft, presented, accepted, partially_accepted (not declined)
+        if (plan.status && PLAN_STATUSES_WITH_UNSCHEDULED.includes(plan.status)) {
             const items = plan.items || []
             const unscheduledValue = items
-                .filter((item: any) => !item.appointment_id && item.status === 'not_started')
+                .filter((item: any) => !item.appointment_id && (item.status === 'not_started' || item.status == null))
                 .reduce((sum: number, item: any) => sum + parseFloat(item.total_price || 0), 0)
 
             if (unscheduledValue > 0) {
                 total += unscheduledValue
                 byStatus[plan.status] = (byStatus[plan.status] || 0) + unscheduledValue
 
-                // Track per patient
                 const patientKey = plan.patient_id
                 const existing = patientValues.get(patientKey)
                 if (existing) {
@@ -199,6 +200,9 @@ export function calculateUnscheduledTreatmentValue(treatmentPlans: any[]): {
     }
 }
 
+// Plans "proposed to patient" = presented, accepted, partially_accepted, declined (excludes draft)
+const PLAN_STATUSES_PROPOSED = ['presented', 'accepted', 'partially_accepted', 'declined']
+
 /**
  * Calculate treatment plan acceptance rate
  */
@@ -209,7 +213,7 @@ export function calculateTreatmentAcceptanceRate(treatmentPlans: any[]): {
     totalDeclined: number
 } {
     const totalProposed = treatmentPlans.filter(
-        p => p.status === 'proposed' || p.status === 'accepted' || p.status === 'declined'
+        p => p.status && PLAN_STATUSES_PROPOSED.includes(p.status)
     ).length
 
     const totalAccepted = treatmentPlans.filter(p => p.status === 'accepted').length

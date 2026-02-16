@@ -27,42 +27,52 @@ export function NotificationCenter() {
     const [isLoadingAlerts, setIsLoadingAlerts] = useState(true)
     const router = useRouter()
 
-    const fetchNotifications = async () => {
+    const fetchNotifications = async (signal?: AbortSignal) => {
         try {
-            const res = await fetch('/api/notifications')
+            const res = await fetch('/api/notifications', { signal })
             if (res.ok) {
                 const data = await res.json()
                 setNotifications(data)
             }
         } catch (error) {
-            console.error("Error fetching notifications:", error)
+            const e = error as Error
+            if (e.name !== 'AbortError' && e.message !== 'Failed to fetch') {
+                console.error("Error fetching notifications:", error)
+            }
         } finally {
             setIsLoadingNotifs(false)
         }
     }
 
-    const fetchAlerts = async () => {
+    const fetchAlerts = async (signal?: AbortSignal) => {
         try {
-            const res = await fetch('/api/dashboard/insurance-panel')
+            const res = await fetch('/api/dashboard/insurance-panel', { signal })
             if (res.ok) {
                 const data = await res.json()
                 setAlerts(data.alerts ?? [])
             }
         } catch (error) {
-            console.error("Error fetching alerts:", error)
+            const e = error as Error
+            if (e.name !== 'AbortError' && e.message !== 'Failed to fetch') {
+                console.error("Error fetching alerts:", error)
+            }
         } finally {
             setIsLoadingAlerts(false)
         }
     }
 
     useEffect(() => {
-        fetchNotifications()
-        fetchAlerts()
+        const ac = new AbortController()
+        fetchNotifications(ac.signal)
+        fetchAlerts(ac.signal)
         const interval = setInterval(() => {
             fetchNotifications()
             fetchAlerts()
         }, 30000)
-        return () => clearInterval(interval)
+        return () => {
+            clearInterval(interval)
+            ac.abort()
+        }
     }, [])
 
     const markAsRead = async (id: string) => {

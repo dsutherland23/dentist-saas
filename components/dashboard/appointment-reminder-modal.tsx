@@ -10,8 +10,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Phone, Clock, CalendarCheck } from "lucide-react"
+import { Phone, Clock, Check } from "lucide-react"
 import { fetchWithAuth } from "@/lib/fetch-client"
+import { toast } from "sonner"
 
 const REMINDER_CHECK_INTERVAL = 5 * 60 * 1000 // 5 minutes
 const DISMISSED_KEY = "appointment-reminders-dismissed"
@@ -29,6 +30,17 @@ export function AppointmentReminderModal() {
     const [reminders, setReminders] = useState<Reminder[]>([])
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+    const markDismissed = useCallback((ids: string[]) => {
+        const existing = JSON.parse(
+            sessionStorage.getItem(DISMISSED_KEY) || "[]"
+        ) as string[]
+        sessionStorage.setItem(
+            DISMISSED_KEY,
+            JSON.stringify([...new Set([...existing, ...ids])])
+        )
+    }, [])
 
     const fetchReminders = useCallback(async () => {
         try {
@@ -38,7 +50,6 @@ export function AppointmentReminderModal() {
             const list = data.reminders || []
             if (list.length === 0) return
 
-            // Don't show if user dismissed these same appointments recently
             const dismissed = JSON.parse(
                 sessionStorage.getItem(DISMISSED_KEY) || "[]"
             ) as string[]
@@ -66,17 +77,34 @@ export function AppointmentReminderModal() {
         return () => clearInterval(interval)
     }, [fetchReminders])
 
+    // Close only via (X), Dismiss, or after Confirm - not on Escape or click-outside
     const handleDismiss = () => {
-        const ids = reminders.map((r) => r.id)
-        const existing = JSON.parse(
-            sessionStorage.getItem(DISMISSED_KEY) || "[]"
-        ) as string[]
-        sessionStorage.setItem(
-            DISMISSED_KEY,
-            JSON.stringify([...new Set([...existing, ...ids])])
-        )
+        markDismissed(reminders.map((r) => r.id))
         setOpen(false)
         setReminders([])
+    }
+
+    const handleConfirm = async (id: string) => {
+        setConfirmingId(id)
+        try {
+            const res = await fetchWithAuth(`/api/appointments/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: "confirmed" }),
+            })
+            if (!res.ok) throw new Error("Failed to confirm")
+            markDismissed([id])
+            setReminders((prev) => {
+                const next = prev.filter((r) => r.id !== id)
+                if (next.length === 0) setOpen(false)
+                return next
+            })
+            toast.success("Appointment confirmed")
+        } catch {
+            toast.error("Failed to confirm appointment")
+        } finally {
+            setConfirmingId(null)
+        }
     }
 
     const handleCall = (phone: string | null) => {
@@ -86,8 +114,17 @@ export function AppointmentReminderModal() {
     }
 
     return (
-        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleDismiss()}>
-            <DialogContent className="sm:max-w-md">
+        <Dialog
+            open={open}
+            onOpenChange={(isOpen) => {
+                if (!isOpen) handleDismiss()
+            }}
+        >
+            <DialogContent
+                className="sm:max-w-md"
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+            >
                 <DialogHeader>
                     <div className="flex items-center gap-2">
                         <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center">
@@ -105,9 +142,9 @@ export function AppointmentReminderModal() {
                     {reminders.map((r) => (
                         <div
                             key={r.id}
-                            className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-slate-50"
+                            className="flex items-center justify-between gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50"
                         >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
                                 <div className="flex items-center gap-1.5 text-sm font-medium text-teal-700 shrink-0">
                                     <Clock className="h-4 w-4" />
                                     {r.time}
@@ -121,16 +158,34 @@ export function AppointmentReminderModal() {
                                     </p>
                                 </div>
                             </div>
-                            <Button
-                                size="sm"
-                                className="shrink-0 bg-teal-600 hover:bg-teal-700"
-                                onClick={() => handleCall(r.phone)}
-                                disabled={!r.phone}
-                                title={r.phone ? `Call ${r.patient}` : "No phone number"}
-                            >
-                                <Phone className="h-4 w-4 mr-1" />
-                                Call
-                            </Button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8"
+                                    onClick={() => handleCall(r.phone)}
+                                    disabled={!r.phone}
+                                    title={r.phone ? `Call ${r.patient}` : "No phone number"}
+                                >
+                                    <Phone className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="h-8 bg-emerald-600 hover:bg-emerald-700"
+                                    onClick={() => handleConfirm(r.id)}
+                                    disabled={confirmingId === r.id}
+                                    title="Mark as confirmed after call"
+                                >
+                                    {confirmingId === r.id ? (
+                                        <span className="animate-pulse">…</span>
+                                    ) : (
+                                        <>
+                                            <Check className="h-4 w-4 mr-1" />
+                                            Confirm
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
                         </div>
                     ))}
                 </div>

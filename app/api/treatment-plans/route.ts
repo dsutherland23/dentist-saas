@@ -22,6 +22,7 @@ export async function GET(req: Request) {
 
         const { searchParams } = new URL(req.url)
         const planId = searchParams.get("id")
+        const patientId = searchParams.get("patient_id")
 
         const clinicId = userData.clinic_id
 
@@ -48,8 +49,8 @@ export async function GET(req: Request) {
             return NextResponse.json(plan)
         }
 
-        // Get all plans with items
-        const { data: plans, error } = await supabase
+        // Get all plans with items (optional patient_id filter)
+        let query = supabase
             .from("treatment_plans")
             .select(`
                 *,
@@ -60,11 +61,16 @@ export async function GET(req: Request) {
                     description,
                     total_price,
                     status,
-                    appointment_id
+                    appointment_id,
+                    acceptance_status
                 )
             `)
             .eq("clinic_id", clinicId)
             .order("created_at", { ascending: false })
+        if (patientId) {
+            query = query.eq("patient_id", patientId)
+        }
+        const { data: plans, error } = await query
 
         if (error) throw error
 
@@ -72,7 +78,7 @@ export async function GET(req: Request) {
         const enrichedPlans = (plans || []).map(plan => {
             const items = plan.items || []
             const unscheduledItems = items.filter((item: any) => 
-                !item.appointment_id && item.status === 'not_started'
+                !item.appointment_id && (item.status === 'not_started' || item.status == null)
             )
             const unscheduledValue = unscheduledItems.reduce(
                 (sum: number, item: any) => sum + parseFloat(item.total_price || 0),
@@ -143,7 +149,7 @@ export async function POST(req: Request) {
                 plan_name,
                 total_estimated_cost: totalCost,
                 notes,
-                status: 'proposed'
+                status: 'draft'
             })
             .select()
             .single()
@@ -197,8 +203,16 @@ export async function PATCH(req: Request) {
         const body = await req.json()
         const { id, status, notes } = body
 
+        const VALID_PLAN_STATUSES = ["draft", "presented", "accepted", "partially_accepted", "declined"]
+
         if (!id) {
             return NextResponse.json({ error: "Missing plan ID" }, { status: 400 })
+        }
+        if (status && !VALID_PLAN_STATUSES.includes(status)) {
+            return NextResponse.json(
+                { error: "Valid status required: " + VALID_PLAN_STATUSES.join(", ") },
+                { status: 400 }
+            )
         }
 
         const updateData: any = { updated_at: new Date().toISOString() }

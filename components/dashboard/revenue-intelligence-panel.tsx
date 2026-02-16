@@ -43,10 +43,13 @@ export function RevenueIntelligencePanel() {
             const res = await fetchWithAuth("/api/treatment-plans")
             if (res.ok) {
                 const json = await res.json()
-                setTreatmentPlans(json)
+                setTreatmentPlans(Array.isArray(json) ? json : [])
+            } else {
+                setTreatmentPlans([])
             }
         } catch (error) {
             console.error("Error fetching treatment plans:", error)
+            setTreatmentPlans([])
         } finally {
             setLoading(false)
         }
@@ -151,7 +154,7 @@ export function RevenueIntelligencePanel() {
                                 </p>
                             </div>
                             <p className="text-3xl font-bold text-purple-900 mb-1">
-                                {treatmentPlans.filter(p => ['proposed', 'accepted', 'in_progress'].includes(p.status)).length}
+                                {treatmentPlans.filter(p => p.status && ['draft', 'presented', 'accepted', 'partially_accepted'].includes(p.status)).length}
                             </p>
                             <p className="text-xs text-purple-700">
                                 treatment plans in pipeline

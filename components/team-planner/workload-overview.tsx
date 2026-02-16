@@ -4,8 +4,7 @@ import React, { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
 import { Loader2, Users, Clock, AlertCircle } from "lucide-react"
-import { createClient } from "@/lib/supabase"
-import { format, startOfWeek, endOfWeek, differenceInMinutes, parseISO } from "date-fns"
+import { fetchWithAuth } from "@/lib/fetch-client"
 import { Badge } from "@/components/ui/badge"
 
 interface WorkloadData {
@@ -17,13 +16,10 @@ interface WorkloadData {
 }
 
 export function WorkloadOverview() {
-    const supabase = createClient()
     const [isLoading, setIsLoading] = useState(true)
     const [chartData, setChartData] = useState<WorkloadData[]>([])
-    const [weekRange, setWeekRange] = useState({
-        start: startOfWeek(new Date(), { weekStartsOn: 1 }),
-        end: endOfWeek(new Date(), { weekStartsOn: 1 })
-    })
+    const [weekStartLabel, setWeekStartLabel] = useState("")
+    const [weekEndLabel, setWeekEndLabel] = useState("")
 
     useEffect(() => {
         fetchWorkloadData()
@@ -32,68 +28,15 @@ export function WorkloadOverview() {
     const fetchWorkloadData = async () => {
         setIsLoading(true)
         try {
-            // 1. Fetch all staff members
-            const { data: staff, error: staffError } = await supabase
-                .from('users')
-                .select('id, first_name, last_name, role')
-                .not('role', 'eq', 'patient')
-
-            if (staffError) throw staffError
-
-            // 2. Fetch all schedules to calculate capacity
-            const { data: schedules, error: scheduleError } = await supabase
-                .from('staff_schedules')
-                .select('*')
-                .eq('is_active', true)
-
-            if (scheduleError) throw scheduleError
-
-            // 3. Fetch appointments for this week to calculate booked time
-            const { data: appointments, error: apptError } = await supabase
-                .from('appointments')
-                .select('*')
-                .gte('start_time', weekRange.start.toISOString())
-                .lte('start_time', weekRange.end.toISOString())
-                .not('status', 'eq', 'cancelled')
-
-            if (apptError) throw apptError
-
-            // 4. Transform data for chart
-            const workload = staff.map((member, index) => {
-                const colors = ['#0d9488', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981']
-
-                // Calculate weekly capacity (hours)
-                const memberSchedules = schedules.filter(s => s.staff_id === member.id)
-                let weeklyCapacityMinutes = 0
-                memberSchedules.forEach(s => {
-                    if (s.start_time && s.end_time) {
-                        const [sH, sM] = s.start_time.split(':').map(Number)
-                        const [eH, eM] = s.end_time.split(':').map(Number)
-                        weeklyCapacityMinutes += (eH * 60 + eM) - (sH * 60 + sM)
-                    }
-                })
-
-                // Calculate booked minutes from appointments
-                const memberAppts = appointments.filter(a => a.dentist_id === member.id)
-                const bookedMinutes = memberAppts.reduce((acc, a) => {
-                    return acc + differenceInMinutes(new Date(a.end_time), new Date(a.start_time))
-                }, 0)
-
-                const capacityHours = Math.round((weeklyCapacityMinutes / 60) * 10) / 10
-                const bookedHours = Math.round((bookedMinutes / 60) * 10) / 10
-
-                return {
-                    name: `${member.first_name[0]}. ${member.last_name}`,
-                    capacity: capacityHours || 0,
-                    booked: bookedHours || 0,
-                    utilization: capacityHours > 0 ? Math.round((bookedHours / capacityHours) * 100) : 0,
-                    color: colors[index % colors.length]
-                }
-            })
-
-            setChartData(workload.filter(w => w.capacity > 0 || w.booked > 0))
+            const res = await fetchWithAuth("/api/team-planner/workload-data")
+            if (!res.ok) throw new Error("Failed to load workload data")
+            const data = await res.json()
+            setChartData(data.chartData || [])
+            setWeekStartLabel(data.weekStartLabel || "")
+            setWeekEndLabel(data.weekEndLabel || "")
         } catch (error) {
-            console.error('Error fetching workload data:', error)
+            console.error("Error fetching workload data:", error)
+            setChartData([])
         } finally {
             setIsLoading(false)
         }
@@ -150,7 +93,7 @@ export function WorkloadOverview() {
                     <div className="flex items-center justify-between">
                         <div>
                             <CardTitle>Staff Load vs Capacity</CardTitle>
-                            <CardDescription>Weekly distribution for {format(weekRange.start, 'MMM d')} - {format(weekRange.end, 'MMM d, yyyy')}</CardDescription>
+                            <CardDescription>Weekly distribution for {weekStartLabel && weekEndLabel ? `${weekStartLabel} - ${weekEndLabel}` : "this week"}</CardDescription>
                         </div>
                         {avgUtilization > 85 && (
                             <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 gap-1">

@@ -17,10 +17,10 @@ import {
     parseISO,
     getDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Loader2, UserX, Calendar as CalendarIcon, Info, Users, Clock, CheckCircle2, XCircle } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Clock, CheckCircle2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
+import { fetchWithAuth } from "@/lib/fetch-client"
 import {
     Tooltip,
     TooltipContent,
@@ -68,7 +68,6 @@ interface StaffMember {
 }
 
 export function TeamAvailabilityCalendar() {
-    const supabase = createClient()
     const [currentDate, setCurrentDate] = useState(new Date())
     const [isLoading, setIsLoading] = useState(true)
     const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>([])
@@ -84,39 +83,18 @@ export function TeamAvailabilityCalendar() {
     const fetchCalendarData = async () => {
         setIsLoading(true)
         try {
-            const start = startOfMonth(currentDate)
-            const end = endOfMonth(currentDate)
-
-            // 1. Fetch approved time off requests
-            const { data: requests, error: requestsError } = await supabase
-                .from('time_off_requests')
-                .select('*, staff:staff_id(id, first_name, last_name, role)')
-                .eq('status', 'approved')
-                .or(`start_date.lte.${end.toISOString()},end_date.gte.${start.toISOString()}`)
-
-            if (requestsError) throw requestsError
-            setTimeOffRequests(requests || [])
-
-            // 2. Fetch all staff members
-            const { data: staffData, error: staffError } = await supabase
-                .from('users')
-                .select('id, first_name, last_name, role, email')
-                .not('role', 'eq', 'patient')
-
-            if (staffError) throw staffError
-            setStaff(staffData || [])
-
-            // 3. Fetch all active schedules
-            const { data: scheduleData, error: scheduleError } = await supabase
-                .from('staff_schedules')
-                .select('*')
-                .eq('is_active', true)
-
-            if (scheduleError) throw scheduleError
-            setSchedules(scheduleData || [])
-
+            const monthStr = format(currentDate, "yyyy-MM")
+            const res = await fetchWithAuth(`/api/team-planner/calendar-data?month=${monthStr}`)
+            if (!res.ok) throw new Error("Failed to load calendar data")
+            const data = await res.json()
+            setStaff(data.staff || [])
+            setSchedules(data.schedules || [])
+            setTimeOffRequests(data.timeOffRequests || [])
         } catch (error) {
-            console.error('Error fetching calendar data:', error)
+            console.error("Error fetching calendar data:", error)
+            setStaff([])
+            setSchedules([])
+            setTimeOffRequests([])
         } finally {
             setIsLoading(false)
         }
@@ -334,7 +312,7 @@ export function TeamAvailabilityCalendar() {
                                                 {member.schedule ? (
                                                     <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
                                                         <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                                        {member.schedule.start_time.slice(0, 5)} - {member.schedule.end_time.slice(0, 5)}
+                                                        {String(member.schedule.start_time).slice(0, 5)} - {String(member.schedule.end_time).slice(0, 5)}
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs text-slate-400 italic">No shift scheduled</span>

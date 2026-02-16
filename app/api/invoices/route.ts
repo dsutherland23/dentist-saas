@@ -160,15 +160,55 @@ export async function PATCH(req: Request) {
 
         if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+        const { data: userData } = await supabase
+            .from("users")
+            .select("clinic_id")
+            .eq("id", user.id)
+            .single()
+
+        if (!userData?.clinic_id) return NextResponse.json({ error: "Clinic Not Found" }, { status: 404 })
+
         const body = await req.json()
         const { id, status } = body
 
         if (!id || !status) return NextResponse.json({ error: "Missing fields" }, { status: 400 })
 
+        // When marking as paid: auto-record payment transaction if none exists
+        if (status === "paid") {
+            const { data: invoice } = await supabase
+                .from("invoices")
+                .select("id, total_amount, clinic_id")
+                .eq("id", id)
+                .eq("clinic_id", userData.clinic_id)
+                .single()
+
+            if (invoice) {
+                const { data: existing } = await supabase
+                    .from("payments")
+                    .select("id")
+                    .eq("invoice_id", id)
+                    .limit(1)
+                    .maybeSingle()
+
+                if (!existing) {
+                    const amount = Number(invoice.total_amount) || 0
+                    await supabase.from("payments").insert({
+                        invoice_id: id,
+                        amount_paid: amount,
+                        payment_method: "cash",
+                        status: "succeeded",
+                        clinic_id: userData.clinic_id,
+                        payment_date: new Date().toISOString()
+                    })
+                }
+            }
+        }
+
         const { error } = await supabase
             .from("invoices")
             .update({ status })
             .eq("id", id)
+            .eq("clinic_id", userData.clinic_id)
 
         if (error) throw error
         return NextResponse.json({ success: true })

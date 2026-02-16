@@ -28,8 +28,8 @@ export async function GET() {
         const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
         const dayOfWeek = now.getDay() // 0-6
 
-        // Fetch today's appointments
-        const { data: appointments, error: apptError } = await supabase
+        // 1. Fetch today's appointments (scheduled for today)
+        const { data: todayAppointments, error: apptError } = await supabase
             .from("appointments")
             .select(`
                 id,
@@ -37,12 +37,40 @@ export async function GET() {
                 end_time,
                 treatment_type,
                 status,
+                checked_in_at,
+                patient_id,
                 patients (first_name, last_name)
             `)
             .eq("clinic_id", clinicId)
             .gte("start_time", todayStart.toISOString())
             .lte("start_time", todayEnd.toISOString())
             .order("start_time", { ascending: true })
+
+        // 2. Fetch walk-ins: checked-in/in_treatment from OTHER days (patient showed up early/different day)
+        const { data: activeWalkIns } = await supabase
+            .from("appointments")
+            .select(`
+                id,
+                start_time,
+                end_time,
+                treatment_type,
+                status,
+                checked_in_at,
+                patient_id,
+                patients (first_name, last_name)
+            `)
+            .eq("clinic_id", clinicId)
+            .in("status", ["checked_in", "in_treatment"])
+
+        const walkInAppointments = (activeWalkIns || []).filter((a: any) => {
+            const start = new Date(a.start_time).getTime()
+            return start < todayStart.getTime() || start > todayEnd.getTime()
+        })
+
+        // Merge and deduplicate (today's list may already include some checked_in)
+        const todayIds = new Set((todayAppointments || []).map((a: any) => a.id))
+        const walkInsOnly = (walkInAppointments || []).filter((a: any) => !todayIds.has(a.id))
+        const appointments = [...walkInsOnly, ...(todayAppointments || [])]
 
         // Fetch today's staff rota from staff_schedules
         const { data: staffRota, error: rotaError } = await supabase
@@ -83,24 +111,37 @@ export async function GET() {
             }))
         }
 
+        // Sort: in_treatment first, then checked_in, then by start_time
+        const statusOrder = (s: string) => (s === "in_treatment" ? 0 : s === "checked_in" ? 1 : 2)
+        appointments.sort((a: any, b: any) => {
+            const ordA = statusOrder(a.status || "")
+            const ordB = statusOrder(b.status || "")
+            if (ordA !== ordB) return ordA - ordB
+            return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+        })
+
         // Format appointments
-        const schedule = appointments?.map((appt: any) => {
-            const startTime = new Date(appt.start_time)
+        const schedule = appointments.map((appt: any) => {
+            const ts = appt.checked_in_at || appt.start_time
+            const startTime = new Date(ts)
             const hours = startTime.getHours()
             const minutes = startTime.getMinutes()
             const ampm = hours >= 12 ? 'PM' : 'AM'
             const displayHours = hours % 12 || 12
             const displayMinutes = minutes.toString().padStart(2, '0')
+            const isWalkIn = walkInsOnly.some((w: any) => w.id === appt.id)
+            const timeLabel = isWalkIn ? `Walk-in · ${displayHours}:${displayMinutes} ${ampm}` : `${displayHours}:${displayMinutes} ${ampm}`
 
             return {
                 id: appt.id,
-                time: `${displayHours}:${displayMinutes} ${ampm}`,
+                patient_id: appt.patient_id,
+                time: timeLabel,
                 patient: appt.patients ? `${appt.patients.first_name} ${appt.patients.last_name}` : "Unknown Patient",
                 treatment: appt.treatment_type || "General Appointment",
                 status: appt.status || "scheduled",
                 type: 'appointment'
             }
-        }) || []
+        })
 
         // Format staff rota
         const rota = rotaFromSchedules?.map((shift: any) => ({
