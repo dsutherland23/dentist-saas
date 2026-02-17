@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dental Chart Layout Diagram</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .diagram-container {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            background: white;
+        }
+        .tooth {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tooth:hover {
+            filter: brightness(1.2);
+            stroke-width: 3;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .info-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .info-card h3 {
+            margin-top: 0;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+            padding-bottom: 10px;
+        }
+        .info-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        .info-card li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        .info-card li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: white;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .color-box {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #333;
+            border-radius: 4px;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 30px 0;
+        }
+        .stat-box {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .tooltip {
+            position: absolute;
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 1000;
+        }
+        @media (max-width: 768px) {
+            .stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🦷 Dental Chart V2 - Interactive Layout Diagram</h1>
+        <p class="subtitle">Hover over teeth to see details • Click to highlight</p>
+
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-number">32</div>
+                <div class="stat-label">Total Teeth</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">4</div>
+                <div class="stat-label">Quadrants</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">2</div>
+                <div class="stat-label">Numbering Systems</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-number">1200×800</div>
+                <div class="stat-label">SVG ViewBox</div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="color-box" style="background: #4CAF50;"></div>
+                <span>Healthy</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #F44336;"></div>
+                <span>Decay</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #2196F3;"></div>
+                <span>Restoration</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #9C27B0;"></div>
+                <span>Crown</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #FF9800;"></div>
+                <span>Fracture</span>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            <svg viewBox="0 0 1200 800" id="dentalChart">
+                <!-- Centerline -->
+                <line x1="600" y1="100" x2="600" y2="700" stroke="#e5e7eb" stroke-width="2" stroke-dasharray="5,5"/>
+                
+                <!-- Quadrant Labels -->
+                <text x="350" y="120" font-size="16" fill="#9ca3af" text-anchor="middle" font-weight="bold">Q1 (Upper Right)</text>
+                <text x="850" y="120" font-size="16" fill="#9ca3af" text-anchor="middle" font-weight="bold">Q2 (Upper Left)</text>
+                <text x="350" y="760" font-size="16" fill="#9ca3af" text-anchor="middle" font-weight="bold">Q4 (Lower Right)</text>
+                <text x="850" y="760" font-size="16" fill="#9ca3af" text-anchor="middle" font-weight="bold">Q3 (Lower Left)</text>
+                
+                <!-- Arch Labels -->
+                <text x="80" y="250" font-size="14" fill="#666" font-weight="bold">UPPER</text>
+                <text x="80" y="550" font-size="14" fill="#666" font-weight="bold">LOWER</text>
+                
+                <!-- Upper Right Quadrant (FDI 18-11, Universal 1-8) -->
+                <g class="quadrant" data-quadrant="Q1">
+                    <ellipse cx="145" cy="185" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="18" data-universal="1" data-name="3rd Molar"/>
+                    <text x="145" y="190" text-anchor="middle" font-size="10" fill="white" pointer-events="none">18/1</text>
+                    
+                    <ellipse cx="210" cy="170" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="17" data-universal="2" data-name="2nd Molar"/>
+                    <text x="210" y="175" text-anchor="middle" font-size="10" fill="white" pointer-events="none">17/2</text>
+                    
+                    <ellipse cx="275" cy="160" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="16" data-universal="3" data-name="1st Molar"/>
+                    <text x="275" y="165" text-anchor="middle" font-size="10" fill="white" pointer-events="none">16/3</text>
+                    
+                    <ellipse cx="338" cy="155" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="15" data-universal="4" data-name="2nd Premolar"/>
+                    <text x="338" y="160" text-anchor="middle" font-size="10" fill="white" pointer-events="none">15/4</text>
+                    
+                    <ellipse cx="398" cy="153" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="14" data-universal="5" data-name="1st Premolar"/>
+                    <text x="398" y="158" text-anchor="middle" font-size="10" fill="white" pointer-events="none">14/5</text>
+                    
+                    <ellipse cx="455" cy="155" rx="20" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="13" data-universal="6" data-name="Canine"/>
+                    <text x="455" y="160" text-anchor="middle" font-size="10" fill="white" pointer-events="none">13/6</text>
+                    
+                    <ellipse cx="505" cy="160" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="12" data-universal="7" data-name="Lateral Incisor"/>
+                    <text x="505" y="165" text-anchor="middle" font-size="10" fill="white" pointer-events="none">12/7</text>
+                    
+                    <ellipse cx="555" cy="165" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="11" data-universal="8" data-name="Central Incisor"/>
+                    <text x="555" y="170" text-anchor="middle" font-size="10" fill="white" pointer-events="none">11/8</text>
+                </g>
+                
+                <!-- Upper Left Quadrant (FDI 21-28, Universal 9-16) -->
+                <g class="quadrant" data-quadrant="Q2">
+                    <ellipse cx="645" cy="165" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="21" data-universal="9" data-name="Central Incisor"/>
+                    <text x="645" y="170" text-anchor="middle" font-size="10" fill="white" pointer-events="none">21/9</text>
+                    
+                    <ellipse cx="695" cy="160" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="22" data-universal="10" data-name="Lateral Incisor"/>
+                    <text x="695" y="165" text-anchor="middle" font-size="10" fill="white" pointer-events="none">22/10</text>
+                    
+                    <ellipse cx="745" cy="155" rx="20" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="23" data-universal="11" data-name="Canine"/>
+                    <text x="745" y="160" text-anchor="middle" font-size="10" fill="white" pointer-events="none">23/11</text>
+                    
+                    <ellipse cx="800" cy="153" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="24" data-universal="12" data-name="1st Premolar"/>
+                    <text x="800" y="158" text-anchor="middle" font-size="10" fill="white" pointer-events="none">24/12</text>
+                    
+                    <ellipse cx="860" cy="155" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="25" data-universal="13" data-name="2nd Premolar"/>
+                    <text x="860" y="160" text-anchor="middle" font-size="10" fill="white" pointer-events="none">25/13</text>
+                    
+                    <ellipse cx="923" cy="160" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="26" data-universal="14" data-name="1st Molar"/>
+                    <text x="923" y="165" text-anchor="middle" font-size="10" fill="white" pointer-events="none">26/14</text>
+                    
+                    <ellipse cx="988" cy="170" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="27" data-universal="15" data-name="2nd Molar"/>
+                    <text x="988" y="175" text-anchor="middle" font-size="10" fill="white" pointer-events="none">27/15</text>
+                    
+                    <ellipse cx="1053" cy="185" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="28" data-universal="16" data-name="3rd Molar"/>
+                    <text x="1053" y="190" text-anchor="middle" font-size="10" fill="white" pointer-events="none">28/16</text>
+                </g>
+                
+                <!-- Lower Left Quadrant (FDI 31-38, Universal 17-24) -->
+                <g class="quadrant" data-quadrant="Q3">
+                    <ellipse cx="645" cy="605" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="31" data-universal="24" data-name="Central Incisor"/>
+                    <text x="645" y="610" text-anchor="middle" font-size="10" fill="white" pointer-events="none">31/24</text>
+                    
+                    <ellipse cx="695" cy="600" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="32" data-universal="23" data-name="Lateral Incisor"/>
+                    <text x="695" y="605" text-anchor="middle" font-size="10" fill="white" pointer-events="none">32/23</text>
+                    
+                    <ellipse cx="745" cy="595" rx="20" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="33" data-universal="22" data-name="Canine"/>
+                    <text x="745" y="600" text-anchor="middle" font-size="10" fill="white" pointer-events="none">33/22</text>
+                    
+                    <ellipse cx="800" cy="593" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="34" data-universal="21" data-name="1st Premolar"/>
+                    <text x="800" y="598" text-anchor="middle" font-size="10" fill="white" pointer-events="none">34/21</text>
+                    
+                    <ellipse cx="860" cy="595" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="35" data-universal="20" data-name="2nd Premolar"/>
+                    <text x="860" y="600" text-anchor="middle" font-size="10" fill="white" pointer-events="none">35/20</text>
+                    
+                    <ellipse cx="923" cy="600" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="36" data-universal="19" data-name="1st Molar"/>
+                    <text x="923" y="605" text-anchor="middle" font-size="10" fill="white" pointer-events="none">36/19</text>
+                    
+                    <ellipse cx="988" cy="610" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="37" data-universal="18" data-name="2nd Molar"/>
+                    <text x="988" y="615" text-anchor="middle" font-size="10" fill="white" pointer-events="none">37/18</text>
+                    
+                    <ellipse cx="1053" cy="625" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="38" data-universal="17" data-name="3rd Molar"/>
+                    <text x="1053" y="630" text-anchor="middle" font-size="10" fill="white" pointer-events="none">38/17</text>
+                </g>
+                
+                <!-- Lower Right Quadrant (FDI 41-48, Universal 25-32) -->
+                <g class="quadrant" data-quadrant="Q4">
+                    <ellipse cx="555" cy="605" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="41" data-universal="25" data-name="Central Incisor"/>
+                    <text x="555" y="610" text-anchor="middle" font-size="10" fill="white" pointer-events="none">41/25</text>
+                    
+                    <ellipse cx="505" cy="600" rx="18" ry="26" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="42" data-universal="26" data-name="Lateral Incisor"/>
+                    <text x="505" y="605" text-anchor="middle" font-size="10" fill="white" pointer-events="none">42/26</text>
+                    
+                    <ellipse cx="455" cy="595" rx="20" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="43" data-universal="27" data-name="Canine"/>
+                    <text x="455" y="600" text-anchor="middle" font-size="10" fill="white" pointer-events="none">43/27</text>
+                    
+                    <ellipse cx="400" cy="593" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="44" data-universal="28" data-name="1st Premolar"/>
+                    <text x="400" y="598" text-anchor="middle" font-size="10" fill="white" pointer-events="none">44/28</text>
+                    
+                    <ellipse cx="342" cy="595" rx="22" ry="28" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="45" data-universal="29" data-name="2nd Premolar"/>
+                    <text x="342" y="600" text-anchor="middle" font-size="10" fill="white" pointer-events="none">45/29</text>
+                    
+                    <ellipse cx="277" cy="600" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="46" data-universal="30" data-name="1st Molar"/>
+                    <text x="277" y="605" text-anchor="middle" font-size="10" fill="white" pointer-events="none">46/30</text>
+                    
+                    <ellipse cx="212" cy="610" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="47" data-universal="31" data-name="2nd Molar"/>
+                    <text x="212" y="615" text-anchor="middle" font-size="10" fill="white" pointer-events="none">47/31</text>
+                    
+                    <ellipse cx="147" cy="625" rx="25" ry="30" fill="#4CAF50" stroke="#333" stroke-width="2" class="tooth" data-fdi="48" data-universal="32" data-name="3rd Molar"/>
+                    <text x="147" y="630" text-anchor="middle" font-size="10" fill="white" pointer-events="none">48/32</text>
+                </g>
+            </svg>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>✅ Layout Features</h3>
+                <ul>
+                    <li>All 32 teeth visible</li>
+                    <li>Teeth touch side-by-side</li>
+                    <li>No overlapping</li>
+                    <li>Smooth U-shaped arches</li>
+                    <li>Proper spacing at centerline</li>
+                </ul>
+            </div>
+            
+            <div class="info-card">
+                <h3>🔢 Numbering Systems</h3>
+                <ul>
+                    <li>FDI: 11-18, 21-28, 31-38, 41-48</li>
+                    <li>Universal: 1-32 sequential</li>
+                    <li>Toggle between systems</li>
+                    <li>Both displayed on teeth</li>
+                </ul>
+            </div>
+            
+            <div class="info-card">
+                <h3>🎨 Color Coding</h3>
+                <ul>
+                    <li>Green: Healthy teeth</li>
+                    <li>Red: Decay/cavities</li>
+                    <li>Blue: Restorations</li>
+                    <li>Purple: Crowns</li>
+                    <li>Orange: Fractures</li>
+                </ul>
+            </div>
+            
+            <div class="info-card">
+                <h3>🖱️ Interactive Features</h3>
+                <ul>
+                    <li>Click to select tooth</li>
+                    <li>Hover for highlight</li>
+                    <li>Detail panel on selection</li>
+                    <li>Surface-level editing</li>
+                    <li>Real-time updates</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Interactive features
+        const teeth = document.querySelectorAll('.tooth');
+        const tooltip = document.getElementById('tooltip');
+        let selectedTooth = null;
+
+        teeth.forEach(tooth => {
+            tooth.addEventListener('mouseenter', (e) => {
+                const fdi = tooth.dataset.fdi;
+                const universal = tooth.dataset.universal;
+                const name = tooth.dataset.name;
+                
+                tooltip.innerHTML = `
+                    <strong>${name}</strong><br>
+                    FDI: ${fdi} | Universal: ${universal}
+                `;
+                tooltip.style.opacity = '1';
+            });
+
+            tooth.addEventListener('mousemove', (e) => {
+                tooltip.style.left = (e.pageX + 15) + 'px';
+                tooltip.style.top = (e.pageY + 15) + 'px';
+            });
+
+            tooth.addEventListener('mouseleave', () => {
+                tooltip.style.opacity = '0';
+            });
+
+            tooth.addEventListener('click', () => {
+                if (selectedTooth) {
+                    selectedTooth.style.stroke = '#333';
+                    selectedTooth.style.strokeWidth = '2';
+                }
+                
+                tooth.style.stroke = '#2196F3';
+                tooth.style.strokeWidth = '4';
+                selectedTooth = tooth;
+                
+                const fdi = tooth.dataset.fdi;
+                const universal = tooth.dataset.universal;
+                const name = tooth.dataset.name;
+                
+                console.log(`Selected: ${name} (FDI: ${fdi}, Universal: ${universal})`);
+            });
+        });
+
+        // Animate on load
+        window.addEventListener('load', () => {
+            teeth.forEach((tooth, index) => {
+                setTimeout(() => {
+                    tooth.style.opacity = '0';
+                    tooth.style.transform = 'scale(0.5)';
+                    setTimeout(() => {
+                        tooth.style.transition = 'all 0.3s ease-out';
+                        tooth.style.opacity = '1';
+                        tooth.style.transform = 'scale(1)';
+                    }, 50);
+                }, index * 30);
+            });
+        });
+    </script>
+</body>
+</html>

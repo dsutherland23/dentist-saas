@@ -21,6 +21,8 @@ import { toast } from "sonner"
 import { DentalChart, NumberingSystem, Tooth, ToothStatus } from "@/lib/types/dental-chart"
 import { universalToFDI, universalToPalmer } from "@/lib/types/dental-chart"
 import { ToothDetailPanel } from "./tooth-detail-panel"
+import { ToothRenderer, calculateToothPosition } from "./tooth-renderer"
+import type { SurfaceName } from "./tooth-shapes"
 
 interface InteractiveDentalChartProps {
   patientId: string
@@ -29,16 +31,27 @@ interface InteractiveDentalChartProps {
   readOnly?: boolean
 }
 
-// Color mapping for tooth status
+// Color mapping for surface status (updated for realistic view)
+const surfaceStatusColors = {
+  healthy: '#f5f1e8',      // Natural enamel
+  decay: '#ef4444',         // Red (cavity)
+  filled: '#3b82f6',        // Blue (restoration)
+  crown: '#8b5cf6',         // Purple
+  fracture: '#f97316',      // Orange
+  planned: '#eab308',       // Yellow
+  missing: '#e5e7eb',       // Light gray
+}
+
+// Legacy status colors for backward compatibility
 const statusColors: Record<ToothStatus, string> = {
-  healthy: "#86efac", // green-300
-  treated: "#93c5fd", // blue-300
-  problem: "#fca5a5", // red-300
-  planned: "#fde047", // yellow-300
-  missing: "#e5e7eb", // gray-200
-  extracted: "#d1d5db", // gray-300
-  impacted: "#fbbf24", // amber-400
-  implant: "#c084fc", // purple-400
+  healthy: "#86efac",
+  treated: "#93c5fd",
+  problem: "#fca5a5",
+  planned: "#fde047",
+  missing: "#e5e7eb",
+  extracted: "#d1d5db",
+  impacted: "#fbbf24",
+  implant: "#c084fc",
 }
 
 export function InteractiveDentalChart({ 
@@ -52,6 +65,7 @@ export function InteractiveDentalChart({
   const [saving, setSaving] = useState(false)
   const [selectedTooth, setSelectedTooth] = useState<Tooth | null>(null)
   const [numberingSystem, setNumberingSystem] = useState<NumberingSystem>("universal")
+  const [activeTool, setActiveTool] = useState<'select' | 'cavity' | 'restoration'>('select')
 
   // Load chart from API
   const loadChart = async () => {
@@ -148,6 +162,54 @@ export function InteractiveDentalChart({
       const refreshedTooth = updated.teeth.find((t: Tooth) => t.tooth_number === selectedTooth.tooth_number)
       if (refreshedTooth) setSelectedTooth(refreshedTooth)
     }
+  }
+
+  // Handle surface click (for marking cavities, restorations, etc.)
+  const handleSurfaceClick = (tooth: Tooth, surfaceName: SurfaceName) => {
+    if (isReadOnly || activeTool === 'select') return
+    
+    // Map surface name to surface code
+    const surfaceCodeMap: Record<SurfaceName, string> = {
+      mesial: 'M',
+      distal: 'D',
+      occlusal: 'O',
+      buccal: 'B',
+      lingual: 'L'
+    }
+    
+    const surfaceCode = surfaceCodeMap[surfaceName] as any
+    const surfaces = tooth.surfaces || []
+    const existingSurface = surfaces.find(s => s.surface_code === surfaceCode)
+    
+    let updatedSurfaces
+    if (activeTool === 'cavity') {
+      if (existingSurface && existingSurface.status === 'decay') {
+        // Remove cavity marking
+        updatedSurfaces = surfaces.filter(s => s.surface_code !== surfaceCode)
+      } else {
+        // Add or update cavity marking
+        updatedSurfaces = [
+          ...surfaces.filter(s => s.surface_code !== surfaceCode),
+          { surface_code: surfaceCode, status: 'decay' as const }
+        ]
+      }
+    } else if (activeTool === 'restoration') {
+      if (existingSurface && existingSurface.status === 'filled') {
+        // Remove restoration marking
+        updatedSurfaces = surfaces.filter(s => s.surface_code !== surfaceCode)
+      } else {
+        // Add or update restoration marking
+        updatedSurfaces = [
+          ...surfaces.filter(s => s.surface_code !== surfaceCode),
+          { surface_code: surfaceCode, status: 'filled' as const }
+        ]
+      }
+    } else {
+      return
+    }
+    
+    const updatedTooth = { ...tooth, surfaces: updatedSurfaces }
+    handleToothUpdate(updatedTooth)
   }
 
   // Get display tooth number based on numbering system
@@ -260,152 +322,91 @@ export function InteractiveDentalChart({
               className="w-full h-auto"
               style={{ maxHeight: "600px" }}
             >
-              {/* Upper Arch */}
-              <g id="upper-arch">
-                {/* Upper Right (1-8) */}
-                {chart.teeth.slice(0, 8).map((tooth, idx) => (
-                  <g 
+              {/* Render all 32 teeth with realistic shapes */}
+              {chart.teeth.map((tooth) => {
+                const position = calculateToothPosition(
+                  parseInt(tooth.tooth_number),
+                  800,
+                  600
+                )
+                return (
+                  <ToothRenderer
                     key={tooth.tooth_number}
-                    onClick={() => setSelectedTooth(tooth)}
-                    className="cursor-pointer"
-                    style={{ transition: "all 0.2s" }}
-                  >
-                    <rect
-                      x={50 + idx * 45}
-                      y={100}
-                      width={40}
-                      height={60}
-                      fill={statusColors[tooth.status]}
-                      stroke={selectedTooth?.tooth_number === tooth.tooth_number ? "#0d9488" : "#64748b"}
-                      strokeWidth={selectedTooth?.tooth_number === tooth.tooth_number ? "3" : "2"}
-                      rx="6"
-                      className="hover:stroke-teal-600 hover:stroke-[3]"
-                    />
-                    <text
-                      x={50 + idx * 45 + 20}
-                      y={135}
-                      textAnchor="middle"
-                      className="text-xs font-semibold fill-slate-700"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {getDisplayToothNumber(tooth.tooth_number)}
-                    </text>
-                  </g>
-                ))}
-
-                {/* Upper Left (9-16) */}
-                {chart.teeth.slice(8, 16).map((tooth, idx) => (
-                  <g 
-                    key={tooth.tooth_number}
-                    onClick={() => setSelectedTooth(tooth)}
-                    className="cursor-pointer"
-                  >
-                    <rect
-                      x={420 + idx * 45}
-                      y={100}
-                      width={40}
-                      height={60}
-                      fill={statusColors[tooth.status]}
-                      stroke={selectedTooth?.tooth_number === tooth.tooth_number ? "#0d9488" : "#64748b"}
-                      strokeWidth={selectedTooth?.tooth_number === tooth.tooth_number ? "3" : "2"}
-                      rx="6"
-                      className="hover:stroke-teal-600 hover:stroke-[3]"
-                    />
-                    <text
-                      x={420 + idx * 45 + 20}
-                      y={135}
-                      textAnchor="middle"
-                      className="text-xs font-semibold fill-slate-700"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {getDisplayToothNumber(tooth.tooth_number)}
-                    </text>
-                  </g>
-                ))}
-              </g>
-
+                    tooth={tooth}
+                    isSelected={selectedTooth?.tooth_number === tooth.tooth_number}
+                    onToothClick={() => setSelectedTooth(tooth)}
+                    onSurfaceClick={(surface) => handleSurfaceClick(tooth, surface)}
+                    displayNumber={getDisplayToothNumber(tooth.tooth_number)}
+                    position={position}
+                    scale={position.scale}
+                    rotation={position.rotation}
+                  />
+                )
+              })}
+              
               {/* Center Line */}
-              <line x1="400" y1="80" x2="400" y2="520" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="5,5" />
-
-              {/* Lower Arch */}
-              <g id="lower-arch">
-                {/* Lower Left (17-24) */}
-                {chart.teeth.slice(16, 24).map((tooth, idx) => (
-                  <g 
-                    key={tooth.tooth_number}
-                    onClick={() => setSelectedTooth(tooth)}
-                    className="cursor-pointer"
-                  >
-                    <rect
-                      x={420 + idx * 45}
-                      y={400}
-                      width={40}
-                      height={60}
-                      fill={statusColors[tooth.status]}
-                      stroke={selectedTooth?.tooth_number === tooth.tooth_number ? "#0d9488" : "#64748b"}
-                      strokeWidth={selectedTooth?.tooth_number === tooth.tooth_number ? "3" : "2"}
-                      rx="6"
-                      className="hover:stroke-teal-600 hover:stroke-[3]"
-                    />
-                    <text
-                      x={420 + idx * 45 + 20}
-                      y={435}
-                      textAnchor="middle"
-                      className="text-xs font-semibold fill-slate-700"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {getDisplayToothNumber(tooth.tooth_number)}
-                    </text>
-                  </g>
-                ))}
-
-                {/* Lower Right (25-32) */}
-                {chart.teeth.slice(24, 32).map((tooth, idx) => (
-                  <g 
-                    key={tooth.tooth_number}
-                    onClick={() => setSelectedTooth(tooth)}
-                    className="cursor-pointer"
-                  >
-                    <rect
-                      x={50 + idx * 45}
-                      y={400}
-                      width={40}
-                      height={60}
-                      fill={statusColors[tooth.status]}
-                      stroke={selectedTooth?.tooth_number === tooth.tooth_number ? "#0d9488" : "#64748b"}
-                      strokeWidth={selectedTooth?.tooth_number === tooth.tooth_number ? "3" : "2"}
-                      rx="6"
-                      className="hover:stroke-teal-600 hover:stroke-[3]"
-                    />
-                    <text
-                      x={50 + idx * 45 + 20}
-                      y={435}
-                      textAnchor="middle"
-                      className="text-xs font-semibold fill-slate-700"
-                      style={{ pointerEvents: "none" }}
-                    >
-                      {getDisplayToothNumber(tooth.tooth_number)}
-                    </text>
-                  </g>
-                ))}
-              </g>
-
-              {/* Labels */}
-              <text x="20" y="135" className="text-sm font-medium fill-slate-500">Upper</text>
-              <text x="20" y="435" className="text-sm font-medium fill-slate-500">Lower</text>
+              <line 
+                x1="400" 
+                y1="120" 
+                x2="400" 
+                y2="480" 
+                stroke="#cbd5e1" 
+                strokeWidth="2" 
+                strokeDasharray="5,5" 
+              />
+              
+              {/* Arch Labels */}
+              <text x="40" y="180" className="text-sm font-medium fill-slate-500">Upper</text>
+              <text x="40" y="420" className="text-sm font-medium fill-slate-500">Lower</text>
+              <text x="730" y="180" className="text-sm font-medium fill-slate-500">Upper</text>
+              <text x="730" y="420" className="text-sm font-medium fill-slate-500">Lower</text>
             </svg>
 
+            {/* Tool Selection */}
+            {!isReadOnly && (
+              <div className="mt-4 flex items-center gap-2 p-2 bg-slate-50 rounded-lg border">
+                <span className="text-xs font-medium text-slate-600">Tool:</span>
+                <Button
+                  size="sm"
+                  variant={activeTool === 'select' ? 'default' : 'outline'}
+                  onClick={() => setActiveTool('select')}
+                  className="h-7 text-xs"
+                >
+                  Select
+                </Button>
+                <Button
+                  size="sm"
+                  variant={activeTool === 'cavity' ? 'default' : 'outline'}
+                  onClick={() => setActiveTool('cavity')}
+                  className="h-7 text-xs"
+                >
+                  Mark Cavity
+                </Button>
+                <Button
+                  size="sm"
+                  variant={activeTool === 'restoration' ? 'default' : 'outline'}
+                  onClick={() => setActiveTool('restoration')}
+                  className="h-7 text-xs"
+                >
+                  Mark Restoration
+                </Button>
+              </div>
+            )}
+
             {/* Legend */}
-            <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {Object.entries(statusColors).map(([status, color]) => (
-                <div key={status} className="flex items-center gap-2">
-                  <div 
-                    className="w-4 h-4 rounded border border-slate-300"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-xs text-slate-600 capitalize">{status}</span>
-                </div>
-              ))}
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold text-slate-700">Surface Status Colors:</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                {Object.entries(surfaceStatusColors).map(([status, color]) => (
+                  <div key={status} className="flex items-center gap-2">
+                    <div 
+                      className="w-3 h-3 rounded border border-slate-300"
+                      style={{ backgroundColor: color }}
+                    />
+                    <span className="text-xs text-slate-600 capitalize">{status}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

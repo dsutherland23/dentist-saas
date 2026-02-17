@@ -199,9 +199,47 @@ export function ToothDetailPanel({
           />
         </div>
 
-        {/* Surfaces */}
+        {/* Surfaces with Visual Selector */}
         <div className="space-y-3">
           <Label>Surfaces</Label>
+          
+          {/* Mini tooth diagram for visual reference */}
+          <div className="bg-slate-50 p-4 rounded-lg border">
+            <svg viewBox="0 0 100 100" className="w-full h-32">
+              {/* Simple tooth outline */}
+              <rect x="30" y="20" width="40" height="50" rx="8" fill="#f5f1e8" stroke="#64748b" strokeWidth="2" />
+              
+              {/* Surface labels */}
+              <text x="10" y="48" className="text-xs fill-slate-600" fontSize="10">M</text>
+              <text x="85" y="48" className="text-xs fill-slate-600" fontSize="10">D</text>
+              <text x="50" y="15" textAnchor="middle" className="text-xs fill-slate-600" fontSize="10">O</text>
+              <text x="50" y="50" textAnchor="middle" className="text-xs fill-slate-600" fontSize="10">B/F</text>
+              <text x="50" y="95" textAnchor="middle" className="text-xs fill-slate-600" fontSize="10">L</text>
+              
+              {/* Surface status indicators */}
+              {editedTooth.surfaces.map((surface) => {
+                const statusColor = surface.status === 'decay' ? '#ef4444' : 
+                                  surface.status === 'filled' ? '#3b82f6' : 
+                                  surface.status === 'crown' ? '#8b5cf6' :
+                                  surface.status === 'fracture' ? '#f97316' : '#10b981'
+                const surfaceCode = surface.surface_code
+                let cx = 50, cy = 50
+                if (surfaceCode === 'M') cx = 35
+                if (surfaceCode === 'D') cx = 65
+                if (surfaceCode === 'O' || surfaceCode === 'I') cy = 30
+                if (surfaceCode === 'B' || surfaceCode === 'F') cy = 45
+                if (surfaceCode === 'L') cy = 60
+                
+                return surface.status !== 'healthy' ? (
+                  <circle key={surface.surface_code} cx={cx} cy={cy} r="4" fill={statusColor} />
+                ) : null
+              })}
+            </svg>
+            <p className="text-xs text-slate-500 text-center mt-2">
+              M=Mesial, D=Distal, O=Occlusal, B/F=Buccal/Facial, L=Lingual
+            </p>
+          </div>
+          
           <div className="grid grid-cols-2 gap-2">
             {editedTooth.surfaces.map((surface) => (
               <div key={surface.surface_code} className="space-y-1">
@@ -218,17 +256,50 @@ export function ToothDetailPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="healthy">Healthy</SelectItem>
-                    <SelectItem value="decay">Decay</SelectItem>
-                    <SelectItem value="filled">Filled</SelectItem>
+                    <SelectItem value="decay">Cavity/Decay</SelectItem>
+                    <SelectItem value="filled">Filled/Restoration</SelectItem>
                     <SelectItem value="crown">Crown</SelectItem>
                     <SelectItem value="fracture">Fracture</SelectItem>
-                    <SelectItem value="planned">Planned</SelectItem>
+                    <SelectItem value="planned">Planned Treatment</SelectItem>
                     <SelectItem value="missing">Missing</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Treatment Planning */}
+        <div className="space-y-2 pt-2 border-t">
+          <Label>Planned Treatment</Label>
+          <Select
+            value={editedTooth.status === 'planned' ? 'planned' : 'none'}
+            onValueChange={(v) => {
+              if (v !== 'none') {
+                updateField("status", "planned")
+              }
+            }}
+            disabled={readOnly}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select treatment..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No planned treatment</SelectItem>
+              <SelectItem value="filling">Filling/Restoration</SelectItem>
+              <SelectItem value="crown">Crown</SelectItem>
+              <SelectItem value="root_canal">Root Canal</SelectItem>
+              <SelectItem value="extraction">Extraction</SelectItem>
+              <SelectItem value="implant">Implant</SelectItem>
+              <SelectItem value="veneer">Veneer</SelectItem>
+              <SelectItem value="onlay">Onlay/Inlay</SelectItem>
+            </SelectContent>
+          </Select>
+          {editedTooth.status === 'planned' && (
+            <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+              Treatment planned
+            </Badge>
+          )}
         </div>
 
         {/* Diagnoses */}

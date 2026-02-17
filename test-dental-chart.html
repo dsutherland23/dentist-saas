@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dental Chart Verification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .checklist {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .checklist h3 {
+            margin-top: 0;
+        }
+        .checklist label {
+            display: block;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        .checklist input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        iframe {
+            width: 100%;
+            height: 800px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        .legend {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dental Chart Layout Verification</h1>
+        
+        <div class="info">
+            <p><strong>Patient ID:</strong> 4ae47eea-d953-4f6c-88df-2102a123d926</p>
+            <p><strong>URL:</strong> <a href="http://localhost:3000/patients/4ae47eea-d953-4f6c-88df-2102a123d926" target="_blank">Open Patient Profile</a></p>
+        </div>
+
+        <div class="checklist">
+            <h3>Verification Checklist</h3>
+            <label>
+                <input type="checkbox" id="check1">
+                <strong>1. All 32 teeth visible</strong> - Count all teeth in the chart (should see 8 per quadrant)
+            </label>
+            <label>
+                <input type="checkbox" id="check2">
+                <strong>2. Teeth touching side-by-side</strong> - No gaps between adjacent teeth, they should touch
+            </label>
+            <label>
+                <input type="checkbox" id="check3">
+                <strong>3. No overlapping teeth</strong> - Each tooth should be distinct and not overlap with neighbors
+            </label>
+            <label>
+                <input type="checkbox" id="check4">
+                <strong>4. U-shaped arches</strong> - Upper arch curves downward, lower arch curves upward
+            </label>
+            <label>
+                <input type="checkbox" id="check5">
+                <strong>5. FDI numbering correct</strong> - Toggle to FDI: Upper right 18-11, Upper left 21-28, Lower left 31-38, Lower right 41-48
+            </label>
+            <label>
+                <input type="checkbox" id="check6">
+                <strong>6. Universal numbering correct</strong> - Toggle to Universal: Upper right 1-8, Upper left 9-16, Lower left 17-24, Lower right 25-32
+            </label>
+            <label>
+                <input type="checkbox" id="check7">
+                <strong>7. No teeth cut off at edges</strong> - All teeth fully visible within the card boundaries
+            </label>
+            <label>
+                <input type="checkbox" id="check8">
+                <strong>8. Tooth colors display correctly</strong> - Healthy teeth should be green/natural color
+            </label>
+            <label>
+                <input type="checkbox" id="check9">
+                <strong>9. Clicking teeth opens detail panel</strong> - Click any tooth to see if detail panel appears on the right
+            </label>
+            <label>
+                <input type="checkbox" id="check10">
+                <strong>10. Numbering system toggle works</strong> - Switch between FDI and Universal to verify numbers change
+            </label>
+        </div>
+
+        <div class="legend">
+            <h3 style="grid-column: 1/-1;">Expected Tooth Colors (Conditions)</h3>
+            <div class="legend-item">
+                <div class="color-box" style="background: #4CAF50;"></div>
+                <span>Healthy</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #F44336;"></div>
+                <span>Decay</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #2196F3;"></div>
+                <span>Restoration</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #9C27B0;"></div>
+                <span>Crown</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #FF9800;"></div>
+                <span>Fracture</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #FFC107;"></div>
+                <span>Wear</span>
+            </div>
+        </div>
+
+        <h2>Expected Layout</h2>
+        <div style="background: #f0f0f0; padding: 20px; border-radius: 4px; margin: 20px 0;">
+            <pre style="margin: 0; font-family: monospace; font-size: 12px;">
+SVG ViewBox: 0 0 1200 800
+Centerline: X=600
+
+UPPER ARCH (Y ~120-210):
+  Upper Right (Q1): FDI 18-11 | Universal 1-8  | X: 145 → 555
+  Upper Left  (Q2): FDI 21-28 | Universal 9-16 | X: 645 → 1053
+
+LOWER ARCH (Y ~560-660):
+  Lower Left  (Q3): FDI 31-38 | Universal 17-24 | X: 645 → 1053
+  Lower Right (Q4): FDI 41-48 | Universal 25-32 | X: 555 → 145
+
+Tooth positions follow smooth curves with teeth touching side-by-side.
+            </pre>
+        </div>
+
+        <h2>Instructions</h2>
+        <ol>
+            <li>Open the patient profile link above in a new tab</li>
+            <li>Scroll down to the "Dental Chart" section</li>
+            <li>Verify each item in the checklist above</li>
+            <li>Test the FDI/Universal toggle button</li>
+            <li>Click on different teeth to verify the detail panel opens</li>
+            <li>Take a screenshot if any issues are found</li>
+        </ol>
+
+        <div style="margin-top: 30px; padding: 15px; background: #fff3cd; border-radius: 4px;">
+            <strong>Note:</strong> The dental chart uses static SVG paths for precise positioning. Each tooth is pre-defined
+            with exact coordinates to ensure they touch side-by-side without overlapping, forming realistic U-shaped arches.
+        </div>
+    </div>
+
+    <script>
+        // Save checkbox states to localStorage
+        document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            const savedState = localStorage.getItem(checkbox.id);
+            if (savedState === 'true') {
+                checkbox.checked = true;
+            }
+            
+            checkbox.addEventListener('change', () => {
+                localStorage.setItem(checkbox.id, checkbox.checked);
+            });
+        });
+    </script>
+</body>
+</html>

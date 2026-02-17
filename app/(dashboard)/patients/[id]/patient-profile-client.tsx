@@ -69,7 +69,7 @@ import { useRouter } from "next/navigation"
 import { ProfilePictureUpload } from "@/components/patients/profile-picture-upload"
 import { AIInsightsCards } from "@/components/patients/ai-insights-cards"
 import { MedicalImageGallery } from "@/components/patients/medical-image-gallery"
-import { InteractiveDentalChart } from "@/components/dental-chart/interactive-dental-chart"
+import { DentalChartV2Container } from "@/components/dental-chart-v2/DentalChartV2Container"
 
 interface PatientProfileClientProps {
     patient: {
@@ -785,7 +785,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 </Card>
 
                 {/* Dental Chart Section */}
-                <InteractiveDentalChart patientId={patient.id} />
+                <DentalChartV2Container patientId={patient.id} />
 
                 {/* Medical History & Insurance Side-by-Side */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

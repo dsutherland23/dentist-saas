@@ -102,10 +102,12 @@ ALTER TABLE time_off_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE team_planner_audit_log ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for staff_schedules
+DROP POLICY IF EXISTS "Users can view schedules in their clinic" ON staff_schedules;
 CREATE POLICY "Users can view schedules in their clinic"
     ON staff_schedules FOR SELECT
     USING (clinic_id IN (SELECT clinic_id FROM users WHERE id = auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can manage schedules" ON staff_schedules;
 CREATE POLICY "Admins can manage schedules"
     ON staff_schedules FOR ALL
     USING (
@@ -118,10 +120,12 @@ CREATE POLICY "Admins can manage schedules"
     );
 
 -- RLS Policies for staff_schedule_overrides
+DROP POLICY IF EXISTS "Users can view overrides in their clinic" ON staff_schedule_overrides;
 CREATE POLICY "Users can view overrides in their clinic"
     ON staff_schedule_overrides FOR SELECT
     USING (clinic_id IN (SELECT clinic_id FROM users WHERE id = auth.uid()));
 
+DROP POLICY IF EXISTS "Admins can manage overrides" ON staff_schedule_overrides;
 CREATE POLICY "Admins can manage overrides"
     ON staff_schedule_overrides FOR ALL
     USING (
@@ -134,6 +138,7 @@ CREATE POLICY "Admins can manage overrides"
     );
 
 -- RLS Policies for time_off_requests
+DROP POLICY IF EXISTS "Staff can view their own time off requests" ON time_off_requests;
 CREATE POLICY "Staff can view their own time off requests"
     ON time_off_requests FOR SELECT
     USING (
@@ -146,14 +151,17 @@ CREATE POLICY "Staff can view their own time off requests"
         )
     );
 
+DROP POLICY IF EXISTS "Staff can create their own time off requests" ON time_off_requests;
 CREATE POLICY "Staff can create their own time off requests"
     ON time_off_requests FOR INSERT
     WITH CHECK (staff_id = auth.uid());
 
+DROP POLICY IF EXISTS "Staff can update their own pending requests" ON time_off_requests;
 CREATE POLICY "Staff can update their own pending requests"
     ON time_off_requests FOR UPDATE
     USING (staff_id = auth.uid() AND status = 'pending');
 
+DROP POLICY IF EXISTS "Admins can manage all time off requests" ON time_off_requests;
 CREATE POLICY "Admins can manage all time off requests"
     ON time_off_requests FOR ALL
     USING (
@@ -175,16 +183,19 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply updated_at triggers
+DROP TRIGGER IF EXISTS update_staff_schedules_updated_at ON staff_schedules;
 CREATE TRIGGER update_staff_schedules_updated_at
     BEFORE UPDATE ON staff_schedules
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_schedule_overrides_updated_at ON staff_schedule_overrides;
 CREATE TRIGGER update_schedule_overrides_updated_at
     BEFORE UPDATE ON staff_schedule_overrides
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_time_off_requests_updated_at ON time_off_requests;
 CREATE TRIGGER update_time_off_requests_updated_at
     BEFORE UPDATE ON time_off_requests
     FOR EACH ROW
@@ -211,14 +222,17 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Apply audit triggers
+DROP TRIGGER IF EXISTS audit_staff_schedules ON staff_schedules;
 CREATE TRIGGER audit_staff_schedules
     AFTER INSERT OR UPDATE OR DELETE ON staff_schedules
     FOR EACH ROW EXECUTE FUNCTION log_team_planner_changes();
 
+DROP TRIGGER IF EXISTS audit_schedule_overrides ON staff_schedule_overrides;
 CREATE TRIGGER audit_schedule_overrides
     AFTER INSERT OR UPDATE OR DELETE ON staff_schedule_overrides
     FOR EACH ROW EXECUTE FUNCTION log_team_planner_changes();
 
+DROP TRIGGER IF EXISTS audit_time_off_requests ON time_off_requests;
 CREATE TRIGGER audit_time_off_requests
     AFTER INSERT OR UPDATE OR DELETE ON time_off_requests
     FOR EACH ROW EXECUTE FUNCTION log_team_planner_changes();
