@@ -17,14 +17,16 @@ export default function TeamPlannerPage() {
                 <p className="text-slate-500 mt-1">Manage staff schedules, time-off requests, and workload distribution</p>
             </div>
 
-            {/* Tabs Navigation */}
+            {/* Tabs Navigation — scrollable on small screens to prevent overflow */}
             <Tabs defaultValue="rota" className="w-full min-w-0">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
+                <TabsList
+                    className="flex w-full min-w-0 overflow-x-auto flex-nowrap gap-0.5 rounded-lg border border-slate-200 bg-white p-1 shadow-sm [&>button]:shrink-0 [&>button]:min-w-[max-content] md:grid md:grid-cols-4 md:overflow-visible md:[&>button]:min-w-0"
+                >
                     <TabsTrigger
                         value="rota"
                         className="flex items-center gap-2 data-[state=active]:bg-teal-600 data-[state=active]:text-white"
                     >
-                        <Clock className="h-4 w-4" />
+                        <Clock className="h-4 w-4 shrink-0" />
                         <span className="hidden sm:inline">Rota Management</span>
                         <span className="sm:hidden">Rota</span>
                     </TabsTrigger>
@@ -32,7 +34,7 @@ export default function TeamPlannerPage() {
                         value="time-off"
                         className="flex items-center gap-2 data-[state=active]:bg-teal-600 data-[state=active]:text-white"
                     >
-                        <UserCheck className="h-4 w-4" />
+                        <UserCheck className="h-4 w-4 shrink-0" />
                         <span className="hidden sm:inline">Time-Off Requests</span>
                         <span className="sm:hidden">Time-Off</span>
                     </TabsTrigger>
@@ -40,7 +42,7 @@ export default function TeamPlannerPage() {
                         value="calendar"
                         className="flex items-center gap-2 data-[state=active]:bg-teal-600 data-[state=active]:text-white"
                     >
-                        <Calendar className="h-4 w-4" />
+                        <Calendar className="h-4 w-4 shrink-0" />
                         <span className="hidden sm:inline">Team Calendar</span>
                         <span className="sm:hidden">Calendar</span>
                     </TabsTrigger>
@@ -48,26 +50,26 @@ export default function TeamPlannerPage() {
                         value="workload"
                         className="flex items-center gap-2 data-[state=active]:bg-teal-600 data-[state=active]:text-white"
                     >
-                        <BarChart3 className="h-4 w-4" />
+                        <BarChart3 className="h-4 w-4 shrink-0" />
                         <span className="hidden sm:inline">Workload Overview</span>
                         <span className="sm:hidden">Workload</span>
                     </TabsTrigger>
                 </TabsList>
 
-                {/* Tab Content */}
-                <TabsContent value="rota" className="mt-6">
+                {/* Tab Content — min-w-0 to prevent horizontal overflow on small screens */}
+                <TabsContent value="rota" className="mt-6 min-w-0">
                     <RotaManagement />
                 </TabsContent>
 
-                <TabsContent value="time-off" className="mt-6">
+                <TabsContent value="time-off" className="mt-6 min-w-0">
                     <TimeOffRequests />
                 </TabsContent>
 
-                <TabsContent value="calendar" className="mt-6">
+                <TabsContent value="calendar" className="mt-6 min-w-0">
                     <TeamAvailabilityCalendar />
                 </TabsContent>
 
-                <TabsContent value="workload" className="mt-6">
+                <TabsContent value="workload" className="mt-6 min-w-0">
                     <WorkloadOverview />
                 </TabsContent>
             </Tabs>

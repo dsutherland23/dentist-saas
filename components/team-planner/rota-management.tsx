@@ -169,66 +169,68 @@ export function RotaManagement() {
     return (
         <div className="space-y-6">
             {/* Header Controls */}
-            <Card className="shadow-sm">
+            <Card className="shadow-sm min-w-0 overflow-hidden">
                 <CardHeader>
-                    <div className="flex items-center justify-between">
-                        <div>
+                    <div className="flex flex-col gap-4 min-w-0 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
                             <CardTitle>Weekly Rota</CardTitle>
                             <CardDescription>Set recurring weekly schedules for staff members</CardDescription>
                         </div>
-                        <div className="flex gap-3">
-                            <Button variant="outline" onClick={copyWeek}>
-                                <Copy className="h-4 w-4 mr-2" />
+                        <div className="flex flex-wrap gap-2 shrink-0">
+                            <Button variant="outline" onClick={copyWeek} className="whitespace-nowrap">
+                                <Copy className="h-4 w-4 mr-2 shrink-0" />
                                 Copy Week
                             </Button>
                             <Button
                                 onClick={saveSchedules}
                                 disabled={isSaving}
-                                className="bg-teal-600 hover:bg-teal-700"
+                                className="bg-teal-600 hover:bg-teal-700 whitespace-nowrap"
                             >
                                 {isSaving ? (
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin shrink-0" />
                                 ) : (
-                                    <Save className="h-4 w-4 mr-2" />
+                                    <Save className="h-4 w-4 mr-2 shrink-0" />
                                 )}
-                                Save Changes
+                                Save
                             </Button>
                         </div>
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex items-center gap-4">
-                        <Label htmlFor="staff-select" className="text-sm font-medium">Select Staff Member:</Label>
-                        <Select value={selectedStaff} onValueChange={setSelectedStaff}>
-                            <SelectTrigger className="w-64">
-                                <SelectValue placeholder="Choose staff..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {staff.map(member => (
-                                    <SelectItem key={member.id} value={member.id}>
-                                        {member.first_name} {member.last_name} - {member.role}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {selectedStaffMember && (
-                            <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200">
-                                {selectedStaffMember.role}
-                            </Badge>
-                        )}
+                    <div className="flex flex-col gap-3 min-w-0 sm:flex-row sm:items-center sm:gap-4">
+                        <Label htmlFor="staff-select" className="text-sm font-medium shrink-0">Select Staff Member:</Label>
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-initial sm:flex-nowrap">
+                            <Select value={selectedStaff} onValueChange={setSelectedStaff}>
+                                <SelectTrigger id="staff-select" className="min-w-0 w-full sm:w-64">
+                                    <SelectValue placeholder="Choose staff..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {staff.map(member => (
+                                        <SelectItem key={member.id} value={member.id}>
+                                            {member.first_name} {member.last_name} - {member.role}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {selectedStaffMember && (
+                                <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 shrink-0">
+                                    {selectedStaffMember.role}
+                                </Badge>
+                            )}
+                        </div>
                     </div>
                 </CardContent>
             </Card>
 
             {/* Schedule Grid */}
-            <div className="grid gap-4">
+            <div className="grid gap-4 min-w-0">
                 {DAYS_OF_WEEK.map(day => {
                     const daySchedules = schedules.filter(s => s.day_of_week === day.value)
 
                     return (
-                        <Card key={day.value} className="shadow-sm">
+                        <Card key={day.value} className="shadow-sm min-w-0 overflow-hidden">
                             <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col gap-2 min-w-0 sm:flex-row sm:items-center sm:justify-between">
                                     <CardTitle className="text-lg font-semibold text-slate-900">
                                         {day.label}
                                     </CardTitle>
@@ -236,9 +238,9 @@ export function RotaManagement() {
                                         size="sm"
                                         variant="outline"
                                         onClick={() => addScheduleSlot(day.value)}
-                                        className="text-teal-600 border-teal-200 hover:bg-teal-50"
+                                        className="text-teal-600 border-teal-200 hover:bg-teal-50 w-full sm:w-auto"
                                     >
-                                        <Plus className="h-4 w-4 mr-1" />
+                                        <Plus className="h-4 w-4 mr-1 shrink-0" />
                                         Add Shift
                                     </Button>
                                 </div>
@@ -252,41 +254,51 @@ export function RotaManagement() {
                                             if (schedule.day_of_week !== day.value) return null
 
                                             return (
-                                                <div key={index} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                                    <Clock className="h-4 w-4 text-slate-400" />
-                                                    <div className="flex items-center gap-2 flex-1">
+                                                <div
+                                                    key={index}
+                                                    className="flex min-w-0 flex-col gap-3 rounded-lg border border-slate-100 bg-slate-50 p-4 sm:flex-row sm:items-center sm:gap-4"
+                                                >
+                                                    {/* Time range row — min-width on inputs so "09:00" doesn't truncate */}
+                                                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                                                        <Clock className="h-4 w-4 shrink-0 text-slate-400" />
                                                         <Input
                                                             type="time"
                                                             value={schedule.start_time}
                                                             onChange={(e) => updateSchedule(index, 'start_time', e.target.value)}
-                                                            className="w-32"
+                                                            className="min-w-[7.5rem] max-w-[8rem] shrink-0"
+                                                            aria-label="Start time"
                                                         />
-                                                        <span className="text-slate-500">to</span>
+                                                        <span className="shrink-0 text-slate-500">to</span>
                                                         <Input
                                                             type="time"
                                                             value={schedule.end_time}
                                                             onChange={(e) => updateSchedule(index, 'end_time', e.target.value)}
-                                                            className="w-32"
+                                                            className="min-w-[7.5rem] max-w-[8rem] shrink-0"
+                                                            aria-label="End time"
                                                         />
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <Label htmlFor={`active-${index}`} className="text-sm text-slate-600">
-                                                            Active
-                                                        </Label>
-                                                        <Switch
-                                                            id={`active-${index}`}
-                                                            checked={schedule.is_active}
-                                                            onCheckedChange={(checked) => updateSchedule(index, 'is_active', checked)}
-                                                        />
+                                                    {/* Active + Delete row */}
+                                                    <div className="flex shrink-0 items-center justify-between gap-3 border-t border-slate-200 pt-3 sm:justify-end sm:border-0 sm:pt-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <Label htmlFor={`active-${index}`} className="text-sm text-slate-600">
+                                                                Active
+                                                            </Label>
+                                                            <Switch
+                                                                id={`active-${index}`}
+                                                                checked={schedule.is_active}
+                                                                onCheckedChange={(checked) => updateSchedule(index, 'is_active', checked)}
+                                                            />
+                                                        </div>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => removeSchedule(index)}
+                                                            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                                                            aria-label="Remove shift"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
                                                     </div>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => removeSchedule(index)}
-                                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
                                                 </div>
                                             )
                                         })}

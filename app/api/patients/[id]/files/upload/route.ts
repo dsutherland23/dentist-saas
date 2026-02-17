@@ -74,7 +74,7 @@ export async function POST(
             .insert({
                 clinic_id: userData.clinic_id,
                 patient_id: patientId,
-                name: name || file.name,
+                name,
                 type,
                 file_path: filePath,
                 created_by: user.id,

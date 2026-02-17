@@ -579,20 +579,22 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
     const startCamera = async () => {
         try {
-            const constraints: MediaStreamConstraints = {
-                video: {
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 },
-                },
+            const videoConstraints: MediaTrackConstraints = {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
             }
             let stream: MediaStream | null = null
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { ...constraints.video, facingMode: "environment" } })
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { ...videoConstraints, facingMode: "environment" },
+                })
             } catch {
                 try {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: { ...constraints.video, facingMode: "user" } })
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        video: { ...videoConstraints, facingMode: "user" },
+                    })
                 } catch {
-                    stream = await navigator.mediaDevices.getUserMedia(constraints)
+                    stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints })
                 }
             }
             setCameraStream(stream)
