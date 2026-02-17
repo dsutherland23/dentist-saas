@@ -36,25 +36,30 @@ export async function POST(
         }
 
         const formData = await request.formData()
-        const file = formData.get("file") as File | null
-        const name = (formData.get("name") as string) || file?.name || "Untitled"
+        const fileValue = formData.get("file")
+        const name = (formData.get("name") as string) || (fileValue && typeof (fileValue as File).name === "string" ? (fileValue as File).name : null) || "Untitled"
         const type = (formData.get("type") as string) || "document"
 
-        if (!file || !(file instanceof File)) {
-            return NextResponse.json({ error: "No file provided" }, { status: 400 })
+        // Accept File or Blob (e.g. from camera capture or multipart parsing)
+        const hasArrayBuffer = fileValue && typeof (fileValue as Blob).arrayBuffer === "function"
+        const size = hasArrayBuffer ? (fileValue as Blob).size : 0
+        if (!hasArrayBuffer || size === 0) {
+            return NextResponse.json({ error: "No file provided or file is empty" }, { status: 400 })
         }
 
-        if (file.size > MAX_FILE_SIZE_BYTES) {
+        if (size > MAX_FILE_SIZE_BYTES) {
             return NextResponse.json({ error: `File must be under ${MAX_FILE_SIZE_MB}MB` }, { status: 400 })
         }
 
-        const fileExt = file.name.split(".").pop() || "bin"
+        const buffer = Buffer.from(await (fileValue as Blob).arrayBuffer())
+        const fileExt = (fileValue as File).name?.split(".").pop() || (type === "xray" || type === "intraoral" || type === "3d_scan" ? "jpg" : "bin")
         const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`
         const filePath = `${patientId}/${fileName}`
 
+        const contentType = (fileValue as Blob).type || (fileExt === "jpg" || fileExt === "jpeg" ? "image/jpeg" : "application/octet-stream")
         const { error: uploadError } = await supabase.storage
             .from("patient-files")
-            .upload(filePath, file, { upsert: false })
+            .upload(filePath, buffer, { upsert: false, contentType })
 
         if (uploadError) {
             console.error("[FILES_UPLOAD] Storage error:", uploadError)

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -48,6 +48,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
     Select,
     SelectContent,
@@ -145,17 +146,43 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [patientInvoices, setPatientInvoices] = useState<{ id: string; invoice_number: string; total_amount: number; status: string; created_at: string }[]>([])
     const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
     const [medicalImageTab, setMedicalImageTab] = useState<"xray" | "intraoral" | "3d_scan" | "add">("xray")
+    const [reportDialogOpen, setReportDialogOpen] = useState(false)
+    const [reportSections, setReportSections] = useState({ summary: true, treatments: true, appointments: true, billing: true })
+    const [reportFormat, setReportFormat] = useState<"csv" | "text">("csv")
 
     // Calculate patient age and last visit
-    const patientAge = patient.date_of_birth 
+    const patientAge = patient.date_of_birth
         ? new Date().getFullYear() - new Date(patient.date_of_birth).getFullYear()
         : null
-    
-    const lastVisit = appointments.find(a => a.status === 'completed')
+
+    const lastVisit = appointments.find(a => a.status === "completed")
     const lastVisitDate = lastVisit ? format(new Date(lastVisit.start_time), "MMM d, yyyy") : "Never"
-    
+
+    // Derive payment history for AI insights from invoices
+    const paidCount = patientInvoices.filter((inv) => inv.status === "paid").length
+    const overdueCount = patientInvoices.filter((inv) => inv.status === "overdue").length
+    const paymentHistoryDerived: "excellent" | "good" | "poor" =
+        patientInvoices.length === 0 ? "good" : overdueCount > 0 ? "poor" : paidCount === patientInvoices.length ? "excellent" : "good"
+
+    // Derive preventive care status from last completed visit (e.g. > 6 months = due/overdue)
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+    const lastVisitDateObj = lastVisit ? new Date(lastVisit.start_time) : null
+    const preventiveCareStatusDerived: "due" | "current" | "overdue" =
+        !lastVisitDateObj ? "due" : lastVisitDateObj < sixMonthsAgo ? "overdue" : "current"
+
     // Calculate missed appointments for AI insights
-    const missedAppointments = appointments.filter(a => a.status === 'no_show').length
+    const missedAppointments = appointments.filter((a) => a.status === "no_show").length
+
+    // Appointments: upcoming (scheduled/confirmed) and recent past (completed) for display
+    const now = new Date()
+    const upcomingAppointments = appointments
+        .filter((a) => ["scheduled", "confirmed", "checked_in", "in_treatment"].includes(a.status) && new Date(a.start_time) >= now)
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const recentPastAppointments = appointments
+        .filter((a) => a.status === "completed")
+        .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+        .slice(0, 5)
 
     // Form States
     const [alertsData, setAlertsData] = useState({
@@ -505,7 +532,11 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const handleFileUpload = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!fileData.file) {
-            toast.error("Please select a file")
+            toast.error("Please select a file or capture a photo first")
+            return
+        }
+        if (fileData.file.size === 0) {
+            toast.error("File is empty. Try capturing the photo again or choose a different file.")
             return
         }
         if (fileData.file.size > MAX_FILE_SIZE_BYTES) {
@@ -546,33 +577,70 @@ export default function PatientProfileClient({ patient, appointments, treatments
         }
     }
 
-    const startCamera = () => {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => {
-                setCameraStream(stream)
-                if (videoRef.current) videoRef.current.srcObject = stream
-            })
-            .catch(() => toast.error("Camera access denied or unavailable"))
+    const startCamera = async () => {
+        try {
+            const constraints: MediaStreamConstraints = {
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                },
+            }
+            let stream: MediaStream | null = null
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { ...constraints.video, facingMode: "environment" } })
+            } catch {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: { ...constraints.video, facingMode: "user" } })
+                } catch {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints)
+                }
+            }
+            setCameraStream(stream)
+        } catch (err) {
+            console.error("Camera error:", err)
+            toast.error("Camera access denied or unavailable. Use a device with a camera or upload a file instead.")
+        }
     }
 
+    useEffect(() => {
+        if (!cameraStream || !videoRef.current) return
+        videoRef.current.srcObject = cameraStream
+        return () => {
+            if (videoRef.current) videoRef.current.srcObject = null
+        }
+    }, [cameraStream])
+
     const stopCamera = () => {
-        cameraStream?.getTracks().forEach(t => t.stop())
+        cameraStream?.getTracks().forEach((t) => t.stop())
         setCameraStream(null)
         if (videoRef.current) videoRef.current.srcObject = null
     }
 
     const capturePhoto = () => {
         if (!videoRef.current || !cameraStream) return
+        const video = videoRef.current
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+            toast.error("Video not ready. Wait a moment and try again.")
+            return
+        }
         const canvas = document.createElement("canvas")
-        canvas.width = videoRef.current.videoWidth
-        canvas.height = videoRef.current.videoHeight
-        canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0)
-        canvas.toBlob(blob => {
-            if (!blob) return
-            const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" })
-            setFileData(prev => ({ ...prev, file, type: prev.type === "xray" ? "xray" : "photo" }))
-            stopCamera()
-        }, "image/jpeg", 0.9)
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+        canvas.getContext("2d")?.drawImage(video, 0, 0)
+        canvas.toBlob(
+            (blob) => {
+                if (!blob || blob.size === 0) {
+                    toast.error("Capture failed. Try again.")
+                    return
+                }
+                const file = new File([blob], `photo-${Date.now()}.jpg`, { type: "image/jpeg" })
+                setFileData((prev) => ({ ...prev, file, type: prev.type === "xray" ? "xray" : prev.type === "intraoral" ? "intraoral" : prev.type === "3d_scan" ? "3d_scan" : "photo" }))
+                stopCamera()
+                toast.success("Photo captured. Click Start Secure Upload to save.")
+            },
+            "image/jpeg",
+            0.9
+        )
     }
 
     const handleDeleteTreatment = async (id: string) => {
@@ -603,6 +671,17 @@ export default function PatientProfileClient({ patient, appointments, treatments
             toast.error("Could not open file")
         }
     }
+
+    const getImageUrl = useCallback(
+        async (filePath: string): Promise<string> => {
+            const res = await fetch(`/api/patients/${patient.id}/file-url?path=${encodeURIComponent(filePath)}`)
+            if (!res.ok) throw new Error("Failed to get image URL")
+            const { url } = await res.json()
+            if (!url) throw new Error("No URL returned")
+            return url
+        },
+        [patient.id]
+    )
 
     const handleDeleteFile = async (fileId: string) => {
         try {
@@ -641,8 +720,103 @@ export default function PatientProfileClient({ patient, appointments, treatments
         }
     }
 
+    const handleGenerateReport = () => {
+        const lines: string[] = []
+        const name = `${patient.first_name} ${patient.last_name}`.replace(/,/g, " ")
+        const filename = `patient-report-${name.replace(/\s+/g, "-")}-${format(new Date(), "yyyy-MM-dd")}`
+
+        if (reportFormat === "csv") {
+            if (reportSections.summary) {
+                lines.push("Section,Field,Value")
+                lines.push("Summary,Patient Name," + (patient.first_name + " " + patient.last_name))
+                lines.push("Summary,Date of Birth," + (patient.date_of_birth || "—"))
+                lines.push("Summary,Age," + (patientAge ?? "—"))
+                lines.push("Summary,Phone," + (patient.phone || "—"))
+                lines.push("Summary,Email," + (patient.email || "—"))
+                lines.push("Summary,Address," + (patient.address || "—"))
+                lines.push("Summary,Last Visit," + lastVisitDate)
+                lines.push("Summary,Insurance," + (patient.insurance_provider || "—"))
+                lines.push("Summary,Policy," + (patient.insurance_policy_number || "—"))
+                lines.push("Summary,Allergies," + (patient.allergies || "None"))
+                lines.push("Summary,Medical Conditions," + (patient.medical_conditions || "None"))
+                lines.push("")
+            }
+            if (reportSections.appointments && appointments.length > 0) {
+                lines.push("Appointments,Date,Time,Treatment,Status,Dentist")
+                appointments.slice(0, 50).forEach((a) => {
+                    const dt = new Date(a.start_time)
+                    lines.push(`Appointments,${format(dt, "yyyy-MM-dd")},${format(dt, "HH:mm")},${(a.treatment_type || "—").replace(/,/g, ";")},${a.status},${a.dentists ? `Dr. ${a.dentists.first_name} ${a.dentists.last_name}` : "—"}`)
+                })
+                lines.push("")
+            }
+            if (reportSections.treatments && treatments.length > 0) {
+                lines.push("Treatments,Date,Procedure,Diagnosis,Notes,Dentist")
+                treatments.slice(0, 50).forEach((t) => {
+                    const d = t.dentists ? `Dr. ${t.dentists.first_name} ${t.dentists.last_name}` : "—"
+                    lines.push(`Treatments,${format(new Date(t.created_at), "yyyy-MM-dd")},${(t.procedures_performed || "").replace(/,/g, ";")},${(t.diagnosis || "").replace(/,/g, ";")},${(t.notes || "").replace(/,/g, ";")},${d}`)
+                })
+                lines.push("")
+            }
+            if (reportSections.billing && patientInvoices.length > 0) {
+                lines.push("Billing,Invoice Number,Amount,Status,Date")
+                patientInvoices.forEach((inv) => {
+                    lines.push(`Billing,${inv.invoice_number},${Number(inv.total_amount).toFixed(2)},${inv.status},${format(new Date(inv.created_at), "yyyy-MM-dd")}`)
+                })
+            }
+        } else {
+            if (reportSections.summary) {
+                lines.push("PATIENT SUMMARY")
+                lines.push("Name: " + patient.first_name + " " + patient.last_name)
+                lines.push("DOB: " + (patient.date_of_birth || "—") + "  Age: " + (patientAge ?? "—"))
+                lines.push("Phone: " + (patient.phone || "—"))
+                lines.push("Email: " + (patient.email || "—"))
+                lines.push("Address: " + (patient.address || "—"))
+                lines.push("Last Visit: " + lastVisitDate)
+                lines.push("Insurance: " + (patient.insurance_provider || "—") + "  Policy: " + (patient.insurance_policy_number || "—"))
+                lines.push("Allergies: " + (patient.allergies || "None"))
+                lines.push("Conditions: " + (patient.medical_conditions || "None"))
+                lines.push("")
+            }
+            if (reportSections.appointments && appointments.length > 0) {
+                lines.push("APPOINTMENTS")
+                appointments.slice(0, 50).forEach((a) => {
+                    const dt = new Date(a.start_time)
+                    lines.push(`  ${format(dt, "yyyy-MM-dd HH:mm")}  ${a.treatment_type || "—"}  ${a.status}  ${a.dentists ? `Dr. ${a.dentists.first_name} ${a.dentists.last_name}` : ""}`)
+                })
+                lines.push("")
+            }
+            if (reportSections.treatments && treatments.length > 0) {
+                lines.push("TREATMENT HISTORY")
+                treatments.slice(0, 50).forEach((t) => {
+                    lines.push(`  ${format(new Date(t.created_at), "yyyy-MM-dd")}  ${t.procedures_performed || "—"}`)
+                    if (t.notes) lines.push("    Notes: " + t.notes)
+                })
+                lines.push("")
+            }
+            if (reportSections.billing && patientInvoices.length > 0) {
+                lines.push("BILLING")
+                patientInvoices.forEach((inv) => {
+                    lines.push(`  ${inv.invoice_number}  $${Number(inv.total_amount).toFixed(2)}  ${inv.status}  ${format(new Date(inv.created_at), "yyyy-MM-dd")}`)
+                })
+            }
+        }
+
+        const content = lines.join(reportFormat === "csv" ? "\n" : "\n")
+        const blob = new Blob([content], { type: reportFormat === "csv" ? "text/csv" : "text/plain" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `${filename}.${reportFormat === "csv" ? "csv" : "txt"}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        setReportDialogOpen(false)
+        toast.success("Report downloaded")
+    }
+
     return (
-        <div className="bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
+        <div className="bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border max-w-[100vw]">
             {/* Profile Header with Background */}
             <div className="relative w-full h-48 sm:h-64 bg-gradient-to-r from-teal-500 via-teal-600 to-blue-600">
                 {/* Large Profile Picture */}
@@ -682,38 +856,126 @@ export default function PatientProfileClient({ patient, appointments, treatments
             </div>
 
             {/* Patient Info Bar */}
-            <div className="mt-20 sm:mt-24 px-4 sm:px-8 py-4 bg-white border-b border-slate-200">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
-                    {patientAge && (
-                        <div>
-                            <p className="text-slate-500 font-medium mb-1">Age:</p>
-                            <p className="text-slate-900 font-semibold">{patientAge}</p>
+            <div className="mt-20 sm:mt-24 px-4 sm:px-6 md:px-8 py-4 bg-white border-b border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 text-sm min-w-0">
+                        {patientAge !== null && (
+                            <div className="min-w-0">
+                                <p className="text-slate-500 font-medium mb-1">Age</p>
+                                <p className="text-slate-900 font-semibold truncate">{patientAge}</p>
+                            </div>
+                        )}
+                        <div className="min-w-0">
+                            <p className="text-slate-500 font-medium mb-1">Phone</p>
+                            <p className="text-slate-900 font-semibold truncate" title={patient.phone || undefined}>{patient.phone || "—"}</p>
                         </div>
-                    )}
-                    <div>
-                        <p className="text-slate-500 font-medium mb-1">Phone:</p>
-                        <p className="text-slate-900 font-semibold">{patient.phone || "N/A"}</p>
+                        <div className="col-span-2 sm:col-span-1 min-w-0">
+                            <p className="text-slate-500 font-medium mb-1">Email</p>
+                            <p className="text-slate-900 font-semibold truncate" title={patient.email || undefined}>{patient.email || "—"}</p>
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-slate-500 font-medium mb-1">Last Visit</p>
+                            <p className="text-slate-900 font-semibold">{lastVisitDate}</p>
+                        </div>
                     </div>
-                    <div className="col-span-2 sm:col-span-1">
-                        <p className="text-slate-500 font-medium mb-1">Email:</p>
-                        <p className="text-slate-900 font-semibold truncate">{patient.email || "N/A"}</p>
-                    </div>
-                    <div>
-                        <p className="text-slate-500 font-medium mb-1">Last Visit:</p>
-                        <p className="text-slate-900 font-semibold">{lastVisitDate}</p>
-                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 w-full sm:w-auto"
+                        onClick={() => setIsContactOpen(true)}
+                        aria-label="Edit contact information"
+                    >
+                        <Pencil className="h-4 w-4 mr-2 sm:mr-2" />
+                        Edit contact
+                    </Button>
                 </div>
             </div>
 
-            {/* Main Content */}
-            <div className="p-4 sm:p-6 lg:p-8 space-y-6">
+            {/* Main Content — responsive padding and max-width for xl */}
+            <div className="p-4 sm:p-6 lg:p-8 xl:max-w-[1600px] xl:mx-auto space-y-4 sm:space-y-6">
                 {/* AI Insights Cards */}
                 <AIInsightsCards
                     missedAppointments={missedAppointments}
                     totalAppointments={appointments.length}
-                    paymentHistory="excellent"
-                    preventiveCareStatus="due"
+                    paymentHistory={paymentHistoryDerived}
+                    preventiveCareStatus={preventiveCareStatusDerived}
                 />
+
+                {/* Appointments: Upcoming & Recent */}
+                <Card>
+                    <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+                        <CardTitle className="text-lg">Appointments</CardTitle>
+                        <Button
+                            size="sm"
+                            onClick={() => setAppointmentDialogOpen(true)}
+                            className="bg-teal-600 hover:bg-teal-700"
+                            aria-label="Schedule new appointment"
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Schedule
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {upcomingAppointments.length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-slate-700 mb-2">Upcoming</h4>
+                                <ul className="space-y-2">
+                                    {upcomingAppointments.slice(0, 5).map((apt) => (
+                                        <li
+                                            key={apt.id}
+                                            className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50/50 hover:bg-slate-50"
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className="flex flex-col items-center justify-center w-12 h-12 rounded-lg bg-teal-100 text-teal-700 shrink-0">
+                                                    <span className="text-xs font-medium">{format(new Date(apt.start_time), "MMM")}</span>
+                                                    <span className="text-lg font-bold leading-tight">{format(new Date(apt.start_time), "d")}</span>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-slate-900 truncate">{apt.treatment_type || "Appointment"}</p>
+                                                    <p className="text-sm text-slate-500">
+                                                        {apt.dentists ? `Dr. ${apt.dentists.first_name} ${apt.dentists.last_name}` : "—"} · {format(new Date(apt.start_time), "h:mm a")}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className="shrink-0 capitalize">{getAppointmentStatusLabel(apt.status)}</Badge>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {recentPastAppointments.length > 0 && (
+                            <div>
+                                <h4 className="text-sm font-semibold text-slate-700 mb-2">Recent</h4>
+                                <ul className="space-y-2">
+                                    {recentPastAppointments.map((apt) => (
+                                        <li
+                                            key={apt.id}
+                                            className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-lg border border-slate-100 hover:bg-slate-50/50"
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <Clock className="h-5 w-5 text-slate-400 shrink-0" />
+                                                <div className="min-w-0">
+                                                    <p className="font-medium text-slate-900 truncate">{apt.treatment_type || "Visit"}</p>
+                                                    <p className="text-sm text-slate-500">{format(new Date(apt.start_time), "MMM d, yyyy")}</p>
+                                                </div>
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {upcomingAppointments.length === 0 && recentPastAppointments.length === 0 && (
+                            <div className="text-center py-8 text-slate-500">
+                                <Calendar className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                                <p className="font-medium">No appointments yet</p>
+                                <p className="text-sm mt-1">Schedule one to get started.</p>
+                                <Button variant="outline" size="sm" className="mt-3" onClick={() => setAppointmentDialogOpen(true)}>
+                                    <Plus className="h-4 w-4 mr-2" /> Schedule appointment
+                                </Button>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Medical Images Section */}
                 <Card>
@@ -721,47 +983,50 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         <CardTitle>Medical Images</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <Tabs value={medicalImageTab} onValueChange={(v) => setMedicalImageTab(v as any)}>
-                            <TabsList className="grid w-full grid-cols-4 mb-4">
-                                <TabsTrigger value="xray" className="text-xs sm:text-sm">
-                                    <ImageIcon className="h-4 w-4 mr-1" />
+                        <Tabs value={medicalImageTab} onValueChange={(v) => setMedicalImageTab(v as typeof medicalImageTab)}>
+                            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 mb-4 gap-1">
+                                <TabsTrigger value="xray" className="text-xs sm:text-sm truncate">
+                                    <ImageIcon className="h-4 w-4 mr-1 shrink-0" />
                                     X-Ray
                                 </TabsTrigger>
-                                <TabsTrigger value="intraoral" className="text-xs sm:text-sm">
-                                    <Camera className="h-4 w-4 mr-1" />
+                                <TabsTrigger value="intraoral" className="text-xs sm:text-sm truncate">
+                                    <Camera className="h-4 w-4 mr-1 shrink-0" />
                                     Intraoral
                                 </TabsTrigger>
-                                <TabsTrigger value="3d_scan" className="text-xs sm:text-sm">
-                                    <Activity className="h-4 w-4 mr-1" />
+                                <TabsTrigger value="3d_scan" className="text-xs sm:text-sm truncate">
+                                    <Activity className="h-4 w-4 mr-1 shrink-0" />
                                     3D Scan
                                 </TabsTrigger>
-                                <TabsTrigger value="add" className="text-xs sm:text-sm">
-                                    <Plus className="h-4 w-4 mr-1" />
+                                <TabsTrigger value="add" className="text-xs sm:text-sm truncate">
+                                    <Plus className="h-4 w-4 mr-1 shrink-0" />
                                     Add
                                 </TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="xray">
                                 <MedicalImageGallery
-                                    images={files.filter(f => f.type === 'xray')}
+                                    images={files.filter((f) => f.type === "xray")}
                                     onDelete={handleDeleteFile}
                                     onDownload={downloadFile}
+                                    getImageUrl={getImageUrl}
                                 />
                             </TabsContent>
 
                             <TabsContent value="intraoral">
                                 <MedicalImageGallery
-                                    images={files.filter(f => f.type === 'intraoral')}
+                                    images={files.filter((f) => f.type === "intraoral")}
                                     onDelete={handleDeleteFile}
                                     onDownload={downloadFile}
+                                    getImageUrl={getImageUrl}
                                 />
                             </TabsContent>
 
                             <TabsContent value="3d_scan">
                                 <MedicalImageGallery
-                                    images={files.filter(f => f.type === '3d_scan')}
+                                    images={files.filter((f) => f.type === "3d_scan")}
                                     onDelete={handleDeleteFile}
                                     onDownload={downloadFile}
+                                    getImageUrl={getImageUrl}
                                 />
                             </TabsContent>
 
@@ -818,7 +1083,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     <Pill className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                                     <div className="min-w-0">
                                         <p className="font-semibold text-sm text-blue-900">Medications</p>
-                                        <p className="text-sm text-blue-700 mt-1">Lisinopril 10mg daily</p>
+                                        <p className="text-sm text-blue-700 mt-1 break-words">Not recorded — add in medical conditions if needed</p>
                                     </div>
                                 </div>
                             </div>
@@ -854,40 +1119,98 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     <Shield className="h-6 w-6 text-blue-600" />
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="font-semibold text-slate-900">{patient.insurance_provider || 'No Insurance'}</p>
-                                    <p className="text-sm text-slate-500">Policy: {patient.insurance_policy_number || 'N/A'}</p>
+                                    <p className="font-semibold text-slate-900 break-words">{patient.insurance_provider || "No insurance on file"}</p>
+                                    <p className="text-sm text-slate-500">Policy: {patient.insurance_policy_number || "—"}</p>
                                 </div>
                             </div>
-
-                            {patient.insurance_provider && (
-                                <>
-                                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-100">
-                                        <div>
-                                            <p className="text-xs text-slate-500">Coverage:</p>
-                                            <p className="font-semibold text-sm">80%</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500">Annual Max:</p>
-                                            <p className="font-semibold text-sm">$1,500</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500">Used:</p>
-                                            <p className="font-semibold text-sm">$320</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-slate-500">Remaining:</p>
-                                            <p className="font-semibold text-sm text-emerald-600">$1,180</p>
-                                        </div>
-                                    </div>
-
-                                    <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                                        Valid until Dec 31, 2026
-                                    </Badge>
-                                </>
-                            )}
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Treatment Plans */}
+                <Card>
+                    <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
+                        <CardTitle className="text-lg">Treatment Plans</CardTitle>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                                setTreatmentDialogTab("plan")
+                                setIsTreatmentOpen(true)
+                            }}
+                            aria-label="Create treatment plan"
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            New plan
+                        </Button>
+                    </CardHeader>
+                    <CardContent>
+                        {plansLoading ? (
+                            <div className="flex items-center justify-center py-8 text-slate-500">
+                                <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                                Loading plans…
+                            </div>
+                        ) : treatmentPlans.length === 0 ? (
+                            <div className="text-center py-8 text-slate-500">
+                                <FileText className="h-12 w-12 mx-auto mb-3 text-slate-300" />
+                                <p className="font-medium">No treatment plans</p>
+                                <p className="text-sm mt-1">Create a plan to propose treatments to the patient.</p>
+                                <Button variant="outline" size="sm" className="mt-3" onClick={() => { setTreatmentDialogTab("plan"); setIsTreatmentOpen(true); }}>
+                                    <Plus className="h-4 w-4 mr-2" /> Create plan
+                                </Button>
+                            </div>
+                        ) : (
+                            <ul className="space-y-3">
+                                {treatmentPlans.map((plan: { id: string; plan_name: string; status: string; items?: { id: string; description: string; total_price: number; acceptance_status: string }[] }) => (
+                                    <li key={plan.id} className="rounded-lg border border-slate-200 p-4 space-y-3">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-slate-900 truncate">{plan.plan_name || "Unnamed plan"}</p>
+                                                <p className="text-sm text-slate-500">{(plan.items || []).length} item(s)</p>
+                                            </div>
+                                            <Badge variant="outline" className="shrink-0 capitalize">{plan.status}</Badge>
+                                        </div>
+                                        {(plan.items || []).length > 0 && (
+                                            <ul className="space-y-1 text-sm text-slate-600">
+                                                {(plan.items as { id: string; description: string; total_price: number; acceptance_status: string }[]).slice(0, 3).map((item: { id: string; description: string; total_price: number; acceptance_status: string }) => (
+                                                    <li key={item.id} className="flex justify-between gap-2 truncate">
+                                                        <span className="truncate">{item.description}</span>
+                                                        <span className="shrink-0">${Number(item.total_price).toFixed(2)}</span>
+                                                    </li>
+                                                ))}
+                                                {(plan.items || []).length > 3 && (
+                                                    <li className="text-slate-500">+{(plan.items || []).length - 3} more</li>
+                                                )}
+                                            </ul>
+                                        )}
+                                        {plan.status === "draft" && (
+                                            <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100">
+                                                <Button
+                                                    size="sm"
+                                                    variant="default"
+                                                    className="bg-teal-600 hover:bg-teal-700"
+                                                    disabled={updatingPlanId === plan.id}
+                                                    onClick={() => handleAcceptAllItems(plan)}
+                                                >
+                                                    {updatingPlanId === plan.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                                    Accept all
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    disabled={updatingPlanId === plan.id}
+                                                    onClick={() => handleDeclineAllItems(plan)}
+                                                >
+                                                    Decline all
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </CardContent>
+                </Card>
 
                 {/* Quick Actions */}
                 <Card>
@@ -895,13 +1218,14 @@ export default function PatientProfileClient({ patient, appointments, treatments
                         <CardTitle>Quick Actions</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             <Button
                                 onClick={() => setAppointmentDialogOpen(true)}
-                                className="h-auto py-6 flex-col gap-2 bg-blue-600 hover:bg-blue-700"
+                                className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 bg-blue-600 hover:bg-blue-700 min-w-0 overflow-hidden whitespace-normal"
+                                aria-label="Schedule appointment"
                             >
-                                <Calendar className="h-6 w-6" />
-                                <span className="text-sm font-medium">Schedule Appointment</span>
+                                <Calendar className="h-6 w-6 shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-center leading-tight break-words line-clamp-2 min-w-0 w-full px-0.5">Schedule Appointment</span>
                             </Button>
 
                             <Button
@@ -910,46 +1234,51 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     setIsTreatmentOpen(true)
                                 }}
                                 variant="outline"
-                                className="h-auto py-6 flex-col gap-2"
+                                className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 min-w-0 overflow-hidden whitespace-normal"
+                                aria-label="Add treatment note"
                             >
-                                <FileText className="h-6 w-6" />
-                                <span className="text-sm font-medium">Add Treatment Note</span>
+                                <FileText className="h-6 w-6 shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-center leading-tight break-words line-clamp-2 min-w-0 w-full px-0.5">Add Treatment Note</span>
                             </Button>
 
                             <Button
                                 onClick={() => setIsFileOpen(true)}
                                 variant="outline"
-                                className="h-auto py-6 flex-col gap-2"
+                                className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 min-w-0 overflow-hidden whitespace-normal"
+                                aria-label="Upload images"
                             >
-                                <Upload className="h-6 w-6" />
-                                <span className="text-sm font-medium">Upload Images</span>
+                                <Upload className="h-6 w-6 shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-center leading-tight break-words line-clamp-2 min-w-0 w-full px-0.5">Upload Images</span>
                             </Button>
 
                             <Button
                                 onClick={() => router.push(`/messages?patientId=${patient.id}`)}
                                 variant="outline"
-                                className="h-auto py-6 flex-col gap-2"
+                                className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 min-w-0 overflow-hidden whitespace-normal"
+                                aria-label="Send message"
                             >
-                                <MessageSquare className="h-6 w-6" />
-                                <span className="text-sm font-medium">Send Message</span>
+                                <MessageSquare className="h-6 w-6 shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-center leading-tight break-words line-clamp-2 min-w-0 w-full px-0.5">Send Message</span>
                             </Button>
 
                             <Button
                                 onClick={() => setInvoiceDialogOpen(true)}
                                 variant="outline"
-                                className="h-auto py-6 flex-col gap-2"
+                                className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 min-w-0 overflow-hidden whitespace-normal"
+                                aria-label="View billing"
                             >
-                                <DollarSign className="h-6 w-6" />
-                                <span className="text-sm font-medium">View Billing</span>
+                                <DollarSign className="h-6 w-6 shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-center leading-tight break-words line-clamp-2 min-w-0 w-full px-0.5">View Billing</span>
                             </Button>
 
                             <Button
-                                onClick={() => toast.info("Report generation coming soon")}
+                                onClick={() => setReportDialogOpen(true)}
                                 variant="outline"
-                                className="h-auto py-6 flex-col gap-2"
+                                className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 min-w-0 overflow-hidden whitespace-normal"
+                                aria-label="Generate report"
                             >
-                                <FileBarChart className="h-6 w-6" />
-                                <span className="text-sm font-medium">Generate Report</span>
+                                <FileBarChart className="h-6 w-6 shrink-0" />
+                                <span className="text-xs sm:text-sm font-medium text-center leading-tight break-words line-clamp-2 min-w-0 w-full px-0.5">Generate Report</span>
                             </Button>
                         </div>
                     </CardContent>
@@ -971,30 +1300,29 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                 {treatments.map((treatment) => {
                                     const dentist = treatment.dentists
                                     return (
-                                        <div key={treatment.id} className="flex gap-4 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
-                                            <Avatar className="h-12 w-12 shrink-0">
-                                                <AvatarImage src={dentist?.profile_picture_url || undefined} />
-                                                <AvatarFallback className="bg-teal-100 text-teal-700">
-                                                    {dentist ? `${dentist.first_name[0]}${dentist.last_name[0]}` : 'Dr'}
-                                                </AvatarFallback>
-                                            </Avatar>
-
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2 mb-2">
-                                                    <div className="min-w-0">
-                                                        <h4 className="font-semibold text-slate-900">{treatment.procedures_performed}</h4>
-                                                        <p className="text-sm text-slate-500">
-                                                            Dr. {dentist?.first_name || ''} {dentist?.last_name || 'Unknown'}
-                                                        </p>
+                                        <div key={treatment.id} className="flex flex-col sm:flex-row gap-3 sm:gap-4 p-4 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+                                            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                                <Avatar className="h-12 w-12 shrink-0">
+                                                    <AvatarImage src={dentist?.profile_picture_url || undefined} />
+                                                    <AvatarFallback className="bg-teal-100 text-teal-700">
+                                                        {dentist ? `${dentist.first_name[0]}${dentist.last_name[0]}` : "Dr"}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+                                                        <h4 className="font-semibold text-slate-900 break-words">{treatment.procedures_performed}</h4>
+                                                        <span className="text-sm text-slate-400 shrink-0">
+                                                            {format(new Date(treatment.created_at), "MMM d, yyyy")}
+                                                        </span>
                                                     </div>
-                                                    <span className="text-sm text-slate-400 shrink-0">
-                                                        {format(new Date(treatment.created_at), 'MMM d, yyyy')}
-                                                    </span>
+                                                    <p className="text-sm text-slate-500">
+                                                        Dr. {dentist?.first_name || ""} {dentist?.last_name || "Unknown"}
+                                                    </p>
                                                 </div>
-                                                {treatment.notes && (
-                                                    <p className="text-sm text-slate-600 leading-relaxed">{treatment.notes}</p>
-                                                )}
                                             </div>
+                                            {treatment.notes && (
+                                                <p className="text-sm text-slate-600 leading-relaxed break-words pl-0 sm:pl-16">{treatment.notes}</p>
+                                            )}
                                         </div>
                                     )
                                 })}
@@ -1018,43 +1346,50 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 description="Upload or take a photo of the patient"
             />
 
-            {/* Hidden Dialogs Section */}
-            <div className="hidden">
-                <NewAppointmentDialog
-                    patients={[{ id: patient.id, first_name: patient.first_name, last_name: patient.last_name }]}
-                    dentists={dentists.map(d => ({ id: d.id, first_name: d.first_name, last_name: d.last_name }))}
-                    defaultPatientId={patient.id}
-                    open={appointmentDialogOpen}
-                    onOpenChange={setAppointmentDialogOpen}
-                />
-                <NewInvoiceDialog
-                    defaultPatientId={patient.id}
-                    treatments={availableTreatments}
-                    open={invoiceDialogOpen}
-                    onOpenChange={(open) => {
-                        setInvoiceDialogOpen(open)
-                        if (!open) setCreatedInvoice(null)
-                    }}
-                    onSuccess={(inv) => {
-                        if (inv) {
-                            setCreatedInvoice(inv)
-                            setPatientInvoices(prev => [{
+            {/* Quick Action dialogs — rendered in tree so open/onOpenChange work reliably */}
+            <NewAppointmentDialog
+                patients={[{ id: patient.id, first_name: patient.first_name, last_name: patient.last_name }]}
+                dentists={dentists.map((d) => ({ id: d.id, first_name: d.first_name, last_name: d.last_name }))}
+                defaultPatientId={patient.id}
+                open={appointmentDialogOpen}
+                onOpenChange={setAppointmentDialogOpen}
+            />
+            <NewInvoiceDialog
+                defaultPatientId={patient.id}
+                treatments={availableTreatments}
+                open={invoiceDialogOpen}
+                onOpenChange={(open) => {
+                    setInvoiceDialogOpen(open)
+                    if (!open) setCreatedInvoice(null)
+                }}
+                onSuccess={(inv) => {
+                    if (inv) {
+                        setCreatedInvoice(inv)
+                        setPatientInvoices((prev) => [
+                            {
                                 id: inv.id,
                                 invoice_number: inv.invoice_number,
                                 total_amount: inv.total_amount,
                                 status: "sent",
-                                created_at: new Date().toISOString()
-                            }, ...prev])
-                        }
-                        setInvoiceDialogOpen(false)
-                    }}
-                    trigger={<div />}
-                />
-            </div>
+                                created_at: new Date().toISOString(),
+                            },
+                            ...prev,
+                        ])
+                    }
+                    setInvoiceDialogOpen(false)
+                }}
+                trigger={<span className="sr-only">Create invoice</span>}
+            />
 
             {/* Contact Info Update Dialog */}
-            <Dialog open={isContactOpen} onOpenChange={setIsContactOpen}>
-                <DialogContent>
+            <Dialog
+                open={isContactOpen}
+                onOpenChange={(open) => {
+                    if (open) setContactData({ phone: patient.phone || "", email: patient.email || "", address: patient.address || "" })
+                    setIsContactOpen(open)
+                }}
+            >
+                <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-md">
                     <form onSubmit={handleUpdateContact}>
                         <DialogHeader>
                             <DialogTitle>Update Contact Info</DialogTitle>
@@ -1102,7 +1437,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
             {/* Medical Alerts Update Dialog */}
             <Dialog open={isAlertsOpen} onOpenChange={setIsAlertsOpen}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-md">
                     <form onSubmit={handleUpdateAlerts}>
                         <DialogHeader>
                             <DialogTitle>Update Medical Alerts</DialogTitle>
@@ -1140,7 +1475,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
             {/* Insurance Update Dialog */}
             <Dialog open={isInsuranceOpen} onOpenChange={setIsInsuranceOpen}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-md">
                     <form onSubmit={handleUpdateInsurance}>
                         <DialogHeader>
                             <DialogTitle>Update Insurance Info</DialogTitle>
@@ -1188,7 +1523,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     setNewPlanData({ plan_name: "", notes: "", dentist_id: currentUserId, selectedItems: [] })
                 }
             }}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+                <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>Treatment</DialogTitle>
                         <DialogDescription>Create a treatment plan (proposal) or record treatments performed.</DialogDescription>
@@ -1334,7 +1669,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
             {/* File Upload Dialog */}
             <Dialog open={isFileOpen} onOpenChange={setIsFileOpen}>
-                <DialogContent>
+                <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-lg">
                     <form onSubmit={handleFileUpload}>
                         <DialogHeader>
                             <DialogTitle>Upload Patient File</DialogTitle>
@@ -1412,7 +1747,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
 
             {/* Invoice Created Dialog */}
             <Dialog open={!!createdInvoice} onOpenChange={(open) => !open && setCreatedInvoice(null)}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="w-[calc(100vw-2rem)] max-w-md">
                     <DialogHeader>
                         <DialogTitle>Invoice created</DialogTitle>
                         <DialogDescription>
@@ -1444,6 +1779,77 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     )}
                     <DialogFooter>
                         <Button onClick={() => setCreatedInvoice(null)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Generate Report Dialog */}
+            <Dialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
+                <DialogContent className="w-[calc(100vw-2rem)] max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Generate Patient Report</DialogTitle>
+                        <DialogDescription>
+                            Choose sections to include and download as CSV or text for {patient.first_name} {patient.last_name}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-3">
+                            <Label className="text-sm font-medium">Include sections</Label>
+                            <div className="flex flex-col gap-2">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                        checked={reportSections.summary}
+                                        onCheckedChange={(c) => setReportSections((s) => ({ ...s, summary: !!c }))}
+                                    />
+                                    <span className="text-sm">Patient summary (demographics, contact, insurance)</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                        checked={reportSections.appointments}
+                                        onCheckedChange={(c) => setReportSections((s) => ({ ...s, appointments: !!c }))}
+                                    />
+                                    <span className="text-sm">Appointments</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                        checked={reportSections.treatments}
+                                        onCheckedChange={(c) => setReportSections((s) => ({ ...s, treatments: !!c }))}
+                                    />
+                                    <span className="text-sm">Treatment history</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <Checkbox
+                                        checked={reportSections.billing}
+                                        onCheckedChange={(c) => setReportSections((s) => ({ ...s, billing: !!c }))}
+                                    />
+                                    <span className="text-sm">Billing / invoices</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-sm font-medium">Format</Label>
+                            <Select value={reportFormat} onValueChange={(v) => setReportFormat(v as "csv" | "text")}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="csv">CSV (Excel-friendly)</SelectItem>
+                                    <SelectItem value="text">Plain text</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setReportDialogOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-teal-600 hover:bg-teal-700"
+                            onClick={handleGenerateReport}
+                        >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download report
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

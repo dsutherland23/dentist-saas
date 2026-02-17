@@ -175,7 +175,9 @@ export function DentalChartV2Container({ patientId }: DentalChartV2ContainerProp
   return (
     <div className="space-y-6">
       <Tabs defaultValue="chart" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList
+          className="flex w-full min-w-0 overflow-x-auto flex-nowrap rounded-md bg-muted p-1 text-muted-foreground gap-0.5 [&>button]:shrink-0 [&>button]:min-w-[4.5rem] [&>button]:text-xs sm:[&>button]:text-sm lg:grid lg:grid-cols-6 lg:overflow-visible lg:[&>button]:min-w-0"
+        >
           <TabsTrigger value="chart">Chart</TabsTrigger>
           <TabsTrigger value="periodontal">Periodontal</TabsTrigger>
           <TabsTrigger value="diagnoses">Diagnoses</TabsTrigger>
