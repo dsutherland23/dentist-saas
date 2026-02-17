@@ -23,11 +23,11 @@ async function PatientPageContent({ id }: { id: string }) {
     // Fetch data
     const [patientRes, apptRes, treatmentRes, filesRes, availableTreatmentsRes, dentistsRes] = await Promise.all([
         supabase.from("patients").select("*").eq("id", id).single(),
-        supabase.from("appointments").select("*, dentists:users(last_name)").eq("patient_id", id).order("start_time", { ascending: false }),
-        supabase.from("treatment_records").select("*, dentists:users(last_name)").eq("patient_id", id).order("created_at", { ascending: false }),
+        supabase.from("appointments").select("*, dentists:users(first_name, last_name, profile_picture_url)").eq("patient_id", id).order("start_time", { ascending: false }),
+        supabase.from("treatment_records").select("*, dentists:users(first_name, last_name, profile_picture_url)").eq("patient_id", id).order("created_at", { ascending: false }),
         supabase.from("patient_files").select("*").eq("patient_id", id).order("created_at", { ascending: false }),
         supabase.from("treatments").select("*").eq("is_active", true).order("name", { ascending: true }),
-        supabase.from("users").select("id, first_name, last_name, role").in("role", ["dentist", "clinic_admin", "super_admin"])
+        supabase.from("users").select("id, first_name, last_name, role, profile_picture_url").in("role", ["dentist", "clinic_admin", "super_admin"])
     ])
 
     if (patientRes.error) {

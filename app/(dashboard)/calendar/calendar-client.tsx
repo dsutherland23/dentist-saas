@@ -18,7 +18,7 @@ import {
     parseISO,
     startOfDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
@@ -55,6 +55,7 @@ import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { CheckoutPaymentModal } from "@/components/calendar/checkout-payment-modal"
 import { useRouter } from "next/navigation"
 import { QueueReceiptDialog, type QueueReceiptData } from "@/components/calendar/queue-receipt-dialog"
+import { AllAppointmentsDialog } from "@/components/calendar/all-appointments-dialog"
 
 interface Appointment {
     id: string
@@ -65,6 +66,7 @@ interface Appointment {
     status: string
     patient_id: string
     dentist_id: string
+    room?: string | null
     checked_in_at?: string | null
     checked_out_at?: string | null
     patients?: { first_name: string, last_name: string; phone?: string | null }
@@ -85,6 +87,8 @@ interface CalendarClientProps {
     patients: { id: string; first_name: string; last_name: string }[]
     dentists: { id: string; first_name: string; last_name: string }[]
     clinic?: { name: string; logo_url?: string | null; phone?: string | null; website?: string | null } | null
+    currentUserId?: string | null
+    initialAppointmentId?: string | null
 }
 
 const MOBILE_BREAKPOINT = 768
@@ -101,11 +105,11 @@ function useIsMobile() {
     return isMobile
 }
 
-export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists, clinic }: CalendarClientProps) {
+export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists, clinic, currentUserId = null, initialAppointmentId = null }: CalendarClientProps) {
     const router = useRouter()
     const isMobile = useIsMobile()
     const [currentDate, setCurrentDate] = useState(new Date())
-    const [view, setView] = useState<"day" | "week" | "month" | "staff">("week")
+    const [view, setView] = useState<"day" | "week" | "month">("week")
     const [staffFilterId, setStaffFilterId] = useState<string | null>(null)
     const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
     const [mobileAppointment, setMobileAppointment] = useState<any>(null)
@@ -218,19 +222,38 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         dentistName: dentists.find(d => d.id === blk.staff_id) ? `Dr. ${dentists.find(d => d.id === blk.staff_id)?.last_name}` : "Staff"
     }))
 
+    // Navigate to appointment when opening calendar from dashboard with ?appointmentId=...
+    useEffect(() => {
+        if (!initialAppointmentId || initialAppointments.length === 0) return
+        const appt = initialAppointments.find(a => a.id === initialAppointmentId)
+        if (!appt) return
+        const start = parseISO(appt.start_time)
+        setCurrentDate(startOfDay(start))
+        setView("day")
+        const t = setTimeout(() => {
+            const el = document.querySelector(`[data-appointment-id="${initialAppointmentId}"]`)
+            el?.scrollIntoView({ behavior: "smooth", block: "center" })
+        }, 300)
+        return () => clearTimeout(t)
+    }, [initialAppointmentId, initialAppointments])
+
     const filteredDentists = staffFilterId
         ? dentists.filter(d => d.id === staffFilterId)
         : dentists
-    const filteredAppointments = staffFilterId
-        ? appointments.filter(a => a.dentist_id === staffFilterId)
+    // Always filter to show only current user's appointments
+    const appointmentsByUser = currentUserId
+        ? appointments.filter(a => a.dentist_id === currentUserId)
         : appointments
+    const filteredAppointments = staffFilterId
+        ? appointmentsByUser.filter(a => a.dentist_id === staffFilterId)
+        : appointmentsByUser
     const filteredBlockedSlots = staffFilterId
         ? blockedSlots.filter(b => b.staff_id === staffFilterId)
         : blockedSlots
 
     // Dynamic date calculations based on view
     let startDate: Date, endDate: Date
-    if (view === "day" || view === "staff") {
+    if (view === "day") {
         startDate = startOfDay(currentDate)
         endDate = startOfDay(currentDate)
     } else if (view === "week") {
@@ -245,17 +268,45 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const minHour = Math.min(7, ...apptHours.length ? apptHours : [8])
     const maxHour = Math.max(19, ...apptHours.length ? apptHours : [17])
 
-    const days = view === "staff" ? [currentDate] : eachDayOfInterval({ start: startDate, end: endDate })
+    const days = view === "day" ? [currentDate] : eachDayOfInterval({ start: startDate, end: endDate })
     const hours = Array.from({ length: maxHour - minHour + 1 }, (_, i) => i + minHour)
 
+    // Calculate statistics for current view period
+    const viewAppointments = filteredAppointments.filter(appt => {
+        const apptDate = appt.start
+        if (view === "day") {
+            return isSameDay(apptDate, currentDate)
+        } else if (view === "week") {
+            return apptDate >= startDate && apptDate <= endDate
+        } else {
+            return isSameMonth(apptDate, currentDate)
+        }
+    })
+
+    const stats = {
+        total: viewAppointments.length,
+        confirmed: viewAppointments.filter(a => a.status === 'confirmed').length,
+        pending: viewAppointments.filter(a => ['pending', 'scheduled', 'unconfirmed'].includes(a.status)).length,
+        cancelled: viewAppointments.filter(a => ['cancelled', 'no_show'].includes(a.status)).length,
+    }
+
+    // Chair utilization calculation
+    const totalAppointmentHours = viewAppointments.reduce((sum, appt) => {
+        return sum + differenceInMinutes(appt.end, appt.start) / 60
+    }, 0)
+    const uniqueRooms = new Set(viewAppointments.filter(a => a.room).map(a => a.room)).size || 1
+    const daysInPeriod = view === "day" ? 1 : view === "week" ? 7 : days.length
+    const availableHours = uniqueRooms * daysInPeriod * 8
+    const chairUtilization = availableHours > 0 ? Math.round((totalAppointmentHours / availableHours) * 100) : 0
+
     const nextPeriod = () => {
-        if (view === "day" || view === "staff") setCurrentDate(current => addDays(current, 1))
+        if (view === "day") setCurrentDate(current => addDays(current, 1))
         else if (view === "week") setCurrentDate(current => addWeeks(current, 1))
         else setCurrentDate(current => addMonths(current, 1))
     }
 
     const prevPeriod = () => {
-        if (view === "day" || view === "staff") setCurrentDate(current => addDays(current, -1))
+        if (view === "day") setCurrentDate(current => addDays(current, -1))
         else if (view === "week") setCurrentDate(current => addWeeks(current, -1))
         else setCurrentDate(current => addMonths(current, -1))
     }
@@ -268,7 +319,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     // Helper to format the period label
     const getPeriodLabel = () => {
-        if (view === "day" || view === "staff") return format(currentDate, "MMMM d, yyyy")
+        if (view === "day") return format(currentDate, "MMMM d, yyyy")
         if (view === "week") {
             const start = startOfWeek(currentDate, { weekStartsOn: 1 })
             const end = endOfWeek(currentDate, { weekStartsOn: 1 })
@@ -354,6 +405,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         const triggerDiv = isMonthView ? (
             <div
                 data-appointment
+                data-appointment-id={appt.id}
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData("appointmentId", appt.id)
@@ -367,6 +419,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         ) : (
             <div
                 data-appointment
+                data-appointment-id={appt.id}
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData("appointmentId", appt.id)
@@ -625,6 +678,32 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         }
     }
 
+    const exportSchedule = () => {
+        const header = "Date,Time,Patient,Treatment,Status,Room,Dentist\n"
+        const rows = viewAppointments.map(appt => {
+            const date = format(appt.start, "yyyy-MM-dd")
+            const time = `${format(appt.start, "HH:mm")}-${format(appt.end, "HH:mm")}`
+            const patient = appt.patientName.replace(/,/g, "")
+            const treatment = appt.treatment_type?.replace(/,/g, "") || "N/A"
+            const status = appt.status
+            const room = appt.room || "N/A"
+            const dentist = appt.dentistName.replace(/,/g, "")
+            return `${date},${time},"${patient}","${treatment}",${status},${room},"${dentist}"`
+        }).join("\n")
+        
+        const csv = header + rows
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `schedule-${view}-${format(currentDate, "yyyy-MM-dd")}.csv`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        toast.success("Schedule exported")
+    }
+
     return (
         <div className="flex flex-col min-h-[400px] h-[calc(100vh-8rem)] sm:h-[calc(100vh-100px)] bg-slate-50 p-3 sm:p-4 md:p-6 max-w-full w-full min-w-0 overflow-hidden">
             <CheckoutPaymentModal
@@ -639,19 +718,60 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     }
                 }}
             />
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 shrink-0">
+            
+            {/* Header with Period Label and Controls */}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3 shrink-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
                     <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
                         {getPeriodLabel()}
                     </h2>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    {currentUserId && (
+                        <AllAppointmentsDialog
+                            currentUserId={currentUserId}
+                            dentists={dentists}
+                            trigger={
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 sm:h-9 text-xs border-slate-200 hover:border-teal-300 hover:bg-teal-50"
+                                >
+                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                    View All
+                                </Button>
+                            }
+                        />
+                    )}
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={exportSchedule}
+                        className="h-8 sm:h-9 text-xs border-slate-200 hover:border-blue-300 hover:bg-blue-50"
+                    >
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        Export
+                    </Button>
                     <div className="flex items-center rounded-md border bg-white shadow-sm overflow-hidden border-slate-200">
                         <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronLeft className="h-4 w-4" /></Button>
                         <Button variant="ghost" onClick={today} className="px-2 sm:px-4 font-bold rounded-none border-r border-slate-100 h-8 sm:h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600 transition-colors">Today</Button>
                         <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronRight className="h-4 w-4" /></Button>
                     </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <div className="flex bg-slate-100 p-1 rounded-lg">
+                        {(["day", "week", "month"] as const).map((v) => (
+                            <button
+                                key={v}
+                                onClick={() => setView(v)}
+                                className={cn(
+                                    "px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all capitalize",
+                                    view === v ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                )}
+                            >
+                                {v}
+                            </button>
+                        ))}
+                    </div>
                     <Select value={staffFilterId ?? "all"} onValueChange={(v) => setStaffFilterId(v === "all" ? null : v)}>
                         <SelectTrigger className="w-[140px] sm:w-[160px] h-8 sm:h-9 text-xs border-slate-200 bg-white">
                             <Users className="h-3.5 w-3.5 text-slate-400 mr-1.5 shrink-0" />
@@ -666,20 +786,6 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             ))}
                         </SelectContent>
                     </Select>
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                        {(["day", "week", "staff", "month"] as const).map((v) => (
-                            <button
-                                key={v}
-                                onClick={() => setView(v)}
-                                className={cn(
-                                    "px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all capitalize",
-                                    view === v ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
-                                )}
-                            >
-                                {v === "staff" ? "By staff" : v}
-                            </button>
-                        ))}
-                    </div>
                     <NewAppointmentDialog
                         patients={patients}
                         dentists={dentists}
@@ -705,77 +811,32 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 </div>
             </div>
 
+            {/* Statistics Panel */}
+            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-white rounded-lg border border-slate-200 shadow-sm shrink-0">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-50 border border-slate-100">
+                    <Calendar className="h-3.5 w-3.5 text-slate-600" />
+                    <span className="text-xs font-semibold text-slate-600">{stats.total} Total</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
+                    <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
+                    <span className="text-xs font-semibold text-emerald-700">{stats.confirmed} Confirmed</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200">
+                    <Clock className="h-3.5 w-3.5 text-amber-600" />
+                    <span className="text-xs font-semibold text-amber-700">{stats.pending} Pending</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-rose-50 border border-rose-200">
+                    <XCircle className="h-3.5 w-3.5 text-rose-600" />
+                    <span className="text-xs font-semibold text-rose-700">{stats.cancelled} Cancelled</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200">
+                    <Activity className="h-3.5 w-3.5 text-blue-600" />
+                    <span className="text-xs font-semibold text-blue-700">{chairUtilization}% Chair Use</span>
+                </div>
+            </div>
+
             <div className="flex-1 min-h-0 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col border-slate-200">
-                {view === "staff" ? (
-                    /* Staff view: one day, one column per dentist – see who is scheduled at a glance */
-                    <>
-                        <div className="overflow-x-auto overflow-y-hidden border-b border-slate-100 shrink-0">
-                            <div
-                                className="grid border-b border-slate-100 min-w-0"
-                                style={{ gridTemplateColumns: `70px repeat(${filteredDentists.length}, minmax(120px, 1fr))` }}
-                            >
-                                <div className="p-2 sm:p-4 bg-slate-50/50 text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase text-center flex items-center justify-center border-r border-slate-100 shrink-0">
-                                    TIME
-                                </div>
-                                {filteredDentists.map((d) => (
-                                    <div key={d.id} className="p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 min-w-0 bg-slate-50/30">
-                                        <span className="text-[10px] font-bold text-slate-600 truncate w-full">Dr. {d.last_name}</span>
-                                        <span className="text-[9px] text-slate-400">
-                                            {filteredAppointments.filter(a => a.dentist_id === d.id && isSameDay(a.start, currentDate)).length} apps
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-y-auto overflow-x-auto relative scrollbar-thin min-h-0">
-                            {hours.map((hour) => (
-                                <div
-                                    key={hour}
-                                    className="grid h-14 sm:h-[80px] shrink-0"
-                                    style={{ gridTemplateColumns: `70px repeat(${filteredDentists.length}, minmax(120px, 1fr))` }}
-                                >
-                                    <div className="border-r border-b border-slate-100 bg-slate-50/30 text-[9px] sm:text-[10px] text-slate-400 font-bold p-1 sm:p-2 text-center sticky left-0 bg-slate-50/30 z-[1] flex items-start justify-center pt-2 sm:pt-3 h-14 sm:h-[80px] shrink-0">
-                                        {format(setHours(new Date(), hour), "h a")}
-                                    </div>
-                                    {filteredDentists.map((dentist) => {
-                                        const day = currentDate
-                                        const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === hour
-                                        return (
-                                            <div
-                                                key={dentist.id}
-                                                onDragOver={handleDragOver(day, hour)}
-                                                onDragLeave={handleDragLeave(day, hour)}
-                                                onDrop={handleDrop(day, hour)}
-                                                onClick={(e) => {
-                                                    if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
-                                                    const slotStart = setHours(startOfDay(day), hour)
-                                                    setNewAppointmentStart(slotStart)
-                                                    setIsNewAppointmentOpen(true)
-                                                }}
-                                                className={cn(
-                                                    "border-r border-b border-slate-100 relative group transition-all p-1 cursor-pointer min-h-[80px] overflow-visible",
-                                                    isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
-                                                )}
-                                            >
-                                                {filteredBlockedSlots.filter(
-                                                    (blk) => blk.staff_id === dentist.id && isSameDay(blk.start, day) && blk.start.getHours() === hour
-                                                ).map((blk) => (
-                                                    <BlockedSlotCard key={blk.id} blk={blk} />
-                                                ))}
-                                                {filteredAppointments.filter(
-                                                    (appt) =>
-                                                        appt.dentist_id === dentist.id && isSameDay(appt.start, day) && appt.start.getHours() === hour
-                                                ).map((appt) => (
-                                                    <AppointmentCard key={appt.id} appt={appt} />
-                                                ))}
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            ))}
-                        </div>
-                    </>
-                ) : view !== "month" ? (
+                {view !== "month" ? (
                     <>
                         <div className="flex-1 flex flex-col min-h-0 overflow-auto">
                             <div className={cn(

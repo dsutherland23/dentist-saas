@@ -16,7 +16,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight } from "lucide-react"
+import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ProfilePictureUpload } from "@/components/patients/profile-picture-upload"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
@@ -122,6 +124,10 @@ export default function SettingsPage() {
         confirm: ""
     })
 
+    // Profile Picture State
+    const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
+    const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null)
+
     // Support State
     const [suggestion, setSuggestion] = useState("")
     const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false)
@@ -143,6 +149,26 @@ export default function SettingsPage() {
             setIsSubmittingSuggestion(false)
         }
     }
+
+    useEffect(() => {
+        async function fetchUserProfile() {
+            try {
+                const supabase = createClient()
+                const { data: { user } } = await supabase.auth.getUser()
+                if (user) {
+                    const { data } = await supabase
+                        .from("users")
+                        .select("profile_picture_url")
+                        .eq("id", user.id)
+                        .single()
+                    if (data?.profile_picture_url) {
+                        setUserProfilePicture(data.profile_picture_url)
+                    }
+                }
+            } catch { /* ignore */ }
+        }
+        fetchUserProfile()
+    }, [])
 
     useEffect(() => {
         async function fetchSettings() {
@@ -317,10 +343,14 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            <Tabs defaultValue="general" className="space-y-6 min-w-0">
+            <Tabs defaultValue="profile" className="space-y-6 min-w-0">
                 {/* Scrollable tab list on small screens so all sections are reachable */}
                 <div className="w-full min-w-0 overflow-x-auto scrollbar-thin -mx-1 px-1 pb-1">
                     <TabsList className="inline-flex h-10 w-max min-h-[2.5rem] items-center justify-start gap-0.5 bg-white border border-slate-200 p-1 rounded-md">
+                        <TabsTrigger value="profile" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
+                            <User className="h-4 w-4 shrink-0" />
+                            Profile
+                        </TabsTrigger>
                         <TabsTrigger value="general" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
                             <Building2 className="h-4 w-4 shrink-0" />
                             General
@@ -347,6 +377,88 @@ export default function SettingsPage() {
                         </TabsTrigger>
                     </TabsList>
                 </div>
+
+                {/* Profile Settings */}
+                <TabsContent value="profile" className="space-y-4 min-w-0 overflow-x-hidden">
+                    <Card className="shadow-sm">
+                        <CardHeader>
+                            <CardTitle>Your Profile</CardTitle>
+                            <CardDescription>Update your personal information and profile picture</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="flex flex-col sm:flex-row items-center gap-6">
+                                <div className="relative">
+                                    <Avatar className="h-32 w-32 border-4 border-white shadow-lg">
+                                        <AvatarImage src={userProfilePicture || undefined} />
+                                        <AvatarFallback className="text-3xl bg-teal-100 text-teal-700">
+                                            {profile?.first_name?.[0] || ''}{profile?.last_name?.[0] || ''}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <Button
+                                        size="icon"
+                                        onClick={() => setProfilePictureDialogOpen(true)}
+                                        className="absolute bottom-1 right-1 h-10 w-10 rounded-full bg-white hover:bg-slate-50 text-teal-600 shadow-lg"
+                                    >
+                                        <Camera className="h-5 w-5" />
+                                    </Button>
+                                </div>
+                                <div className="text-center sm:text-left">
+                                    <h3 className="text-xl font-bold text-slate-900">
+                                        {profile?.first_name} {profile?.last_name}
+                                    </h3>
+                                    <p className="text-sm text-slate-500 capitalize">{profile?.role?.replace('_', ' ') || 'Staff'}</p>
+                                    <p className="text-sm text-slate-500 mt-1">{profile?.email}</p>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-3"
+                                        onClick={() => setProfilePictureDialogOpen(true)}
+                                    >
+                                        <Camera className="mr-2 h-4 w-4" />
+                                        Change Photo
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>First Name</Label>
+                                    <Input value={profile?.first_name || ''} disabled className="bg-slate-50" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Last Name</Label>
+                                    <Input value={profile?.last_name || ''} disabled className="bg-slate-50" />
+                                </div>
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label>Email</Label>
+                                    <Input value={profile?.email || ''} disabled className="bg-slate-50" />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Role</Label>
+                                    <Input value={profile?.role?.replace('_', ' ') || ''} disabled className="bg-slate-50 capitalize" />
+                                </div>
+                            </div>
+                            <p className="text-xs text-slate-400">To update your name or email, please contact your clinic administrator.</p>
+                        </CardContent>
+                    </Card>
+
+                    <ProfilePictureUpload
+                        open={profilePictureDialogOpen}
+                        onOpenChange={setProfilePictureDialogOpen}
+                        currentImageUrl={userProfilePicture}
+                        onUploadComplete={(url) => {
+                            setUserProfilePicture(url)
+                            toast.success("Profile picture updated!")
+                        }}
+                        uploadEndpoint="/api/users/profile-picture"
+                        title="Update Your Profile Picture"
+                        description="Upload a photo or take one with your camera"
+                    />
+                </TabsContent>
 
                 {/* General Settings */}
                 <TabsContent value="general" className="space-y-4 min-w-0 overflow-x-hidden">

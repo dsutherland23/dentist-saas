@@ -157,7 +157,7 @@ export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?:
                                         <button
                                             type="button"
                                             className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-teal-200 hover:bg-teal-50/50 transition-colors flex items-center gap-3"
-                                            onClick={() => router.push("/calendar")}
+                                            onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
                                         >
                                             <div className="flex-shrink-0 w-12 text-left">
                                                 <span className="text-sm font-semibold text-slate-900">{item.time}</span>

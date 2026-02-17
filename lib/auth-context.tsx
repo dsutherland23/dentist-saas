@@ -40,9 +40,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const fetchProfile = async (userId: string) => {
         const { data, error } = await supabase
-            .from('users')
-            .select('*, clinic:clinics(name)')
-            .eq('id', userId)
+            .from("users")
+            .select("*, clinic:clinics(name)")
+            .eq("id", userId)
             .single()
 
         if (!error && data) {
@@ -55,26 +55,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     useEffect(() => {
+        let initialLoadDone = false
+
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event, session) => {
+                // Skip the first event — we handle it via getSession() below
+                // to avoid a race that briefly nulls the profile
+                if (!initialLoadDone) return
+
                 setSession(session)
                 setUser(session?.user ?? null)
 
                 if (session?.user) {
                     await fetchProfile(session.user.id)
-                } else {
+                } else if (event === 'SIGNED_OUT') {
                     setProfile(null)
-                }
-
-                setIsLoading(false)
-
-                if (event === 'SIGNED_OUT') {
                     router.push('/login')
                 }
+                // Don't clear profile on TOKEN_REFRESHED — keep showing sidebar
             }
         )
 
-        // Initial fetch
+        // Initial fetch — single authoritative load
         supabase.auth.getSession().then(async ({ data: { session } }) => {
             setSession(session)
             setUser(session?.user ?? null)
@@ -82,10 +84,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 await fetchProfile(session.user.id)
             }
             setIsLoading(false)
+            initialLoadDone = true
         })
 
         return () => subscription.unsubscribe()
-    }, [router, supabase])
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     const signOut = async () => {
         setProfile(null)

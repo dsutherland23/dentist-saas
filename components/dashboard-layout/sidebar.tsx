@@ -38,7 +38,7 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function Sidebar({ className, forceExpanded = false, onCloseMenu }: SidebarProps) {
     const pathname = usePathname()
-    const { signOut, profile } = useAuth()
+    const { signOut, profile, isLoading } = useAuth()
     const { isCollapsed, isHovering, setIsHovering, toggle } = useSidebar()
     const clinicName = profile?.clinic?.name || "DentalCare Pro"
 
@@ -138,9 +138,11 @@ export function Sidebar({ className, forceExpanded = false, onCloseMenu }: Sideb
         },
     ]
 
-    // Filter routes based on user's allowed_sections; show all routes when profile is loading or list would be empty
-    const filtered = allRoutes.filter(route => canAccessSection(profile, route.key))
-    const routes = filtered.length > 0 ? filtered : allRoutes
+    // Filter routes by allowed_sections.
+    // While auth is loading, show all routes (they'll be hidden behind RouteGuard anyway)
+    // to prevent the sidebar from flickering empty during token refreshes.
+    const filtered = profile ? allRoutes.filter(route => canAccessSection(profile, route.key)) : []
+    const routes = isLoading ? allRoutes : (filtered.length > 0 ? filtered : (profile ? allRoutes : allRoutes))
 
     return (
         <div

@@ -20,16 +20,23 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Search, Filter, CalendarCheck, UserCheck } from "lucide-react"
+import { MoreHorizontal, Search, Filter, CalendarCheck, UserCheck, Users, UserPlus, AlertCircle, Download, Upload, FileSpreadsheet, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ManagePatientDialog } from "./manage-patient-dialog"
 import { NewInvoiceDialog } from "@/app/(dashboard)/invoices/new-invoice-dialog"
+import { ImportPatientsDialog } from "@/components/patients/import-patients-dialog"
 import { deletePatient } from "./actions"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
 import { format } from "date-fns"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
+import { Checkbox } from "@/components/ui/checkbox"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 
 export interface TodayAppointment {
@@ -48,23 +55,48 @@ interface Patient {
     email?: string
     phone?: string
     insurance_provider?: string
+    date_of_birth?: string
+    gender?: string
+    address?: string
+    insurance_policy_number?: string
+    emergency_contact_name?: string
+    emergency_contact_phone?: string
+    created_at: string
+}
+
+interface Stats {
+    total: number
+    active: number
+    newThisMonth: number
+    overdue: number
 }
 
 type FilterTab = "all" | "expected_today" | "checked_in"
+type StatusFilter = "all" | "active" | "inactive"
 
 export default function PatientsClient({
     initialPatients,
-    todayAppointments = []
+    todayAppointments = [],
+    lastVisits = {},
+    activePatientIds = [],
+    stats
 }: {
     initialPatients: Patient[]
     todayAppointments?: TodayAppointment[]
+    lastVisits?: Record<string, string>
+    activePatientIds?: string[]
+    stats: Stats
 }) {
     const [searchTerm, setSearchTerm] = useState("")
     const [filterTab, setFilterTab] = useState<FilterTab>("all")
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
     const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
     const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined)
+    const [filterOpen, setFilterOpen] = useState(false)
     const router = useRouter()
     const searchParams = useSearchParams()
+
+    const activePatientIdsSet = new Set(activePatientIds)
 
     const checkedInPatientIds = new Set(
         todayAppointments
@@ -119,6 +151,47 @@ export default function PatientsClient({
         filteredPatients = filteredPatients.filter((p) => checkedInPatientIds.has(p.id))
     }
 
+    // Apply status filter
+    if (statusFilter === "active") {
+        filteredPatients = filteredPatients.filter((p) => activePatientIdsSet.has(p.id))
+    } else if (statusFilter === "inactive") {
+        filteredPatients = filteredPatients.filter((p) => !activePatientIdsSet.has(p.id))
+    }
+
+    const exportPatients = (exportFormat: 'csv' | 'excel') => {
+        const headers = ["First Name", "Last Name", "Email", "Phone", "Date of Birth", "Gender", "Address", "Insurance Provider", "Insurance Policy", "Emergency Contact", "Emergency Phone"]
+        const csvRows = [headers.join(",")]
+        
+        filteredPatients.forEach(p => {
+            const row = [
+                p.first_name || "",
+                p.last_name || "",
+                p.email || "",
+                p.phone || "",
+                p.date_of_birth || "",
+                p.gender || "",
+                p.address?.replace(/,/g, ";") || "",
+                p.insurance_provider || "",
+                p.insurance_policy_number || "",
+                p.emergency_contact_name || "",
+                p.emergency_contact_phone || ""
+            ]
+            csvRows.push(row.map(field => `"${field}"`).join(","))
+        })
+
+        const csv = csvRows.join("\n")
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement("a")
+        link.href = url
+        link.download = `patients-${exportFormat}-${format(new Date(), "yyyy-MM-dd")}.csv`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+        toast.success(`Patients exported as ${exportFormat.toUpperCase()}`)
+    }
+
     const handleDelete = async (id: string) => {
         if (confirm("Are you sure you want to delete this patient?")) {
             try {
@@ -138,7 +211,68 @@ export default function PatientsClient({
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Patients</h2>
                     <p className="text-slate-500 text-sm sm:text-base">Manage your patient records and history.</p>
                 </div>
-                <ManagePatientDialog />
+                <div className="flex gap-2">
+                    <ImportPatientsDialog />
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline">
+                                <Download className="mr-2 h-4 w-4" />
+                                Export
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => exportPatients('csv')}>
+                                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                Export as CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => exportPatients('excel')}>
+                                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                                Export as Excel
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <ManagePatientDialog />
+                </div>
+            </div>
+
+            {/* Statistics Panel */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="flex items-center gap-3 p-3 sm:p-4 rounded-lg border border-slate-200 bg-white">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                        <Users className="h-5 w-5 sm:h-6 sm:w-6 text-slate-600" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-slate-500 truncate">Total Patients</p>
+                        <p className="text-xl sm:text-2xl font-bold text-slate-900">{stats.total}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 sm:p-4 rounded-lg border border-emerald-200 bg-emerald-50/50">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
+                        <UserCheck className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-emerald-600 truncate">Active Patients</p>
+                        <p className="text-xl sm:text-2xl font-bold text-emerald-900">{stats.active}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 sm:p-4 rounded-lg border border-blue-200 bg-blue-50/50">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
+                        <UserPlus className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-blue-600 truncate">New This Month</p>
+                        <p className="text-xl sm:text-2xl font-bold text-blue-900">{stats.newThisMonth}</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 sm:p-4 rounded-lg border border-amber-200 bg-amber-50/50">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
+                        <AlertCircle className="h-5 w-5 sm:h-6 sm:w-6 text-amber-600" />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs sm:text-sm font-medium text-amber-600 truncate">Overdue</p>
+                        <p className="text-xl sm:text-2xl font-bold text-amber-900">{stats.overdue}</p>
+                    </div>
+                </div>
             </div>
 
             {/* Expected Today & Checked-In summary cards */}
@@ -208,7 +342,70 @@ export default function PatientsClient({
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Button variant="outline"><Filter className="mr-2 h-4 w-4" /> Filter</Button>
+                <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+                    <PopoverTrigger asChild>
+                        <Button variant="outline">
+                            <Filter className="mr-2 h-4 w-4" />
+                            Filter
+                            {statusFilter !== "all" && (
+                                <span className="ml-2 h-2 w-2 rounded-full bg-teal-500" />
+                            )}
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56" align="end">
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <h4 className="font-medium text-sm">Patient Status</h4>
+                                <div className="space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="all"
+                                            checked={statusFilter === "all"}
+                                            onCheckedChange={() => setStatusFilter("all")}
+                                        />
+                                        <label htmlFor="all" className="text-sm cursor-pointer">
+                                            All Patients
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="active"
+                                            checked={statusFilter === "active"}
+                                            onCheckedChange={() => setStatusFilter("active")}
+                                        />
+                                        <label htmlFor="active" className="text-sm cursor-pointer">
+                                            Active Only (visited in last 6 months)
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="inactive"
+                                            checked={statusFilter === "inactive"}
+                                            onCheckedChange={() => setStatusFilter("inactive")}
+                                        />
+                                        <label htmlFor="inactive" className="text-sm cursor-pointer">
+                                            Inactive / Overdue (no visit in 6+ months)
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            {statusFilter !== "all" && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setStatusFilter("all")
+                                        setFilterOpen(false)
+                                    }}
+                                >
+                                    <X className="mr-2 h-3 w-3" />
+                                    Clear Filter
+                                </Button>
+                            )}
+                        </div>
+                    </PopoverContent>
+                </Popover>
             </div>
 
             <div className="rounded-md border bg-white shadow-sm overflow-x-auto overflow-hidden min-w-0 w-full">
@@ -270,12 +467,9 @@ export default function PatientsClient({
                                     </TableCell>
                                     <TableCell className="hidden md:table-cell">{patient.insurance_provider || "None"}</TableCell>
                                     <TableCell>
-                                        {(() => {
-                                            const appt = todayAppointments.find((a) => a.patient_id === patient.id)
-                                            return appt
-                                                ? format(new Date(appt.start_time), "h:mm a")
-                                                : "--"
-                                        })()}
+                                        {lastVisits[patient.id]
+                                            ? format(new Date(lastVisits[patient.id]), "MMM d, yyyy")
+                                            : "Never"}
                                     </TableCell>
                                     <TableCell>
                                         <span className="text-slate-500">$0.00</span>

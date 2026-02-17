@@ -5,11 +5,16 @@ import { getClinicId } from "@/app/(dashboard)/patients/actions"
 
 export const dynamic = "force-dynamic"
 
-export default async function CalendarPage() {
+type CalendarPageProps = { searchParams?: Promise<Record<string, string | string[] | undefined>> }
+
+export default async function CalendarPage({ searchParams: searchParamsPromise }: CalendarPageProps) {
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect("/login")
+
+    const searchParams = searchParamsPromise ? await searchParamsPromise : {}
+    const appointmentId = typeof searchParams?.appointmentId === "string" ? searchParams.appointmentId : null
 
     // getClinicId() redirects to /onboarding if no clinic — do NOT wrap in try-catch
     // as redirect() throws a special error that must propagate
@@ -70,6 +75,8 @@ export default async function CalendarPage() {
             patients={patientsRes.data || []}
             dentists={dentists}
             clinic={clinic}
+            currentUserId={user.id}
+            initialAppointmentId={appointmentId}
         />
     )
 }
