@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Stethoscope, Building2, User, ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 
-export default function OnboardingPage() {
+function OnboardingPageContent() {
     const router = useRouter()
     const searchParams = useSearchParams()
     const reasonNoClinic = searchParams.get("reason") === "no_clinic"
@@ -145,5 +145,17 @@ export default function OnboardingPage() {
                 </Card>
             </div>
         </div>
+    )
+}
+
+export default function OnboardingPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen min-h-dvh flex items-center justify-center gradient-mesh p-4">
+                <div className="h-8 w-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" />
+            </div>
+        }>
+            <OnboardingPageContent />
+        </Suspense>
     )
 }
