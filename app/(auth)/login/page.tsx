@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -30,7 +30,7 @@ function getDomainFromInput(value: string): string | null {
     return trimmed.includes(".") ? trimmed : null
 }
 
-export default function LoginPage() {
+function LoginPageContent() {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [ssoDialogOpen, setSsoDialogOpen] = useState(false)
@@ -290,5 +290,17 @@ export default function LoginPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen min-h-dvh flex items-center justify-center gradient-mesh p-4">
+                <div className="h-8 w-8 border-2 border-teal-500/30 border-t-teal-500 rounded-full animate-spin" />
+            </div>
+        }>
+            <LoginPageContent />
+        </Suspense>
     )
 }
