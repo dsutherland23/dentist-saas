@@ -6,6 +6,7 @@ import { Topbar } from "@/components/dashboard-layout/topbar"
 import { SidebarProvider, useSidebar } from "@/lib/hooks/use-sidebar-context"
 import { RouteGuard } from "@/components/route-guard"
 import { RevenueCatInit } from "@/components/revenuecat/revenuecat-init"
+import { TrialGuard } from "@/components/trial-guard"
 import { cn } from "@/lib/utils"
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     return (
         <RouteGuard>
             <RevenueCatInit />
+            <TrialGuard>
             <div className="h-full relative flex">
                 {/* Desktop Sidebar Container */}
                 <div className={cn(
@@ -43,6 +45,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     </div>
                 </main>
             </div>
+            </TrialGuard>
         </RouteGuard>
     )
 }

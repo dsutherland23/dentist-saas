@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,16 +34,19 @@ import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase"
 import { format } from "date-fns"
 import { useRevenueCat } from "@/lib/hooks/use-revenuecat"
+import { useTrialLock } from "@/lib/hooks/use-trial-lock"
 import { PRICING, getRevenueCatPurchases } from "@/lib/revenuecat"
 import { ExternalLink } from "lucide-react"
 
 export default function SettingsPage() {
     const { profile, user } = useAuth()
     const { customerInfo, isPro, loading: rcLoading, refresh } = useRevenueCat(user?.id ?? profile?.id)
+    const { isTrialActive, isTrialExpired, trialDaysLeft } = useTrialLock()
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [mounted, setMounted] = useState(false)
     const [purchasingPlan, setPurchasingPlan] = useState<"monthly" | "yearly" | "lifetime" | null>(null)
+    const [activeTab, setActiveTab] = useState<"general" | "notifications" | "security" | "billing" | "team" | "support">("general")
 
     useEffect(() => {
         setMounted(true)
@@ -155,7 +159,8 @@ export default function SettingsPage() {
     const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false)
 
     const handleSubmitSuggestion = async () => {
-        if (!suggestion.trim()) {
+        const text = suggestion.trim()
+        if (!text) {
             toast.error("Please enter a suggestion")
             return
         }
@@ -164,10 +169,20 @@ export default function SettingsPage() {
             const res = await fetch("/api/support/feedback", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ content: suggestion.trim() }),
+                body: JSON.stringify({ content: text }),
             })
             const data = await res.json().catch(() => ({}))
             if (res.ok) {
+                // Best-effort: also open the user's email client with the suggestion
+                try {
+                    if (typeof window !== "undefined") {
+                        const subject = encodeURIComponent("New suggestion from Dental Clinic Pro")
+                        const body = encodeURIComponent(text)
+                        window.location.href = `mailto:socialkon10@gmail.com?subject=${subject}&body=${body}`
+                    }
+                } catch {
+                    // ignore mailto failures and still show success toast
+                }
                 toast.success("Thank you for your feedback! We've received your suggestion.")
                 setSuggestion("")
             } else {
@@ -443,6 +458,13 @@ export default function SettingsPage() {
         }
     }
 
+    // When trial has ended and user is not Pro, force Billing tab
+    useEffect(() => {
+        if (!rcLoading && !isPro && isTrialExpired && activeTab !== "billing") {
+            setActiveTab("billing")
+        }
+    }, [rcLoading, isPro, isTrialExpired, activeTab])
+
     if (isLoading) {
         return (
             <div className="flex h-[80vh] items-center justify-center">
@@ -461,7 +483,14 @@ export default function SettingsPage() {
                 </div>
             </div>
 
-            <Tabs defaultValue="general" className="space-y-4 sm:space-y-6 min-w-0 max-w-full">
+            <Tabs value={activeTab} onValueChange={(val) => {
+                const v = val as typeof activeTab
+                if (isTrialExpired && !isPro && v !== "billing") {
+                    toast.error("Your 7‑day trial has ended. Please subscribe on the Billing tab to continue.")
+                    return
+                }
+                setActiveTab(v)
+            }} className="space-y-4 sm:space-y-6 min-w-0 max-w-full">
                 {/* Scrollable tab list on small screens */}
                 <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden -mx-1 px-1 pb-1 scrollbar-thin">
                     <TabsList className="inline-flex h-9 sm:h-10 w-max min-h-[2.25rem] items-center justify-start gap-0.5 bg-white border border-slate-200 p-1 rounded-md">
@@ -957,27 +986,51 @@ export default function SettingsPage() {
                             <CardDescription>Dental Clinic Pro — manage your subscription and billing</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            {/* Current plan status */}
+                            {/* Current plan status + 7‑day trial messaging */}
                             <div className="p-6 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border border-teal-200">
-                                <div className="flex flex-wrap items-center justify-between gap-4">
-                                    <div>
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className="space-y-1">
                                         <h3 className="text-2xl font-bold text-slate-900">
-                                            {rcLoading ? "Loading…" : isPro ? "Pro" : "Free"} Plan
+                                            {rcLoading
+                                                ? "Loading…"
+                                                : isPro
+                                                    ? "Pro"
+                                                    : isTrialActive
+                                                        ? "Free Trial"
+                                                        : "Free"}{" "}
+                                            Plan
                                         </h3>
-                                        <p className="text-slate-600 mt-1">
+                                        <p className="text-slate-600 mt-1 text-sm sm:text-base">
                                             {rcLoading
                                                 ? "Checking subscription…"
                                                 : isPro
                                                     ? "You have access to all Pro features."
-                                                    : "Upgrade to unlock Pro features."}
+                                                    : isTrialActive && trialDaysLeft !== null
+                                                        ? `7‑day free trial — ${trialDaysLeft} day${trialDaysLeft === 1 ? "" : "s"} left.`
+                                                        : isTrialExpired
+                                                            ? "Your 7‑day trial has ended. Subscribe to keep Pro features."
+                                                            : "Start your 7‑day free trial of Pro features."}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs font-semibold rounded uppercase">
-                                            {rcLoading ? "…" : isPro ? "active" : "free"}
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                                        <span className="inline-flex items-center justify-center px-2 py-1 bg-teal-100 text-teal-700 text-xs font-semibold rounded uppercase whitespace-nowrap">
+                                            {rcLoading
+                                                ? "…"
+                                                : isPro
+                                                    ? "active"
+                                                    : isTrialActive && trialDaysLeft !== null
+                                                        ? `trial • ${trialDaysLeft}d left`
+                                                        : isTrialExpired
+                                                            ? "trial ended"
+                                                            : "free"}
                                         </span>
                                         {isPro && customerInfo?.managementURL ? (
-                                            <Button variant="outline" size="sm" asChild>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                asChild
+                                                className="w-full sm:w-auto"
+                                            >
                                                 <a href={customerInfo.managementURL} target="_blank" rel="noopener noreferrer">
                                                     Manage subscription <ExternalLink className="ml-1 h-3.5 w-3.5" />
                                                 </a>
@@ -988,11 +1041,12 @@ export default function SettingsPage() {
                                                 size="sm"
                                                 onClick={() => handlePurchasePlan("monthly")}
                                                 disabled={purchasingPlan !== null}
+                                                className="w-full sm:w-auto"
                                             >
                                                 {purchasingPlan === "monthly" ? (
                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                 ) : null}
-                                                Upgrade to Pro
+                                                {isTrialExpired ? "Subscribe to continue" : "Upgrade to Pro"}
                                             </Button>
                                         )}
                                     </div>
@@ -1330,17 +1384,41 @@ export default function SettingsPage() {
                     </Card>
 
                     <div className="grid gap-4 md:grid-cols-3">
-                        <Button variant="ghost" className="h-auto py-4 flex flex-col gap-1 items-start">
-                            <span className="font-semibold text-teal-700">Help Center</span>
-                            <span className="text-xs text-slate-500">Guides and tutorials</span>
+                        <Button
+                            asChild
+                            variant="ghost"
+                            className="h-auto py-4 flex flex-col gap-1 items-start text-left"
+                        >
+                            <Link href="/help-center">
+                                <span className="font-semibold text-teal-700">Help Center</span>
+                                <span className="text-xs text-slate-500">
+                                    Guides, tutorials, and best practices for running your clinic on Dental Clinic Pro.
+                                </span>
+                            </Link>
                         </Button>
-                        <Button variant="ghost" className="h-auto py-4 flex flex-col gap-1 items-start">
-                            <span className="font-semibold text-blue-700">Contact Support</span>
-                            <span className="text-xs text-slate-500">Talk to a human (24/7)</span>
+                        <Button
+                            asChild
+                            variant="ghost"
+                            className="h-auto py-4 flex flex-col gap-1 items-start text-left"
+                        >
+                            <a href="mailto:support@antigravitydental.com">
+                                <span className="font-semibold text-blue-700">Contact Support</span>
+                                <span className="text-xs text-slate-500">
+                                    Email our team anytime. We typically respond within one business day.
+                                </span>
+                            </a>
                         </Button>
-                        <Button variant="ghost" className="h-auto py-4 flex flex-col gap-1 items-start">
-                            <span className="font-semibold text-purple-700">System Status</span>
-                            <span className="text-xs text-slate-500">All systems operational</span>
+                        <Button
+                            asChild
+                            variant="ghost"
+                            className="h-auto py-4 flex flex-col gap-1 items-start text-left"
+                        >
+                            <Link href="/system-status">
+                                <span className="font-semibold text-purple-700">System Status</span>
+                                <span className="text-xs text-slate-500">
+                                    Check current uptime, past incidents, and how to contact us if something looks off.
+                                </span>
+                            </Link>
                         </Button>
                     </div>
                 </TabsContent>
