@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import {
     Select,
@@ -52,6 +51,9 @@ interface AllAppointmentsDialogProps {
     trigger?: React.ReactNode
     currentUserId?: string | null
     dentists?: Array<{ id: string; first_name?: string; last_name: string }>
+    /** When provided with onOpenChange, dialog open state is controlled (e.g. from URL ?openAll=true) */
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
 }
 
 const STATUS_DROPDOWN_OPTIONS = [
@@ -75,9 +77,12 @@ const STATUS_FILTER_OPTIONS = [
     { value: "no_show", label: "No-Show", color: "bg-rose-100 text-rose-800 border-rose-200" },
 ] as const
 
-export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [] }: AllAppointmentsDialogProps) {
+export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], open: controlledOpen, onOpenChange }: AllAppointmentsDialogProps) {
     const router = useRouter()
-    const [open, setOpen] = useState(false)
+    const [internalOpen, setInternalOpen] = useState(false)
+    const isControlled = controlledOpen !== undefined && onOpenChange !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+    const setOpen = isControlled ? onOpenChange : setInternalOpen
     const [loading, setLoading] = useState(false)
     const [appointments, setAppointments] = useState<Appointment[]>([])
     const [editingNotes, setEditingNotes] = useState<Record<string, string>>({})
@@ -459,8 +464,8 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [] }:
                     </Button>
                 )}
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-                <DialogHeader>
+            <DialogContent className="flex max-h-[90vh] max-w-3xl flex-col overflow-hidden w-[95vw] sm:w-full">
+                <DialogHeader className="shrink-0">
                     <DialogTitle className="text-xl font-bold">All My Appointments</DialogTitle>
                     <DialogDescription>
                         Manage your appointments, update status, and add notes
@@ -536,8 +541,8 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [] }:
                         </Button>
                     </div>
                 ) : (
-                    <ScrollArea className="flex-1 pr-4">
-                        <div className="space-y-6">
+                    <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden pr-1 max-h-[60vh]">
+                        <div className="space-y-6 pb-4">
                             {/* Upcoming Appointments */}
                             {upcomingAppointments.length > 0 && (
                                 <div>
@@ -568,10 +573,10 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [] }:
                                 </div>
                             )}
                         </div>
-                    </ScrollArea>
+                    </div>
                 )}
 
-                <div className="border-t pt-4 flex justify-between items-center">
+                <div className="flex shrink-0 items-center justify-between border-t pt-4">
                     <p className="text-xs text-slate-500">
                         {selectedStatuses.length > 0 ? (
                             <>

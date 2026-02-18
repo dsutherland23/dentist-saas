@@ -1568,10 +1568,14 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     )}
                                     <div className="space-y-2">
                                         <Label>Dentist</Label>
-                                        <Select value={newPlanData.dentist_id} onValueChange={val => setNewPlanData(prev => ({ ...prev, dentist_id: val }))}>
-                                            <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                            <SelectContent>
-                                                {dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)}
+                                        <Select value={newPlanData.dentist_id || undefined} onValueChange={val => setNewPlanData(prev => ({ ...prev, dentist_id: val }))}>
+                                            <SelectTrigger><SelectValue placeholder="Select dentist" /></SelectTrigger>
+                                            <SelectContent className="z-[100]" position="popper">
+                                                {dentists.length === 0 ? (
+                                                    <div className="py-2 px-2 text-sm text-slate-500">No dentists available</div>
+                                                ) : (
+                                                    dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)
+                                                )}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -1634,12 +1638,16 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     <div className="grid grid-cols-2 gap-4 pt-2 border-t">
                                         <div className="space-y-2">
                                             <Label>Dentist</Label>
-                                            <Select value={treatmentData.dentist_id} onValueChange={val => setTreatmentData(prev => ({ ...prev, dentist_id: val }))}>
-                                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {dentists.map(dentist => (
-                                                        <SelectItem key={dentist.id} value={dentist.id}>Dr. {dentist.last_name}</SelectItem>
-                                                    ))}
+                                            <Select value={treatmentData.dentist_id || undefined} onValueChange={val => setTreatmentData(prev => ({ ...prev, dentist_id: val }))}>
+                                                <SelectTrigger><SelectValue placeholder="Select dentist" /></SelectTrigger>
+                                                <SelectContent className="z-[100]" position="popper">
+                                                    {dentists.length === 0 ? (
+                                                        <div className="py-2 px-2 text-sm text-slate-500">No dentists available</div>
+                                                    ) : (
+                                                        dentists.map(dentist => (
+                                                            <SelectItem key={dentist.id} value={dentist.id}>Dr. {dentist.last_name}</SelectItem>
+                                                        ))
+                                                    )}
                                                 </SelectContent>
                                             </Select>
                                         </div>

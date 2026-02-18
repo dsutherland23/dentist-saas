@@ -276,7 +276,7 @@
     @apply bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600;
   }
 
-  /* Dashboard: professional stat cards */
+  /* Dashboard: professional stat cards (legacy, kept for compatibility) */
   .dashboard-stat-card {
     @apply relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 transition-all duration-200;
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
@@ -290,6 +290,29 @@
   }
   .dashboard-section-title {
     @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+  }
+
+  /* Premium dashboard 2026: soft elevation, no heavy borders */
+  .dashboard-kpi-card {
+    @apply relative overflow-hidden rounded-2xl bg-white p-6 transition-shadow duration-200;
+    border: 1px solid rgb(241 245 249);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  }
+  .dashboard-kpi-card:hover {
+    box-shadow: 0 4px 14px -2px rgb(0 0 0 / 0.06), 0 2px 8px -2px rgb(0 0 0 / 0.04);
+  }
+  .dashboard-chart-card {
+    @apply relative overflow-hidden rounded-2xl bg-white p-6 transition-shadow duration-200;
+    border: 1px solid rgb(241 245 249);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
+  }
+  .dashboard-chart-card:hover {
+    box-shadow: 0 2px 8px -2px rgb(0 0 0 / 0.05);
+  }
+  .dashboard-table-card {
+    @apply rounded-2xl bg-white overflow-hidden transition-shadow duration-200;
+    border: 1px solid rgb(241 245 249);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
   }
 
   /* Segmented control (tabs) */
@@ -309,7 +332,8 @@
 
   /* Dashboard content panels */
   .dashboard-panel {
-    @apply rounded-2xl border border-slate-200/80 bg-white overflow-hidden;
+    @apply rounded-2xl overflow-hidden bg-white transition-shadow duration-200;
+    border: 1px solid rgb(241 245 249);
     box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.04);
   }
   .dashboard-panel .dashboard-panel-header {

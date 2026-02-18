@@ -15,6 +15,7 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
 
     const searchParams = searchParamsPromise ? await searchParamsPromise : {}
     const appointmentId = typeof searchParams?.appointmentId === "string" ? searchParams.appointmentId : null
+    const openAll = searchParams?.openAll === "true" || searchParams?.openAll === "1"
 
     // getClinicId() redirects to /onboarding if no clinic — do NOT wrap in try-catch
     // as redirect() throws a special error that must propagate
@@ -26,8 +27,8 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
     const rangeEnd = new Date(now)
     rangeEnd.setDate(rangeEnd.getDate() + 60)
 
-    // Parallel fetching (incl. clinic for receipt/referral branding)
-    const [patientsRes, dentistsRes, appsRes, blocksRes, clinicRes] = await Promise.all([
+    // Parallel fetching (incl. clinic for receipt/referral branding, current user role for visit flow)
+    const [patientsRes, dentistsRes, appsRes, blocksRes, clinicRes, currentUserRes] = await Promise.all([
         supabase.from("patients").select("id, first_name, last_name").eq("clinic_id", clinicId),
         supabase.from("users").select("id, first_name, last_name, role").eq("clinic_id", clinicId),
         supabase.from("appointments")
@@ -44,7 +45,8 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
             .gte("end_time", rangeStart.toISOString())
             .lte("start_time", rangeEnd.toISOString())
             .order("start_time", { ascending: true }),
-        supabase.from("clinics").select("name, logo_url, phone, website").eq("id", clinicId).single()
+        supabase.from("clinics").select("name, logo_url, phone, website, require_consent_in_visit_flow").eq("id", clinicId).single(),
+        supabase.from("users").select("role").eq("id", user.id).single()
     ])
 
     if (patientsRes.error || dentistsRes.error || appsRes.error) {
@@ -65,8 +67,11 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
             logo_url: clinicRes.data.logo_url ?? null,
             phone: clinicRes.data.phone ?? null,
             website: clinicRes.data.website ?? null,
+            require_consent_in_visit_flow: clinicRes.data.require_consent_in_visit_flow ?? false,
         }
         : null
+
+    const currentUserRole = currentUserRes.data?.role ?? null
 
     return (
         <CalendarClient
@@ -76,7 +81,9 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
             dentists={dentists}
             clinic={clinic}
             currentUserId={user.id}
+            currentUserRole={currentUserRole}
             initialAppointmentId={appointmentId}
+            initialOpenAll={openAll}
         />
     )
 }

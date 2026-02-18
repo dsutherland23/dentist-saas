@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
     format,
@@ -18,15 +18,10 @@ import {
     parseISO,
     startOfDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download, X, Stethoscope, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -50,12 +45,14 @@ import {
     Sheet,
     SheetContent,
 } from "@/components/ui/sheet"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { differenceInMinutes, addMinutes, isAfter } from "date-fns"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { CheckoutPaymentModal } from "@/components/calendar/checkout-payment-modal"
 import { useRouter } from "next/navigation"
 import { QueueReceiptDialog, type QueueReceiptData } from "@/components/calendar/queue-receipt-dialog"
 import { AllAppointmentsDialog } from "@/components/calendar/all-appointments-dialog"
+import { VisitProgressPanel, type VisitForPanel, type PatientVerificationData } from "@/components/calendar/visit-progress-panel"
 
 interface Appointment {
     id: string
@@ -86,9 +83,12 @@ interface CalendarClientProps {
     initialBlockedSlots?: BlockedSlot[]
     patients: { id: string; first_name: string; last_name: string }[]
     dentists: { id: string; first_name: string; last_name: string }[]
-    clinic?: { name: string; logo_url?: string | null; phone?: string | null; website?: string | null } | null
+    clinic?: { name: string; logo_url?: string | null; phone?: string | null; website?: string | null; require_consent_in_visit_flow?: boolean } | null
     currentUserId?: string | null
+    currentUserRole?: string | null
     initialAppointmentId?: string | null
+    /** When true, open the "View All" appointments dialog on mount (e.g. from dashboard "View all" link) */
+    initialOpenAll?: boolean
 }
 
 const MOBILE_BREAKPOINT = 768
@@ -105,14 +105,14 @@ function useIsMobile() {
     return isMobile
 }
 
-export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists, clinic, currentUserId = null, initialAppointmentId = null }: CalendarClientProps) {
+export default function CalendarClient({ initialAppointments, initialBlockedSlots = [], patients, dentists, clinic, currentUserId = null, currentUserRole = null, initialAppointmentId = null, initialOpenAll = false }: CalendarClientProps) {
     const router = useRouter()
     const isMobile = useIsMobile()
+    const [allAppointmentsDialogOpen, setAllAppointmentsDialogOpen] = useState(!!initialOpenAll)
     const [currentDate, setCurrentDate] = useState(new Date())
     const [view, setView] = useState<"day" | "week" | "month">("week")
     const [staffFilterId, setStaffFilterId] = useState<string | null>(null)
     const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
-    const [mobileAppointment, setMobileAppointment] = useState<any>(null)
     const [pendingReschedule, setPendingReschedule] = useState<{
         appointment: any,
         newStart: Date,
@@ -130,6 +130,75 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const [receiptData, setReceiptData] = useState<QueueReceiptData | null>(null)
     const [isReceiptOpen, setIsReceiptOpen] = useState(false)
     const [checkoutAppt, setCheckoutAppt] = useState<{ id: string; patientName: string; treatment_type: string; patient_id: string } | null>(null)
+    const [selectedApptForDetail, setSelectedApptForDetail] = useState<any | null>(null)
+    const [openAppointmentIdForVisit, setOpenAppointmentIdForVisit] = useState<string | null>(null)
+    const [visitData, setVisitData] = useState<VisitForPanel | null>(null)
+    const [visitLoading, setVisitLoading] = useState(false)
+    const [patientVerificationData, setPatientVerificationData] = useState<PatientVerificationData | null>(null)
+    const [patientSummaryHoverOpen, setPatientSummaryHoverOpen] = useState(false)
+    const patientSummaryCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // Fetch patient profile summary when detail panel opens (for auto-verify + hover summary)
+    useEffect(() => {
+        const pid = selectedApptForDetail?.patient_id
+        if (!pid) {
+            setPatientVerificationData(null)
+            return
+        }
+        let cancelled = false
+        fetch(`/api/patients/${pid}/visit-verification`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => { if (!cancelled) setPatientVerificationData(data) })
+            .catch(() => { if (!cancelled) setPatientVerificationData(null) })
+        return () => { cancelled = true }
+    }, [selectedApptForDetail?.patient_id])
+
+    // Open "View All" from dashboard link and clear URL so refresh doesn't reopen
+    useEffect(() => {
+        if (initialOpenAll) {
+            router.replace("/calendar", { scroll: false })
+        }
+    }, [initialOpenAll, router])
+    const [visitTransitioning, setVisitTransitioning] = useState(false)
+    const openForVisitRef = useRef<string | null>(null)
+    useEffect(() => { openForVisitRef.current = openAppointmentIdForVisit }, [openAppointmentIdForVisit])
+
+    const fetchVisitForAppointment = useCallback(async (appointmentId: string) => {
+        setVisitLoading(true)
+        setVisitData(null)
+        try {
+            const res = await fetch(`/api/visits?appointmentId=${encodeURIComponent(appointmentId)}`)
+            const json = await res.json().catch(() => ({}))
+            if (openForVisitRef.current === appointmentId) {
+                if (res.ok && json.visit) setVisitData(json.visit)
+            }
+        } catch {
+            if (openForVisitRef.current === appointmentId) setVisitData(null)
+        } finally {
+            if (openForVisitRef.current === appointmentId) setVisitLoading(false)
+        }
+    }, [])
+
+    const handleVisitTransition = useCallback(async (appointmentId: string, nextState: string, flags?: Record<string, boolean>) => {
+        setVisitTransitioning(true)
+        try {
+            const res = await fetch("/api/visits/transition", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ appointmentId, nextState, flags }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error((json as { error?: string }).error || "Transition failed")
+            if (json.visit) setVisitData(json.visit)
+            if (json.appointment) router.refresh()
+            toast.success("Visit updated")
+            router.refresh()
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Failed to update visit")
+        } finally {
+            setVisitTransitioning(false)
+        }
+    }, [router])
 
     const closeContextMenu = useCallback(() => setContextMenuBlock(null), [])
 
@@ -222,20 +291,32 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         dentistName: dentists.find(d => d.id === blk.staff_id) ? `Dr. ${dentists.find(d => d.id === blk.staff_id)?.last_name}` : "Staff"
     }))
 
-    // Navigate to appointment when opening calendar from dashboard with ?appointmentId=...
+    // Navigate to appointment and open detail + visit flow when opening calendar from dashboard with ?appointmentId=...
     useEffect(() => {
         if (!initialAppointmentId || initialAppointments.length === 0) return
-        const appt = initialAppointments.find(a => a.id === initialAppointmentId)
-        if (!appt) return
-        const start = parseISO(appt.start_time)
+        const raw = initialAppointments.find(a => a.id === initialAppointmentId)
+        if (!raw) return
+        const start = parseISO(raw.start_time)
         setCurrentDate(startOfDay(start))
         setView("day")
+        const normalized = {
+            ...raw,
+            start,
+            end: parseISO(raw.end_time),
+            patientName: raw.patients ? `${raw.patients.first_name} ${raw.patients.last_name}` : "Unknown Patient",
+            dentistName: raw.dentists ? `Dr. ${raw.dentists.last_name}` : "Unknown Dentist",
+            patientPhone: raw.patients?.phone ?? null
+        }
+        setSelectedApptForDetail(normalized)
+        setOpenAppointmentIdForVisit(initialAppointmentId)
+        fetchVisitForAppointment(initialAppointmentId)
+        router.replace("/calendar", { scroll: false })
         const t = setTimeout(() => {
             const el = document.querySelector(`[data-appointment-id="${initialAppointmentId}"]`)
             el?.scrollIntoView({ behavior: "smooth", block: "center" })
         }, 300)
         return () => clearTimeout(t)
-    }, [initialAppointmentId, initialAppointments])
+    }, [initialAppointmentId, initialAppointments, fetchVisitForAppointment, router])
 
     const filteredDentists = staffFilterId
         ? dentists.filter(d => d.id === staffFilterId)
@@ -402,30 +483,49 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
         const cardBaseClass = "text-[10px] px-2 py-1 rounded bg-slate-100/50 text-slate-700 font-medium border border-slate-200/50 cursor-grab active:cursor-grabbing hover:bg-slate-200/50 transition-colors"
 
-        const triggerDiv = isMonthView ? (
+        const openCard = (e: React.MouseEvent) => {
+            e.stopPropagation()
+            setSelectedApptForDetail(appt)
+            setOpenAppointmentIdForVisit(appt.id)
+            fetchVisitForAppointment(appt.id)
+        }
+
+        if (isMonthView) {
+            return (
+                <div
+                    data-appointment
+                    data-appointment-id={appt.id}
+                    draggable
+                    role="button"
+                    tabIndex={0}
+                    onClick={openCard}
+                    onKeyDown={(e) => e.key === "Enter" && openCard(e as any)}
+                    onDragStart={(e) => {
+                        e.dataTransfer.setData("appointmentId", appt.id)
+                        e.dataTransfer.effectAllowed = "move"
+                    }}
+                    className={cn(cardBaseClass, "w-full truncate cursor-pointer")}
+                >
+                    <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
+                    <span className="truncate">{appt.patientName}</span>
+                </div>
+            )
+        }
+
+        return (
             <div
                 data-appointment
                 data-appointment-id={appt.id}
                 draggable
+                role="button"
+                tabIndex={0}
+                onClick={openCard}
+                onKeyDown={(e) => e.key === "Enter" && openCard(e as any)}
                 onDragStart={(e) => {
                     e.dataTransfer.setData("appointmentId", appt.id)
                     e.dataTransfer.effectAllowed = "move"
                 }}
-                className={cn(cardBaseClass, "w-full truncate")}
-            >
-                <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
-                <span className="truncate">{appt.patientName}</span>
-            </div>
-        ) : (
-            <div
-                data-appointment
-                data-appointment-id={appt.id}
-                draggable
-                onDragStart={(e) => {
-                    e.dataTransfer.setData("appointmentId", appt.id)
-                    e.dataTransfer.effectAllowed = "move"
-                }}
-                className={cn(cardBaseClass, "absolute left-1 right-1 p-2 z-20 group/appt overflow-hidden")}
+                className={cn(cardBaseClass, "absolute left-1 right-1 p-2 z-20 group/appt overflow-hidden cursor-pointer")}
                 style={{
                     top: `${(appt.start.getMinutes() / 60) * 100}%`,
                     height: `${Math.max((appt.end.getTime() - appt.start.getTime()) / 60000 / 60 * 100, 35)}%`,
@@ -438,159 +538,6 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 </div>
                 <div className="truncate pl-0 mt-0.5 opacity-80 text-[9px]">{appt.treatment_type}</div>
             </div>
-        )
-
-        const openMobileSheet = () => setMobileAppointment(appt)
-
-        if (isMobile) {
-            return (
-                <div onClick={(e) => { e.stopPropagation(); openMobileSheet() }} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && openMobileSheet()}>
-                    {triggerDiv}
-                </div>
-            )
-        }
-
-        return (
-            <Popover>
-                <PopoverTrigger asChild>
-                    {triggerDiv}
-                </PopoverTrigger>
-                <PopoverContent
-                    data-appointment
-                    className="w-80 max-w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto p-0 overflow-x-hidden border-slate-200 shadow-xl"
-                    side="right"
-                    align="start"
-                    onClick={(e) => e.stopPropagation()}
-                    onPointerDown={(e) => e.stopPropagation()}
-                >
-                    <div className={cn("p-4 border-b", colorClass.split(" ")[0])}>
-                        <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
-                                <AvatarFallback className="bg-white/50 text-current font-bold uppercase">
-                                    {appt.patientName.split(" ").map((n: string) => n[0]).join("")}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div>
-                                <h4 className="font-bold text-slate-900">{appt.patientName}</h4>
-                                <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">Patient Record</p>
-                                {appt.patientPhone && (
-                                    <a href={`tel:${appt.patientPhone}`} className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-teal-600 hover:underline">
-                                        <Phone className="h-3 w-3 shrink-0" />
-                                        {appt.patientPhone}
-                                    </a>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="p-4 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Treatment</p>
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-3.5 w-3.5 text-teal-600" />
-                                    <span className="text-sm font-semibold text-slate-700">{appt.treatment_type}</span>
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase">Dentist</p>
-                                <div className="flex items-center gap-2">
-                                    <Plus className="h-3.5 w-3.5 text-blue-600" />
-                                    <span className="text-sm font-semibold text-slate-700">{appt.dentistName}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                <span className="text-xs font-bold text-slate-600">
-                                    {format(appt.start, "h:mm a")} – {format(appt.end, "h:mm a")}
-                                </span>
-                            </div>
-                            {showStatusDropdown ? (
-                                <Select
-                                    value={statusToDropdownValue(appt.status)}
-                                    onValueChange={(v) => handleStatusChange(appt.id, v)}
-                                    disabled={updatingStatusId === appt.id}
-                                >
-                                    <SelectTrigger className="h-7 w-[100px] text-[9px] font-bold uppercase tracking-tighter px-2 py-0 border-slate-200">
-                                        <SelectValue placeholder="Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {STATUS_DROPDOWN_OPTIONS.map((o) => (
-                                            <SelectItem key={o.value} value={o.value} className="text-[11px] font-medium">
-                                                {o.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <Badge
-                                    variant="outline"
-                                    className={cn(
-                                        "text-[9px] uppercase tracking-tighter font-bold",
-                                        (appt.status === "checked_in" || appt.status === "in_treatment")
-                                            ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                            : appt.status === "completed"
-                                                ? "bg-slate-100 border-slate-200 text-slate-600"
-                                                : "bg-slate-50 border-slate-200 text-slate-500"
-                                    )}
-                                >
-                                    {getAppointmentStatusLabel(appt.status)}
-                                </Badge>
-                            )}
-                        </div>
-                        {(appt.checked_in_at || appt.checked_out_at) && (
-                            <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px] text-slate-500">
-                                {appt.checked_in_at && (
-                                    <p className="flex items-center gap-1.5">
-                                        <span className="font-semibold text-emerald-600">In:</span>
-                                        {format(parseISO(appt.checked_in_at), "h:mm a")}
-                                    </p>
-                                )}
-                                {appt.checked_out_at && (
-                                    <p className="flex items-center gap-1.5">
-                                        <span className="font-semibold text-slate-600">Out:</span>
-                                        {format(parseISO(appt.checked_out_at), "h:mm a")}
-                                    </p>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <div className="bg-slate-50 p-3 border-t border-slate-100 flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold">Reschedule</Button>
-                        {appt.status !== "completed" && appt.status !== "cancelled" && appt.status !== "checked_in" && appt.status !== "in_treatment" && (
-                            <Button
-                                className="h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60"
-                                disabled={updatingStatusId === appt.id}
-                                onClick={() => handleStatusChange(appt.id, "checked_in")}
-                            >
-                                {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Check In"}
-                            </Button>
-                        )}
-                        {appt.status === "checked_in" && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 text-[11px] font-bold border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-                                disabled={updatingStatusId === appt.id}
-                                onClick={() => handleStatusChange(appt.id, "in_treatment")}
-                            >
-                                {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Start treatment"}
-                            </Button>
-                        )}
-                        {(appt.status === "checked_in" || appt.status === "in_treatment") && (
-                            <Button
-                                className="h-8 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60"
-                                disabled={updatingStatusId === appt.id}
-                                onClick={() => setCheckoutAppt({ id: appt.id, patientName: appt.patientName, treatment_type: appt.treatment_type || "Appointment", patient_id: appt.patient_id })}
-                            >
-                                {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Complete / Check out"}
-                            </Button>
-                        )}
-                    </div>
-                </PopoverContent>
-            </Popover>
         )
     }
 
@@ -732,6 +679,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                         <AllAppointmentsDialog
                             currentUserId={currentUserId}
                             dentists={dentists}
+                            open={allAppointmentsDialogOpen}
+                            onOpenChange={setAllAppointmentsDialogOpen}
                             trigger={
                                 <Button
                                     variant="outline"
@@ -835,7 +784,11 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 border rounded-xl bg-white shadow-sm overflow-hidden flex flex-col border-slate-200">
+            {/* Outer row: calendar + inline detail panel share one card */}
+            <div className="flex-1 min-h-0 flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+            {/* ── Calendar column ── */}
+            <div className="flex-1 min-h-0 overflow-hidden flex flex-col min-w-0">
                 {view !== "month" ? (
                     <>
                         <div className="flex-1 flex flex-col min-h-0 overflow-auto">
@@ -974,7 +927,311 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                         })}
                     </div>
                 ) : null}
-            </div>
+            </div>{/* end calendar column */}
+
+            {/* ── Inline detail panel column ── */}
+            {(() => {
+                const appt = selectedApptForDetail
+                const isOpen = !!appt
+
+                const closeDetail = () => {
+                    setSelectedApptForDetail(null)
+                    setOpenAppointmentIdForVisit(null)
+                    setVisitData(null)
+                }
+
+                const colorIndex = appt ? dentists.findIndex((d: { id: string }) => d.id === appt.dentist_id) % 5 : 0
+                const accentColors = [
+                    { light: "bg-teal-50",   text: "text-teal-700",   ring: "ring-teal-200" },
+                    { light: "bg-blue-50",   text: "text-blue-700",   ring: "ring-blue-200" },
+                    { light: "bg-purple-50", text: "text-purple-700", ring: "ring-purple-200" },
+                    { light: "bg-amber-50",  text: "text-amber-700",  ring: "ring-amber-200" },
+                    { light: "bg-rose-50",   text: "text-rose-700",   ring: "ring-rose-200" },
+                ]
+                const accent = accentColors[colorIndex] || accentColors[0]
+                const initials = appt
+                    ? appt.patientName.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()
+                    : ""
+
+                const now = new Date()
+                const showStatusDropdown = appt
+                    ? isAfter(now, addMinutes(appt.start, 1)) && !["completed"].includes(appt.status)
+                    : false
+
+                const statusBadgeClass = (s: string) => {
+                    if (s === "checked_in" || s === "in_treatment") return "bg-emerald-100 border-emerald-200 text-emerald-800"
+                    if (s === "completed") return "bg-slate-100 border-slate-200 text-slate-600"
+                    if (s === "cancelled" || s === "no_show") return "bg-rose-100 border-rose-200 text-rose-700"
+                    return "bg-amber-100 border-amber-200 text-amber-700"
+                }
+
+                return (
+                    <div
+                        className={cn(
+                            "shrink-0 flex flex-col border-l border-slate-100 bg-white overflow-hidden",
+                            "transition-[width] duration-300 ease-in-out",
+                            isOpen ? "w-64" : "w-0"
+                        )}
+                    >
+                        {appt && (
+                            <div className="w-64 flex flex-col h-full overflow-hidden">
+                                {/* Header */}
+                                <div className={cn("shrink-0 px-3 py-3 border-b border-slate-100", accent.light)}>
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <Avatar className={cn("h-8 w-8 shrink-0 border-2 border-white shadow ring-1", accent.ring)}>
+                                                <AvatarFallback className={cn("font-bold text-xs", accent.text)}>
+                                                    {initials}
+                                                </AvatarFallback>
+                                            </Avatar>
+                                            <div className="min-w-0 flex-1">
+                                                <Popover open={patientSummaryHoverOpen} onOpenChange={setPatientSummaryHoverOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <div
+                                                            className="cursor-default"
+                                                            onMouseEnter={() => {
+                                                                if (patientSummaryCloseTimerRef.current) {
+                                                                    clearTimeout(patientSummaryCloseTimerRef.current)
+                                                                    patientSummaryCloseTimerRef.current = null
+                                                                }
+                                                                setPatientSummaryHoverOpen(true)
+                                                            }}
+                                                            onMouseLeave={() => {
+                                                                patientSummaryCloseTimerRef.current = setTimeout(() => setPatientSummaryHoverOpen(false), 200)
+                                                            }}
+                                                        >
+                                                            <p className="text-sm font-bold text-slate-900 truncate leading-tight">{appt.patientName}</p>
+                                                        </div>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent
+                                                        className="w-72 p-3"
+                                                        align="start"
+                                                        side="right"
+                                                        onMouseEnter={() => {
+                                                            if (patientSummaryCloseTimerRef.current) {
+                                                                clearTimeout(patientSummaryCloseTimerRef.current)
+                                                                patientSummaryCloseTimerRef.current = null
+                                                            }
+                                                            setPatientSummaryHoverOpen(true)
+                                                        }}
+                                                        onMouseLeave={() => {
+                                                            patientSummaryCloseTimerRef.current = setTimeout(() => setPatientSummaryHoverOpen(false), 150)
+                                                        }}
+                                                    >
+                                                        <p className="text-xs font-semibold text-slate-800 mb-2">Patient info</p>
+                                                        {patientVerificationData ? (
+                                                            <div className="space-y-2 text-[11px] text-slate-600">
+                                                                <div>
+                                                                    <span className="font-medium text-slate-500">Contact</span>
+                                                                    <p className="mt-0.5">{patientVerificationData.phone || "—"}</p>
+                                                                    <p className="mt-0.5">{patientVerificationData.email || "—"}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium text-slate-500">Insurance</span>
+                                                                    <p className="mt-0.5">{patientVerificationData.insurance_provider || "—"}</p>
+                                                                    {patientVerificationData.insurance_policy_number && (
+                                                                        <p className="mt-0.5">Policy: {patientVerificationData.insurance_policy_number}</p>
+                                                                    )}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium text-slate-500">Allergies</span>
+                                                                    <p className="mt-0.5">{patientVerificationData.allergies?.trim() || "None on file"}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium text-slate-500">Medical conditions</span>
+                                                                    <p className="mt-0.5">{patientVerificationData.medical_conditions?.trim() || "None on file"}</p>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <p className="text-[11px] text-slate-500">Loading…</p>
+                                                        )}
+                                                    </PopoverContent>
+                                                </Popover>
+                                                {appt.patientPhone && (
+                                                    <a href={`tel:${appt.patientPhone}`} className="text-[10px] text-slate-400 hover:text-teal-600 flex items-center gap-1 mt-0.5">
+                                                        <Phone className="h-2.5 w-2.5 shrink-0" />{appt.patientPhone}
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={closeDetail}
+                                            className="shrink-0 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-black/5 transition-colors"
+                                            aria-label="Close"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Scrollable body */}
+                                <div className="flex-1 overflow-y-auto overscroll-contain">
+
+                                    {/* Key details */}
+                                    <div className="px-3 py-2.5 border-b border-slate-100 space-y-2">
+                                        <div>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                                <Clock className="h-2.5 w-2.5" /> Time
+                                            </p>
+                                            <p className="text-xs font-semibold text-slate-800">{format(appt.start, "h:mm a")} – {format(appt.end, "h:mm a")}</p>
+                                            <p className="text-[10px] text-slate-400 mt-0.5">{format(appt.start, "EEE, MMM d")}</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                                    <Stethoscope className="h-2.5 w-2.5" /> Treatment
+                                                </p>
+                                                <p className="text-[11px] font-semibold text-slate-700 leading-snug">{appt.treatment_type}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5 flex items-center gap-1">
+                                                    <User className="h-2.5 w-2.5" /> Dentist
+                                                </p>
+                                                <p className="text-[11px] font-semibold text-slate-700 leading-snug">{appt.dentistName}</p>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status</p>
+                                            {showStatusDropdown ? (
+                                                <Select
+                                                    value={statusToDropdownValue(appt.status)}
+                                                    onValueChange={(v) => handleStatusChange(appt.id, v)}
+                                                    disabled={updatingStatusId === appt.id}
+                                                >
+                                                    <SelectTrigger className="h-6 w-full text-[10px] font-semibold px-2 border-slate-200">
+                                                        <SelectValue placeholder="Status" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {STATUS_DROPDOWN_OPTIONS.map((o) => (
+                                                            <SelectItem key={o.value} value={o.value} className="text-xs">
+                                                                {o.label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <Badge variant="outline" className={cn("text-[9px] font-semibold px-1.5 py-0.5", statusBadgeClass(appt.status))}>
+                                                    {getAppointmentStatusLabel(appt.status)}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Check-in / out */}
+                                    {(appt.checked_in_at || appt.checked_out_at) && (
+                                        <div className="px-3 py-2 border-b border-slate-100 space-y-1">
+                                            {appt.checked_in_at && (
+                                                <div className="flex items-center gap-1.5 text-[10px]">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                                    <span className="text-slate-400">In</span>
+                                                    <span className="font-semibold text-slate-600">{format(parseISO(appt.checked_in_at), "h:mm a")}</span>
+                                                </div>
+                                            )}
+                                            {appt.checked_out_at && (
+                                                <div className="flex items-center gap-1.5 text-[10px]">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0" />
+                                                    <span className="text-slate-400">Out</span>
+                                                    <span className="font-semibold text-slate-600">{format(parseISO(appt.checked_out_at), "h:mm a")}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Visit progress */}
+                                    {openAppointmentIdForVisit === appt.id && (
+                                        <div className="px-3 py-2.5">
+                                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-2">Visit progress</p>
+                                            {visitLoading ? (
+                                                <div className="flex justify-center py-4">
+                                                    <Loader2 className="h-4 w-4 animate-spin text-slate-300" aria-hidden />
+                                                </div>
+                                            ) : visitData ? (
+                                                <VisitProgressPanel
+                                                    visit={visitData}
+                                                    onTransition={(nextState, flags) => handleVisitTransition(appt.id, nextState, flags)}
+                                                    userRole={currentUserRole}
+                                                    disabled={visitTransitioning}
+                                                    patientId={appt.patient_id}
+                                                    patientVerificationData={patientVerificationData}
+                                                    requireConsentInVisitFlow={clinic?.require_consent_in_visit_flow ?? false}
+                                                />
+                                            ) : appt.status !== "completed" && appt.status !== "cancelled" ? (
+                                                <Button
+                                                    className="w-full h-7 text-[11px] bg-teal-600 hover:bg-teal-700"
+                                                    disabled={visitTransitioning}
+                                                    onClick={() => handleVisitTransition(appt.id, "ARRIVED")}
+                                                >
+                                                    {visitTransitioning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
+                                                    Mark arrived
+                                                </Button>
+                                            ) : null}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Sticky footer actions */}
+                                <div className="shrink-0 px-3 py-2.5 border-t border-slate-100 bg-slate-50/60 space-y-1.5">
+                                    {!visitData && appt.status !== "completed" && appt.status !== "cancelled" && appt.status !== "checked_in" && appt.status !== "in_treatment" && (
+                                        <Button
+                                            className="w-full h-7 text-[11px] font-semibold bg-teal-600 hover:bg-teal-700"
+                                            disabled={updatingStatusId === appt.id}
+                                            onClick={() => handleStatusChange(appt.id, "checked_in")}
+                                        >
+                                            {updatingStatusId === appt.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
+                                            Check In
+                                        </Button>
+                                    )}
+                                    {!visitData && appt.status === "checked_in" && (
+                                        <Button
+                                            className="w-full h-7 text-[11px] font-semibold bg-blue-600 hover:bg-blue-700"
+                                            disabled={updatingStatusId === appt.id}
+                                            onClick={() => handleStatusChange(appt.id, "in_treatment")}
+                                        >
+                                            {updatingStatusId === appt.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Activity className="h-3 w-3 mr-1" />}
+                                            Start Treatment
+                                        </Button>
+                                    )}
+                                    {!visitData && (appt.status === "checked_in" || appt.status === "in_treatment") && (
+                                        <Button
+                                            className="w-full h-7 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700"
+                                            disabled={updatingStatusId === appt.id}
+                                            onClick={() => setCheckoutAppt({ id: appt.id, patientName: appt.patientName, treatment_type: appt.treatment_type || "Appointment", patient_id: appt.patient_id })}
+                                        >
+                                            {updatingStatusId === appt.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
+                                            Check Out
+                                        </Button>
+                                    )}
+                                    <div className="flex gap-1.5">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 h-7 text-[10px] border-slate-200 text-slate-500"
+                                            onClick={() => {
+                                                closeDetail()
+                                                setIsRescheduleOpen(true)
+                                                setPendingReschedule({ appointment: appt, newStart: appt.start, newEnd: appt.end, conflictPatient: null })
+                                            }}
+                                        >
+                                            Reschedule
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0 text-slate-400 hover:text-slate-600"
+                                            onClick={closeDetail}
+                                            aria-label="Close"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )
+            })()}
+
+            </div>{/* end outer row */}
 
             {contextMenuBlock && typeof document !== "undefined" && createPortal(
                 <div
@@ -1051,155 +1308,6 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 </DialogContent>
             </Dialog>
 
-            {/* Mobile: appointment detail in bottom sheet so it doesn't overflow the screen */}
-            <Sheet open={!!mobileAppointment} onOpenChange={(open) => !open && setMobileAppointment(null)}>
-                <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-xl p-0 flex flex-col">
-                    {mobileAppointment && (() => {
-                        const appt = mobileAppointment
-                        const now = new Date()
-                        const oneMinAfterStart = addMinutes(appt.start, 1)
-                        const showStatusDropdown = isAfter(now, oneMinAfterStart) && !["completed"].includes(appt.status)
-                        const colorIndex = dentists.findIndex((d: { id: string }) => d.id === appt.dentist_id) % 5
-                        const colors = [
-                            "bg-teal-50 border-teal-200 text-teal-700",
-                            "bg-blue-50 border-blue-200 text-blue-700",
-                            "bg-purple-50 border-purple-200 text-purple-700",
-                            "bg-amber-50 border-amber-200 text-amber-700",
-                            "bg-rose-50 border-rose-200 text-rose-700"
-                        ]
-                        const colorClass = colors[colorIndex] || colors[0]
-                        return (
-                            <>
-                                <div className={cn("p-4 border-b", colorClass.split(" ")[0])}>
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
-                                            <AvatarFallback className="bg-white/50 text-current font-bold uppercase">
-                                                {appt.patientName.split(" ").map((n: string) => n[0]).join("")}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div>
-                                            <h4 className="font-bold text-slate-900">{appt.patientName}</h4>
-                                            <p className="text-[10px] font-bold uppercase tracking-wider opacity-70">Patient Record</p>
-                                            {appt.patientPhone && (
-                                                <a href={`tel:${appt.patientPhone}`} className="mt-1 flex items-center gap-1 text-[11px] text-slate-600 hover:text-teal-600 hover:underline">
-                                                    <Phone className="h-3 w-3 shrink-0" />
-                                                    {appt.patientPhone}
-                                                </a>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Treatment</p>
-                                            <div className="flex items-center gap-2">
-                                                <MapPin className="h-3.5 w-3.5 text-teal-600" />
-                                                <span className="text-sm font-semibold text-slate-700">{appt.treatment_type}</span>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Dentist</p>
-                                            <div className="flex items-center gap-2">
-                                                <Plus className="h-3.5 w-3.5 text-blue-600" />
-                                                <span className="text-sm font-semibold text-slate-700">{appt.dentistName}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <Clock className="h-3.5 w-3.5 text-slate-400" />
-                                            <span className="text-xs font-bold text-slate-600">
-                                                {format(appt.start, "h:mm a")} – {format(appt.end, "h:mm a")}
-                                            </span>
-                                        </div>
-                                        {showStatusDropdown ? (
-                                            <Select
-                                                value={statusToDropdownValue(appt.status)}
-                                                onValueChange={(v) => { handleStatusChange(appt.id, v); setMobileAppointment(null) }}
-                                                disabled={updatingStatusId === appt.id}
-                                            >
-                                                <SelectTrigger className="h-7 w-[100px] text-[9px] font-bold uppercase tracking-tighter px-2 py-0 border-slate-200">
-                                                    <SelectValue placeholder="Status" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {STATUS_DROPDOWN_OPTIONS.map((o) => (
-                                                        <SelectItem key={o.value} value={o.value} className="text-[11px] font-medium">
-                                                            {o.label}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            <Badge
-                                                variant="outline"
-                                                className={cn(
-                                                    "text-[9px] uppercase tracking-tighter font-bold",
-                                                    (appt.status === "checked_in" || appt.status === "in_treatment")
-                                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                                        : appt.status === "completed"
-                                                            ? "bg-slate-100 border-slate-200 text-slate-600"
-                                                            : "bg-slate-50 border-slate-200 text-slate-500"
-                                                )}
-                                            >
-                                                {getAppointmentStatusLabel(appt.status)}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                    {(appt.checked_in_at || appt.checked_out_at) && (
-                                        <div className="pt-2 border-t border-slate-100 space-y-1 text-[11px] text-slate-500">
-                                            {appt.checked_in_at && (
-                                                <p className="flex items-center gap-1.5">
-                                                    <span className="font-semibold text-emerald-600">In:</span>
-                                                    {format(parseISO(appt.checked_in_at), "h:mm a")}
-                                                </p>
-                                            )}
-                                            {appt.checked_out_at && (
-                                                <p className="flex items-center gap-1.5">
-                                                    <span className="font-semibold text-slate-600">Out:</span>
-                                                    {format(parseISO(appt.checked_out_at), "h:mm a")}
-                                                </p>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="bg-slate-50 p-3 border-t border-slate-100 flex flex-wrap gap-2 shrink-0">
-                                    <Button variant="outline" size="sm" className="h-8 text-[11px] font-bold">Reschedule</Button>
-                                    {appt.status !== "completed" && appt.status !== "cancelled" && appt.status !== "checked_in" && appt.status !== "in_treatment" && (
-                                        <Button
-                                            className="h-8 text-[11px] font-bold bg-teal-600 hover:bg-teal-700 disabled:opacity-60"
-                                            disabled={updatingStatusId === appt.id}
-                                            onClick={() => { handleStatusChange(appt.id, "checked_in"); setMobileAppointment(null) }}
-                                        >
-                                            {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Check In"}
-                                        </Button>
-                                    )}
-                                    {appt.status === "checked_in" && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-8 text-[11px] font-bold border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-60"
-                                            disabled={updatingStatusId === appt.id}
-                                            onClick={() => { handleStatusChange(appt.id, "in_treatment"); setMobileAppointment(null) }}
-                                        >
-                                            {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Start treatment"}
-                                        </Button>
-                                    )}
-                                    {(appt.status === "checked_in" || appt.status === "in_treatment") && (
-                                        <Button
-                                            className="h-8 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60"
-                                            disabled={updatingStatusId === appt.id}
-                                            onClick={() => { setCheckoutAppt({ id: appt.id, patientName: appt.patientName, treatment_type: appt.treatment_type || "Appointment", patient_id: appt.patient_id }); setMobileAppointment(null) }}
-                                        >
-                                            {updatingStatusId === appt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Complete / Check out"}
-                                        </Button>
-                                    )}
-                                </div>
-                            </>
-                        )
-                    })()}
-                </SheetContent>
-            </Sheet>
 
             <QueueReceiptDialog
                 open={isReceiptOpen}

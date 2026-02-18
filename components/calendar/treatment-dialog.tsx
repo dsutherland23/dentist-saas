@@ -204,10 +204,14 @@ export function TreatmentDialog({
                                 )}
                                 <div className="space-y-2">
                                     <Label>Dentist</Label>
-                                    <Select value={newPlanData.dentist_id} onValueChange={val => setNewPlanData(prev => ({ ...prev, dentist_id: val }))}>
+                                    <Select value={newPlanData.dentist_id || undefined} onValueChange={val => setNewPlanData(prev => ({ ...prev, dentist_id: val }))}>
                                         <SelectTrigger><SelectValue placeholder="Select dentist" /></SelectTrigger>
-                                        <SelectContent>
-                                            {dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)}
+                                        <SelectContent className="z-[100]" position="popper">
+                                            {dentists.length === 0 ? (
+                                                <div className="py-2 px-2 text-sm text-slate-500">No dentists available</div>
+                                            ) : (
+                                                dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)
+                                            )}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -256,10 +260,14 @@ export function TreatmentDialog({
                                 </div>
                                 <div className="space-y-2">
                                     <Label>Dentist</Label>
-                                    <Select value={treatmentData.dentist_id} onValueChange={val => setTreatmentData(prev => ({ ...prev, dentist_id: val }))}>
+                                    <Select value={treatmentData.dentist_id || undefined} onValueChange={val => setTreatmentData(prev => ({ ...prev, dentist_id: val }))}>
                                         <SelectTrigger><SelectValue placeholder="Select dentist" /></SelectTrigger>
-                                        <SelectContent>
-                                            {dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)}
+                                        <SelectContent className="z-[100]" position="popper">
+                                            {dentists.length === 0 ? (
+                                                <div className="py-2 px-2 text-sm text-slate-500">No dentists available</div>
+                                            ) : (
+                                                dentists.map(d => <SelectItem key={d.id} value={d.id}>Dr. {d.last_name}</SelectItem>)
+                                            )}
                                         </SelectContent>
                                     </Select>
                                 </div>

@@ -16,7 +16,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User } from "lucide-react"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User, Copy } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ProfilePictureUpload } from "@/components/patients/profile-picture-upload"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,12 +32,17 @@ import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase"
 import { format } from "date-fns"
+import { useRevenueCat } from "@/lib/hooks/use-revenuecat"
+import { PRICING, getRevenueCatPurchases } from "@/lib/revenuecat"
+import { ExternalLink } from "lucide-react"
 
 export default function SettingsPage() {
-    const { profile } = useAuth()
+    const { profile, user } = useAuth()
+    const { customerInfo, isPro, loading: rcLoading, refresh } = useRevenueCat(user?.id ?? profile?.id)
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [mounted, setMounted] = useState(false)
+    const [purchasingPlan, setPurchasingPlan] = useState<"monthly" | "yearly" | "lifetime" | null>(null)
 
     useEffect(() => {
         setMounted(true)
@@ -60,7 +73,8 @@ export default function SettingsPage() {
         business_hours: {
             weekday: "9:00 AM - 6:00 PM",
             weekend: "Closed"
-        }
+        },
+        require_consent_in_visit_flow: false
     })
 
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -114,8 +128,16 @@ export default function SettingsPage() {
 
     // Team State
     const [team, setTeam] = useState<any[]>([])
+    const [canManageTeam, setCanManageTeam] = useState(false)
     const [billing, setBilling] = useState<any>(null)
     const [newMemberEmail, setNewMemberEmail] = useState("")
+    const [newMemberFirstName, setNewMemberFirstName] = useState("")
+    const [newMemberLastName, setNewMemberLastName] = useState("")
+    const [newMemberRole, setNewMemberRole] = useState("receptionist")
+    const [inviteDialogOpen, setInviteDialogOpen] = useState(false)
+    const [tempPassword, setTempPassword] = useState<string | null>(null)
+    const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null)
+    const [removingUserId, setRemovingUserId] = useState<string | null>(null)
 
     // Security State
     const [passwords, setPasswords] = useState({
@@ -139,14 +161,73 @@ export default function SettingsPage() {
         }
         setIsSubmittingSuggestion(true)
         try {
-            // In a real app, this would send to an API
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            toast.success("Thank you for your feedback! We've received your suggestion.")
-            setSuggestion("")
+            const res = await fetch("/api/support/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: suggestion.trim() }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
+                toast.success("Thank you for your feedback! We've received your suggestion.")
+                setSuggestion("")
+            } else {
+                toast.error(data.error || "Failed to send suggestion")
+            }
         } catch (error) {
             toast.error("Failed to send suggestion")
         } finally {
             setIsSubmittingSuggestion(false)
+        }
+    }
+
+    const handlePurchasePlan = async (plan: "monthly" | "yearly" | "lifetime") => {
+        try {
+            const purchases = getRevenueCatPurchases()
+            setPurchasingPlan(plan)
+
+            const offerings = await purchases.getOfferings()
+            const offering = offerings.current
+
+            if (!offering) {
+                toast.error("No active offering found in RevenueCat. Check your Web Billing setup.")
+                return
+            }
+
+            // Try several common package identifiers so you don't need exact names.
+            const candidateIds: string[] =
+                plan === "monthly"
+                    ? ["monthly", "$rc_monthly", "default", "month", "monthly_plan"]
+                    : plan === "yearly"
+                    ? ["yearly", "annual", "$rc_annual", "year", "yearly_plan"]
+                    : ["lifetime", "$rc_lifetime", "lifetime_plan", "one_time"]
+
+            let rcPackage = candidateIds
+                .map((id) => offering.packagesById[id])
+                .find((pkg) => !!pkg)
+
+            // Fallback: first available package if nothing matched.
+            if (!rcPackage && (offering as any).availablePackages?.length) {
+                rcPackage = (offering as any).availablePackages[0]
+            }
+
+            if (!rcPackage) {
+                toast.error(
+                    `Plan '${plan}' is not configured in the current RevenueCat offering. Make sure the offering has a package for this plan (e.g. '${candidateIds.join(
+                        "', '"
+                    )}').`
+                )
+                return
+            }
+
+            await purchases.purchase({ rcPackage })
+            toast.success("Subscription updated successfully")
+            await refresh()
+        } catch (error: any) {
+            console.error("Purchase error", error)
+            const message = error?.message || "Unable to complete purchase"
+            toast.error(message)
+        } finally {
+            setPurchasingPlan(null)
         }
     }
 
@@ -187,12 +268,13 @@ export default function SettingsPage() {
 
                 if (clinicRes.ok) {
                     const clinicData = await clinicRes.json()
-                    setClinic(clinicData)
+                    setClinic({ ...clinicData, require_consent_in_visit_flow: clinicData.require_consent_in_visit_flow ?? false })
                 }
 
                 if (teamRes.ok) {
                     const teamData = await teamRes.json()
-                    setTeam(teamData)
+                    setTeam(teamData.team ?? teamData)
+                    setCanManageTeam(!!teamData.canManageTeam)
                 }
 
                 if (billingRes.ok) {
@@ -210,20 +292,34 @@ export default function SettingsPage() {
     }, [])
 
     const handleInviteMember = async () => {
-        if (!newMemberEmail) return
+        if (!newMemberEmail.trim()) {
+            toast.error("Please enter an email address")
+            return
+        }
         setIsSaving(true)
+        setTempPassword(null)
         try {
-            const res = await fetch('/api/settings/team', {
+            const res = await fetch('/api/staff/invite', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: newMemberEmail, role: 'staff' })
+                body: JSON.stringify({
+                    email: newMemberEmail.trim(),
+                    first_name: newMemberFirstName.trim() || undefined,
+                    last_name: newMemberLastName.trim() || undefined,
+                    role: newMemberRole,
+                })
             })
-
+            const data = await res.json().catch(() => ({}))
             if (res.ok) {
-                toast.success("Invitation sent successfully")
+                toast.success("Team member added. Share the temporary password with them.")
+                setTempPassword(data.temp_password ?? null)
+                setTeam(prev => (data.user ? [...prev, data.user] : prev))
                 setNewMemberEmail("")
+                setNewMemberFirstName("")
+                setNewMemberLastName("")
+                if (!data.temp_password) setInviteDialogOpen(false)
             } else {
-                toast.error("Failed to send invitation")
+                toast.error(data.error || "Failed to invite")
             }
         } catch (error) {
             toast.error("An error occurred")
@@ -233,21 +329,43 @@ export default function SettingsPage() {
     }
 
     const handleUpdateRole = async (userId: string, newRole: string) => {
+        setUpdatingRoleUserId(userId)
         try {
             const res = await fetch('/api/settings/team', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId, role: newRole })
             })
-
+            const errData = await res.json().catch(() => ({}))
             if (res.ok) {
                 toast.success("Role updated successfully")
                 setTeam(prev => prev.map(m => m.id === userId ? { ...m, role: newRole } : m))
             } else {
-                toast.error("Failed to update role")
+                toast.error(errData.error || "Failed to update role")
             }
         } catch (error) {
             toast.error("An error occurred")
+        } finally {
+            setUpdatingRoleUserId(null)
+        }
+    }
+
+    const handleRemoveMember = async (member: { id: string; first_name?: string; last_name?: string }) => {
+        if (!confirm(`Remove ${member.first_name || ""} ${member.last_name || ""} from the team? They will no longer be able to sign in.`)) return
+        setRemovingUserId(member.id)
+        try {
+            const res = await fetch(`/api/settings/team?userId=${encodeURIComponent(member.id)}`, { method: "DELETE" })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
+                toast.success("Team member removed")
+                setTeam(prev => prev.filter(m => m.id !== member.id))
+            } else {
+                toast.error(data.error || "Failed to remove member")
+            }
+        } catch (error) {
+            toast.error("An error occurred")
+        } finally {
+            setRemovingUserId(null)
         }
     }
 
@@ -334,25 +452,21 @@ export default function SettingsPage() {
     }
 
     return (
-        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
+        <div className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-6 bg-slate-50 min-h-screen min-w-0 w-full max-w-full overflow-x-hidden box-border">
             {/* Header */}
             <div className="flex items-center justify-between min-w-0">
                 <div className="min-w-0">
-                    <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Settings</h2>
-                    <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage your practice settings and preferences</p>
+                    <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-slate-900 truncate">Settings</h2>
+                    <p className="text-slate-500 mt-1 text-xs sm:text-sm md:text-base truncate">Manage your practice settings and preferences</p>
                 </div>
             </div>
 
-            <Tabs defaultValue="profile" className="space-y-6 min-w-0">
-                {/* Scrollable tab list on small screens so all sections are reachable */}
-                <div className="w-full min-w-0 overflow-x-auto scrollbar-thin -mx-1 px-1 pb-1">
-                    <TabsList className="inline-flex h-10 w-max min-h-[2.5rem] items-center justify-start gap-0.5 bg-white border border-slate-200 p-1 rounded-md">
-                        <TabsTrigger value="profile" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <User className="h-4 w-4 shrink-0" />
-                            Profile
-                        </TabsTrigger>
-                        <TabsTrigger value="general" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <Building2 className="h-4 w-4 shrink-0" />
+            <Tabs defaultValue="general" className="space-y-4 sm:space-y-6 min-w-0 max-w-full">
+                {/* Scrollable tab list on small screens */}
+                <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden -mx-1 px-1 pb-1 scrollbar-thin">
+                    <TabsList className="inline-flex h-9 sm:h-10 w-max min-h-[2.25rem] items-center justify-start gap-0.5 bg-white border border-slate-200 p-1 rounded-md">
+                        <TabsTrigger value="general" className="gap-1 sm:gap-2 shrink-0 rounded-md px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap">
+                            <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
                             General
                         </TabsTrigger>
                         <TabsTrigger value="notifications" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
@@ -378,71 +492,68 @@ export default function SettingsPage() {
                     </TabsList>
                 </div>
 
-                {/* Profile Settings */}
-                <TabsContent value="profile" className="space-y-4 min-w-0 overflow-x-hidden">
-                    <Card className="shadow-sm">
+                {/* General (includes Your Profile + Practice Information + Regional) */}
+                <TabsContent value="general" className="space-y-4 min-w-0 max-w-full overflow-x-hidden">
+                    {/* Your Profile (Doctor Profile) - consolidated into General */}
+                    <Card className="shadow-sm overflow-hidden">
                         <CardHeader>
-                            <CardTitle>Your Profile</CardTitle>
-                            <CardDescription>Update your personal information and profile picture</CardDescription>
+                            <CardTitle className="text-base sm:text-lg">Your Profile</CardTitle>
+                            <CardDescription>Your account and profile picture</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex flex-col sm:flex-row items-center gap-6">
-                                <div className="relative">
-                                    <Avatar className="h-32 w-32 border-4 border-white shadow-lg">
+                        <CardContent className="space-y-4 sm:space-y-6">
+                            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+                                <div className="relative shrink-0">
+                                    <Avatar className="h-20 w-20 sm:h-24 sm:w-24 md:h-28 md:w-28 border-2 border-white shadow-md">
                                         <AvatarImage src={userProfilePicture || undefined} />
-                                        <AvatarFallback className="text-3xl bg-teal-100 text-teal-700">
+                                        <AvatarFallback className="text-xl sm:text-2xl bg-teal-100 text-teal-700">
                                             {profile?.first_name?.[0] || ''}{profile?.last_name?.[0] || ''}
                                         </AvatarFallback>
                                     </Avatar>
                                     <Button
                                         size="icon"
                                         onClick={() => setProfilePictureDialogOpen(true)}
-                                        className="absolute bottom-1 right-1 h-10 w-10 rounded-full bg-white hover:bg-slate-50 text-teal-600 shadow-lg"
+                                        className="absolute bottom-0 right-0 h-8 w-8 sm:h-9 sm:w-9 rounded-full bg-white border shadow text-teal-600 hover:bg-slate-50"
                                     >
-                                        <Camera className="h-5 w-5" />
+                                        <Camera className="h-4 w-4" />
                                     </Button>
                                 </div>
-                                <div className="text-center sm:text-left">
-                                    <h3 className="text-xl font-bold text-slate-900">
+                                <div className="text-center sm:text-left min-w-0 flex-1">
+                                    <h3 className="text-lg sm:text-xl font-bold text-slate-900 truncate">
                                         {profile?.first_name} {profile?.last_name}
                                     </h3>
-                                    <p className="text-sm text-slate-500 capitalize">{profile?.role?.replace('_', ' ') || 'Staff'}</p>
-                                    <p className="text-sm text-slate-500 mt-1">{profile?.email}</p>
+                                    <p className="text-xs sm:text-sm text-slate-500 capitalize">{profile?.role?.replace('_', ' ') || 'Staff'}</p>
+                                    <p className="text-xs sm:text-sm text-slate-500 mt-0.5 truncate">{profile?.email}</p>
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="mt-3"
+                                        className="mt-2 sm:mt-3"
                                         onClick={() => setProfilePictureDialogOpen(true)}
                                     >
-                                        <Camera className="mr-2 h-4 w-4" />
+                                        <Camera className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                                         Change Photo
                                     </Button>
                                 </div>
                             </div>
-
                             <Separator />
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label>First Name</Label>
-                                    <Input value={profile?.first_name || ''} disabled className="bg-slate-50" />
+                            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs sm:text-sm">First Name</Label>
+                                    <Input value={profile?.first_name || ''} disabled className="bg-slate-50 text-sm min-w-0" />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Last Name</Label>
-                                    <Input value={profile?.last_name || ''} disabled className="bg-slate-50" />
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs sm:text-sm">Last Name</Label>
+                                    <Input value={profile?.last_name || ''} disabled className="bg-slate-50 text-sm min-w-0" />
                                 </div>
-                            </div>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label>Email</Label>
-                                    <Input value={profile?.email || ''} disabled className="bg-slate-50" />
+                                <div className="space-y-1.5 sm:col-span-2">
+                                    <Label className="text-xs sm:text-sm">Email</Label>
+                                    <Input value={profile?.email || ''} disabled className="bg-slate-50 text-sm min-w-0" />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Role</Label>
-                                    <Input value={profile?.role?.replace('_', ' ') || ''} disabled className="bg-slate-50 capitalize" />
+                                <div className="space-y-1.5">
+                                    <Label className="text-xs sm:text-sm">Role</Label>
+                                    <Input value={profile?.role?.replace('_', ' ') || ''} disabled className="bg-slate-50 capitalize text-sm min-w-0" />
                                 </div>
                             </div>
-                            <p className="text-xs text-slate-400">To update your name or email, please contact your clinic administrator.</p>
+                            <p className="text-[11px] sm:text-xs text-slate-400">To update your name or email, contact your clinic administrator.</p>
                         </CardContent>
                     </Card>
 
@@ -458,17 +569,15 @@ export default function SettingsPage() {
                         title="Update Your Profile Picture"
                         description="Upload a photo or take one with your camera"
                     />
-                </TabsContent>
 
-                {/* General Settings */}
-                <TabsContent value="general" className="space-y-4 min-w-0 overflow-x-hidden">
-                    <Card className="shadow-sm">
+                    {/* Practice Information */}
+                    <Card className="shadow-sm overflow-hidden">
                         <CardHeader>
-                            <CardTitle>Practice Information</CardTitle>
+                            <CardTitle className="text-base sm:text-lg">Practice Information</CardTitle>
                             <CardDescription>Update your practice details and contact information</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="flex items-center gap-6">
+                        <CardContent className="space-y-4 sm:space-y-6">
+                            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 sm:gap-6">
                                 <div className="h-24 w-24 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center bg-slate-50 relative overflow-hidden">
                                     {clinic.logo_url ? (
                                         <img src={clinic.logo_url} alt="Clinic Logo" className="object-cover w-full h-full" />
@@ -493,41 +602,42 @@ export default function SettingsPage() {
                                 </div>
                             </div>
                             <Separator />
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="practice-name">Practice Name</Label>
+                            <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+                                <div className="space-y-1.5 sm:space-y-2 min-w-0">
+                                    <Label htmlFor="practice-name" className="text-xs sm:text-sm">Practice Name</Label>
                                     <Input
                                         id="practice-name"
                                         value={clinic.name || ""}
                                         onChange={e => setClinic({ ...clinic, name: e.target.value })}
+                                        className="min-w-0"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="practice-email">Email Address</Label>
+                                <div className="space-y-1.5 sm:space-y-2 min-w-0">
+                                    <Label htmlFor="practice-email" className="text-xs sm:text-sm">Email Address</Label>
                                     <Input
                                         id="practice-email"
                                         type="email"
                                         value={clinic.email || ""}
                                         onChange={e => setClinic({ ...clinic, email: e.target.value })}
+                                        className="min-w-0"
                                     />
                                 </div>
-                            </div>
-
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <div className="space-y-2">
-                                    <Label htmlFor="practice-phone">Phone Number</Label>
+                                <div className="space-y-1.5 sm:space-y-2 min-w-0">
+                                    <Label htmlFor="practice-phone" className="text-xs sm:text-sm">Phone Number</Label>
                                     <Input
                                         id="practice-phone"
                                         value={clinic.phone || ""}
                                         onChange={e => setClinic({ ...clinic, phone: e.target.value })}
+                                        className="min-w-0"
                                     />
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="practice-website">Website</Label>
+                                <div className="space-y-1.5 sm:space-y-2 min-w-0">
+                                    <Label htmlFor="practice-website" className="text-xs sm:text-sm">Website</Label>
                                     <Input
                                         id="practice-website"
                                         value={clinic.website || ""}
                                         onChange={e => setClinic({ ...clinic, website: e.target.value })}
+                                        className="min-w-0"
                                     />
                                 </div>
                             </div>
@@ -602,6 +712,20 @@ export default function SettingsPage() {
                                         />
                                     </div>
                                 </div>
+                            </div>
+
+                            <Separator />
+
+                            <div className="flex items-center justify-between gap-4">
+                                <div className="space-y-0.5">
+                                    <Label htmlFor="require-consent-visit-flow">Require consent acknowledgment before Check In</Label>
+                                    <p className="text-sm text-slate-500">When on, staff must confirm consent in the visit flow before completing Check In.</p>
+                                </div>
+                                <Switch
+                                    id="require-consent-visit-flow"
+                                    checked={!!clinic.require_consent_in_visit_flow}
+                                    onCheckedChange={checked => setClinic({ ...clinic, require_consent_in_visit_flow: !!checked })}
+                                />
                             </div>
 
                             <div className="flex justify-end">
@@ -825,79 +949,124 @@ export default function SettingsPage() {
                     </Card>
                 </TabsContent>
 
-                {/* Billing Settings */}
+                {/* Billing Settings — RevenueCat */}
                 <TabsContent value="billing" className="space-y-4 min-w-0 overflow-x-hidden">
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Subscription Plan</CardTitle>
-                            <CardDescription>Manage your subscription and billing</CardDescription>
+                            <CardDescription>Dental Clinic Pro — manage your subscription and billing</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
+                            {/* Current plan status */}
                             <div className="p-6 bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg border border-teal-200">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap items-center justify-between gap-4">
                                     <div>
-                                        <h3 className="text-2xl font-bold text-slate-900 capitalize">{billing?.plan || "Starter"} Plan</h3>
+                                        <h3 className="text-2xl font-bold text-slate-900">
+                                            {rcLoading ? "Loading…" : isPro ? "Pro" : "Free"} Plan
+                                        </h3>
                                         <p className="text-slate-600 mt-1">
-                                            {billing?.plan === 'pro' ? '$199' : billing?.plan === 'growth' ? '$99' : '$49'}/month • Billed monthly
+                                            {rcLoading
+                                                ? "Checking subscription…"
+                                                : isPro
+                                                    ? "You have access to all Pro features."
+                                                    : "Upgrade to unlock Pro features."}
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="px-2 py-1 bg-teal-100 text-teal-700 text-xs font-semibold rounded uppercase">
-                                            {billing?.status || "active"}
+                                            {rcLoading ? "…" : isPro ? "active" : "free"}
                                         </span>
-                                        <Button variant="outline" size="sm">Change Plan</Button>
+                                        {isPro && customerInfo?.managementURL ? (
+                                            <Button variant="outline" size="sm" asChild>
+                                                <a href={customerInfo.managementURL} target="_blank" rel="noopener noreferrer">
+                                                    Manage subscription <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                                                </a>
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handlePurchasePlan("monthly")}
+                                                disabled={purchasingPlan !== null}
+                                            >
+                                                {purchasingPlan === "monthly" ? (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                ) : null}
+                                                Upgrade to Pro
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             <Separator />
 
+                            {/* Pricing: Monthly $150, Yearly $1000, Lifetime $5000 */}
                             <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Payment Method</h3>
-                                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                                    <div className="flex items-center gap-4">
-                                        <div className="h-12 w-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                            <CreditCard className="h-6 w-6 text-white" />
-                                        </div>
-                                        <div>
-                                            <p className="font-medium">•••• •••• •••• {billing?.payment_method?.last4 || "4242"}</p>
-                                            <p className="text-sm text-slate-500">Expires {billing?.payment_method?.expiry || "12/2025"}</p>
-                                        </div>
+                                <h3 className="text-lg font-semibold">Plans</h3>
+                                <div className="grid gap-4 sm:grid-cols-3">
+                                    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                                        <p className="font-semibold text-slate-900">Monthly</p>
+                                        <p className="mt-1 text-2xl font-bold text-teal-600">{PRICING.monthly.label}<span className="text-sm font-normal text-slate-500">{PRICING.monthly.period}</span></p>
+                                        <p className="mt-2 text-sm text-slate-500">Billed every month. Cancel anytime.</p>
+                                        <Button
+                                            className="mt-4 bg-teal-600 hover:bg-teal-700"
+                                            onClick={() => handlePurchasePlan("monthly")}
+                                            disabled={purchasingPlan === "monthly"}
+                                        >
+                                            {purchasingPlan === "monthly" ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : null}
+                                            Subscribe
+                                        </Button>
                                     </div>
-                                    <Button variant="outline" size="sm">Update</Button>
+                                    <div className="rounded-lg border-2 border-teal-500 bg-teal-50/50 p-5 shadow-sm">
+                                        <p className="font-semibold text-slate-900">Yearly</p>
+                                        <p className="mt-1 text-2xl font-bold text-teal-600">{PRICING.yearly.label}<span className="text-sm font-normal text-slate-500">{PRICING.yearly.period}</span></p>
+                                        <p className="mt-2 text-sm text-slate-500">Save vs monthly. Billed once per year.</p>
+                                        <Button
+                                            className="mt-4 bg-teal-600 hover:bg-teal-700"
+                                            onClick={() => handlePurchasePlan("yearly")}
+                                            disabled={purchasingPlan === "yearly"}
+                                        >
+                                            {purchasingPlan === "yearly" ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : null}
+                                            Subscribe
+                                        </Button>
+                                    </div>
+                                    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+                                        <p className="font-semibold text-slate-900">Lifetime</p>
+                                        <p className="mt-1 text-2xl font-bold text-teal-600">{PRICING.lifetime.label}<span className="text-sm font-normal text-slate-500">{PRICING.lifetime.period}</span></p>
+                                        <p className="mt-2 text-sm text-slate-500">One-time payment. Access forever.</p>
+                                        <Button
+                                            className="mt-4 bg-teal-600 hover:bg-teal-700"
+                                            onClick={() => handlePurchasePlan("lifetime")}
+                                            disabled={purchasingPlan === "lifetime"}
+                                        >
+                                            {purchasingPlan === "lifetime" ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : null}
+                                            Get lifetime
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <Separator />
-
-                            <div className="space-y-4">
-                                <h3 className="text-lg font-semibold">Billing History</h3>
-                                <div className="space-y-2">
-                                    {billing?.invoices?.length > 0 ? (
-                                        billing.invoices.map((invoice: any, index: number) => (
-                                            <div key={index} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-lg transition-colors border-b last:border-0 border-slate-100">
-                                                <div>
-                                                    <p className="font-medium">
-                                                        {mounted ? format(new Date(invoice.issue_date), 'MMM d, yyyy') : 'Loading...'}
-                                                    </p>
-                                                    <p className="text-sm text-slate-500">{invoice.invoice_number}</p>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <div>
-                                                        <p className="font-semibold text-right">${invoice.total_amount}</p>
-                                                        <p className="text-xs text-slate-400 text-right capitalize">{invoice.status}</p>
-                                                    </div>
-                                                    <Button variant="ghost" size="sm">Download</Button>
-                                                </div>
-                                            </div>
-                                        ))
-                                    ) : (
-                                        <div className="text-center py-6 text-slate-500 bg-slate-50 rounded-lg">
-                                            No billing history found.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            {isPro && customerInfo?.managementURL && (
+                                <>
+                                    <Separator />
+                                    <div className="space-y-2">
+                                        <h3 className="text-lg font-semibold">Customer Center</h3>
+                                        <p className="text-sm text-slate-500">Update payment method, download invoices, or cancel from the customer portal.</p>
+                                        <Button variant="outline" size="sm" asChild>
+                                            <a href={customerInfo.managementURL} target="_blank" rel="noopener noreferrer">
+                                                Open Customer Portal <ExternalLink className="ml-1 h-3.5 w-3.5" />
+                                            </a>
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -907,57 +1076,77 @@ export default function SettingsPage() {
                     <Card className="shadow-sm">
                         <CardHeader>
                             <CardTitle>Team Members</CardTitle>
-                            <CardDescription>Manage team access and permissions</CardDescription>
+                            <CardDescription>Manage team access and permissions. Only clinic admins can invite, change roles, or remove members.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="font-semibold">Invite Team Members</h3>
-                                    <p className="text-sm text-slate-500">Add new members to your practice</p>
-                                </div>
-                                <Button className="bg-teal-600 hover:bg-teal-700">
-                                    <Mail className="mr-2 h-4 w-4" />
-                                    Send Invite
-                                </Button>
-                            </div>
-
-                            <Separator />
+                            {canManageTeam && (
+                                <>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="font-semibold">Invite Team Members</h3>
+                                            <p className="text-sm text-slate-500">Add new members; they will receive a temporary password to sign in.</p>
+                                        </div>
+                                        <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => { setInviteDialogOpen(true); setTempPassword(null); }}>
+                                            <Mail className="mr-2 h-4 w-4" />
+                                            Invite Member
+                                        </Button>
+                                    </div>
+                                    <Separator />
+                                </>
+                            )}
+                            {!canManageTeam && (
+                                <p className="text-sm text-slate-500 rounded-lg bg-slate-50 p-3">Only clinic admins can manage team roles and invitations. Ask your admin to change your role if needed.</p>
+                            )}
 
                             <div className="space-y-2">
                                 {team.length > 0 ? (
-                                    team.map((member, index) => (
-                                        <div key={index} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold">
-                                                    {member.first_name?.[0]}{member.last_name?.[0]}
+                                    team
+                                        .filter((m) => m.is_active !== false)
+                                        .map((member) => (
+                                            <div key={member.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-100">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold">
+                                                        {member.first_name?.[0]}{member.last_name?.[0]}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium">{member.first_name} {member.last_name}</p>
+                                                        <p className="text-sm text-slate-500">{member.email}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="font-medium">{member.first_name} {member.last_name}</p>
-                                                    <p className="text-sm text-slate-500">{member.email}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <Badge variant="outline" className="capitalize">{member.role?.replace(/_/g, " ")}</Badge>
+                                                    {canManageTeam && (
+                                                        <>
+                                                            <Select
+                                                                value={member.role}
+                                                                onValueChange={(val) => handleUpdateRole(member.id, val)}
+                                                                disabled={updatingRoleUserId === member.id}
+                                                            >
+                                                                <SelectTrigger className="w-32 h-8">
+                                                                    {updatingRoleUserId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue />}
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="clinic_admin">Admin</SelectItem>
+                                                                    <SelectItem value="dentist">Dentist</SelectItem>
+                                                                    <SelectItem value="hygienist">Hygienist</SelectItem>
+                                                                    <SelectItem value="receptionist">Staff</SelectItem>
+                                                                    <SelectItem value="accountant">Accountant</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                                onClick={() => handleRemoveMember(member)}
+                                                                disabled={removingUserId === member.id || member.id === profile?.id}
+                                                            >
+                                                                {removingUserId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
+                                                            </Button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="capitalize">{member.role}</Badge>
-                                                <Select
-                                                    defaultValue={member.role}
-                                                    onValueChange={(val) => handleUpdateRole(member.id, val)}
-                                                >
-                                                    <SelectTrigger className="w-32 h-8">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="clinic_admin">Admin</SelectItem>
-                                                        <SelectItem value="dentist">Dentist</SelectItem>
-                                                        <SelectItem value="hygienist">Hygienist</SelectItem>
-                                                        <SelectItem value="receptionist">Staff</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50">
-                                                    Remove
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))
+                                        ))
                                 ) : (
                                     <div className="text-center py-12 text-slate-500">
                                         No team members found.
@@ -966,6 +1155,73 @@ export default function SettingsPage() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    <Dialog open={inviteDialogOpen} onOpenChange={(open) => { setInviteDialogOpen(open); if (!open) setTempPassword(null); }}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Invite team member</DialogTitle>
+                                <DialogDescription>They will be created with a temporary password. Share it securely so they can sign in and set a new password.</DialogDescription>
+                            </DialogHeader>
+                            {tempPassword ? (
+                                <div className="space-y-4">
+                                    <p className="text-sm text-slate-600">Account created. Temporary password:</p>
+                                    <div className="flex items-center gap-2">
+                                        <code className="flex-1 rounded bg-slate-100 px-3 py-2 text-sm font-mono break-all">{tempPassword}</code>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => { navigator.clipboard.writeText(tempPassword); toast.success("Copied to clipboard"); }}
+                                        >
+                                            <Copy className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-slate-500">User must change password on first login.</p>
+                                    <DialogFooter>
+                                        <Button onClick={() => { setInviteDialogOpen(false); setTempPassword(null); }}>Done</Button>
+                                    </DialogFooter>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="grid gap-4 py-2">
+                                        <div className="space-y-2">
+                                            <Label>Email *</Label>
+                                            <Input type="email" placeholder="colleague@practice.com" value={newMemberEmail} onChange={(e) => setNewMemberEmail(e.target.value)} />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <Label>First name</Label>
+                                                <Input placeholder="Jane" value={newMemberFirstName} onChange={(e) => setNewMemberFirstName(e.target.value)} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Last name</Label>
+                                                <Input placeholder="Doe" value={newMemberLastName} onChange={(e) => setNewMemberLastName(e.target.value)} />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Role</Label>
+                                            <Select value={newMemberRole} onValueChange={setNewMemberRole}>
+                                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="clinic_admin">Admin</SelectItem>
+                                                    <SelectItem value="dentist">Dentist</SelectItem>
+                                                    <SelectItem value="hygienist">Hygienist</SelectItem>
+                                                    <SelectItem value="receptionist">Staff</SelectItem>
+                                                    <SelectItem value="accountant">Accountant</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
+                                        <Button className="bg-teal-600 hover:bg-teal-700" onClick={handleInviteMember} disabled={isSaving}>
+                                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            Create account
+                                        </Button>
+                                    </DialogFooter>
+                                </>
+                            )}
+                        </DialogContent>
+                    </Dialog>
                 </TabsContent>
 
                 {/* Support & Legal */}

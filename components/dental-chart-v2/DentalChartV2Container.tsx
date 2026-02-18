@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
 import { Loader2, AlertCircle } from "lucide-react"
 import { InteractiveChartV2 } from "./interactive-chart-v2"
@@ -20,9 +21,19 @@ interface DentalChartV2ContainerProps {
   patientId: string
 }
 
+const CHART_SECTIONS = [
+  { value: "chart", label: "Chart" },
+  { value: "periodontal", label: "Periodontal" },
+  { value: "diagnoses", label: "Diagnoses" },
+  { value: "treatments", label: "Treatments" },
+  { value: "notes", label: "Notes" },
+  { value: "attachments", label: "Files" },
+] as const
+
 export function DentalChartV2Container({ patientId }: DentalChartV2ContainerProps) {
   const [chart, setChart] = useState<DentalChartV2 | null>(null)
   const [selectedTooth, setSelectedTooth] = useState<ChartTooth | null>(null)
+  const [chartTab, setChartTab] = useState("chart")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -174,17 +185,28 @@ export function DentalChartV2Container({ patientId }: DentalChartV2ContainerProp
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="chart" className="w-full">
-        <TabsList
-          className="flex w-full min-w-0 overflow-x-auto flex-nowrap rounded-md bg-muted p-1 text-muted-foreground gap-0.5 [&>button]:shrink-0 [&>button]:min-w-[4.5rem] [&>button]:text-xs sm:[&>button]:text-sm lg:grid lg:grid-cols-6 lg:overflow-visible lg:[&>button]:min-w-0"
-        >
-          <TabsTrigger value="chart">Chart</TabsTrigger>
-          <TabsTrigger value="periodontal">Periodontal</TabsTrigger>
-          <TabsTrigger value="diagnoses">Diagnoses</TabsTrigger>
-          <TabsTrigger value="treatments">Treatments</TabsTrigger>
-          <TabsTrigger value="notes">Notes</TabsTrigger>
-          <TabsTrigger value="attachments">Files</TabsTrigger>
-        </TabsList>
+      <Tabs value={chartTab} onValueChange={setChartTab} className="w-full">
+        <div className="space-y-2">
+          <div className="lg:hidden">
+            <Select value={chartTab} onValueChange={setChartTab}>
+              <SelectTrigger className="w-full bg-muted">
+                <SelectValue placeholder="Section" />
+              </SelectTrigger>
+              <SelectContent>
+                {CHART_SECTIONS.map((s) => (
+                  <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <TabsList
+            className="hidden lg:grid w-full grid-cols-6 rounded-md bg-muted p-1 text-muted-foreground"
+          >
+            {CHART_SECTIONS.map((s) => (
+              <TabsTrigger key={s.value} value={s.value}>{s.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value="chart" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

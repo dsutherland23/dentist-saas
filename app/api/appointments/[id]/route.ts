@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache"
 
 const VALID_STATUSES = ["pending", "unconfirmed", "scheduled", "confirmed", "checked_in", "in_treatment", "completed", "cancelled", "no_show"]
 
+/**
+ * PATCH appointment status. Use for scheduling states (scheduled, confirmed, cancelled, no_show).
+ * In-clinic flow (checked_in → in_treatment → completed) is also enforced by the Visit Flow Engine:
+ * POST /api/visits/transition with state machine, role checks, and step requirements.
+ * Calendar shows Visit Progress Panel when a visit exists; legacy buttons still call this PATCH when no visit.
+ */
 export async function PATCH(
     request: Request,
     { params }: { params: Promise<{ id: string }> }

@@ -16,28 +16,28 @@ export default async function PatientPage({
 async function PatientPageContent({ id }: { id: string }) {
     const supabase = await createClient()
 
-    // Auth Check
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect("/login")
 
-    // Fetch data
-    const [patientRes, apptRes, treatmentRes, filesRes, availableTreatmentsRes, dentistsRes] = await Promise.all([
-        supabase.from("patients").select("*").eq("id", id).single(),
-        supabase.from("appointments").select("*, dentists:users(first_name, last_name, profile_picture_url)").eq("patient_id", id).order("start_time", { ascending: false }),
-        supabase.from("treatment_records").select("*, dentists:users(first_name, last_name, profile_picture_url)").eq("patient_id", id).order("created_at", { ascending: false }),
-        supabase.from("patient_files").select("*").eq("patient_id", id).order("created_at", { ascending: false }),
-        supabase.from("treatments").select("*").eq("is_active", true).order("name", { ascending: true }),
-        supabase.from("users").select("id, first_name, last_name, role, profile_picture_url").in("role", ["dentist", "clinic_admin", "super_admin"])
-    ])
-
+    const patientRes = await supabase.from("patients").select("*").eq("id", id).single()
     if (patientRes.error) {
         console.error("Error fetching patient", patientRes.error)
         return <div className="p-8">Patient not found or access denied.</div>
     }
+    const patient = patientRes.data
+    const clinicId = patient.clinic_id
+
+    const [apptRes, treatmentRes, filesRes, availableTreatmentsRes, dentistsRes] = await Promise.all([
+        supabase.from("appointments").select("*, dentists:users(first_name, last_name, profile_picture_url)").eq("patient_id", id).order("start_time", { ascending: false }),
+        supabase.from("treatment_records").select("*, dentists:users(first_name, last_name, profile_picture_url)").eq("patient_id", id).order("created_at", { ascending: false }),
+        supabase.from("patient_files").select("*").eq("patient_id", id).order("created_at", { ascending: false }),
+        supabase.from("treatments").select("*").eq("is_active", true).order("name", { ascending: true }),
+        supabase.from("users").select("id, first_name, last_name, role, profile_picture_url").eq("clinic_id", clinicId).in("role", ["dentist", "clinic_admin", "super_admin"])
+    ])
 
     return (
         <PatientProfileClient
-            patient={patientRes.data}
+            patient={patient}
             appointments={apptRes.data || []}
             treatments={treatmentRes.data || []}
             files={filesRes.data || []}

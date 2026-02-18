@@ -71,32 +71,42 @@ export async function PUT(request: Request) {
         console.log("Updating clinic settings for clinic_id:", userData.clinic_id)
         console.log("Payload:", body)
 
-        // Update clinic
+        const updatePayload: Record<string, unknown> = {
+            name: body.name,
+            logo_url: body.logo_url,
+            primary_color: body.primary_color,
+            secondary_color: body.secondary_color,
+            custom_domain: body.custom_domain,
+            email: body.email,
+            phone: body.phone,
+            website: body.website,
+            address: body.address,
+            city: body.city,
+            state: body.state,
+            zip: body.zip,
+            business_hours: body.business_hours,
+        }
+        if (typeof body.require_consent_in_visit_flow === "boolean") {
+            updatePayload.require_consent_in_visit_flow = body.require_consent_in_visit_flow
+        }
+        Object.keys(updatePayload).forEach((k) => {
+            if (updatePayload[k] === undefined) delete updatePayload[k]
+        })
+
         const { data, error } = await supabase
             .from("clinics")
-            .update({
-                name: body.name,
-                logo_url: body.logo_url,
-                primary_color: body.primary_color,
-                secondary_color: body.secondary_color,
-                custom_domain: body.custom_domain,
-                email: body.email,
-                phone: body.phone,
-                website: body.website,
-                address: body.address,
-                city: body.city,
-                state: body.state,
-                zip: body.zip,
-                business_hours: body.business_hours
-            })
+            .update(updatePayload)
             .eq("id", userData.clinic_id)
             .select()
             .single()
 
         if (error) {
             console.error("Supabase clinic update error:", error)
+            const isColumnMissing = error.message?.includes("column") && error.message?.includes("does not exist")
             return NextResponse.json({
-                error: "Failed to update clinic",
+                error: isColumnMissing
+                    ? "Database may need an update. Run your Supabase migration (e.g. 20260226000001_require_consent_visit_flow.sql) to enable all settings."
+                    : "Failed to update clinic",
                 details: error.message,
                 code: error.code
             }, { status: 500 })
