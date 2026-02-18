@@ -19,7 +19,7 @@ export async function getClinicId() {
         .single()
 
     if (!userData?.clinic_id) {
-        redirect("/onboarding")
+        redirect("/onboarding?reason=no_clinic")
     }
 
     return userData.clinic_id

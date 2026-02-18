@@ -70,7 +70,16 @@ export default function SignUpPage() {
                 },
             })
 
-            if (authError) throw new Error(authError.message)
+            if (authError) {
+                const msg = authError.message || ""
+                if (msg.toLowerCase().includes("rate limit") || msg.toLowerCase().includes("email rate limit")) {
+                    throw new Error(
+                        "Too many sign-up attempts. Please wait an hour and try again, or use a different email. " +
+                        "If you're the site admin, you can turn off \"Confirm email\" in Supabase (Authentication → Providers → Email) for development."
+                    )
+                }
+                throw new Error(authError.message)
+            }
 
             if (authData.user) {
                 // 2. Call API to create clinic and user record

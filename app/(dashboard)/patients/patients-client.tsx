@@ -20,13 +20,12 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
-import { MoreHorizontal, Search, Filter, CalendarCheck, UserCheck, Users, UserPlus, AlertCircle, Download, Upload, FileSpreadsheet, X } from "lucide-react"
+import { MoreHorizontal, Search, Filter, CalendarCheck, UserCheck, Users, UserPlus, Plus, AlertCircle, Download, Upload, FileSpreadsheet, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ManagePatientDialog } from "./manage-patient-dialog"
 import { NewInvoiceDialog } from "@/app/(dashboard)/invoices/new-invoice-dialog"
 import { ImportPatientsDialog } from "@/components/patients/import-patients-dialog"
-import { deletePatient } from "./actions"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
@@ -192,15 +191,23 @@ export default function PatientsClient({
         toast.success(`Patients exported as ${exportFormat.toUpperCase()}`)
     }
 
+    const [deletingId, setDeletingId] = useState<string | null>(null)
     const handleDelete = async (id: string) => {
-        if (confirm("Are you sure you want to delete this patient?")) {
-            try {
-                await deletePatient(id)
+        if (!confirm("Are you sure you want to delete this patient?")) return
+        setDeletingId(id)
+        try {
+            const res = await fetch(`/api/patients/${id}`, { method: "DELETE" })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
                 toast.success("Patient deleted")
                 router.refresh()
-            } catch (error) {
-                toast.error("Failed to delete patient")
+            } else {
+                toast.error((data as { error?: string }).error || "Failed to delete patient")
             }
+        } catch {
+            toast.error("Failed to delete patient")
+        } finally {
+            setDeletingId(null)
         }
     }
 
@@ -211,12 +218,12 @@ export default function PatientsClient({
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Patients</h2>
                     <p className="text-slate-500 text-sm sm:text-base">Manage your patient records and history.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap items-center gap-2 min-w-0 shrink">
                     <ImportPatientsDialog />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="outline">
-                                <Download className="mr-2 h-4 w-4" />
+                            <Button variant="outline" size="sm" className="shrink-0">
+                                <Download className="mr-1.5 h-4 w-4 sm:mr-2" />
                                 Export
                             </Button>
                         </DropdownMenuTrigger>
@@ -231,7 +238,15 @@ export default function PatientsClient({
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <ManagePatientDialog />
+                    <ManagePatientDialog
+                        trigger={
+                            <Button className="bg-teal-600 hover:bg-teal-700 shrink-0">
+                                <Plus className="mr-1.5 h-4 w-4 sm:mr-2" />
+                                <span className="hidden sm:inline">Add Patient</span>
+                                <span className="sm:hidden">Add</span>
+                            </Button>
+                        }
+                    />
                 </div>
             </div>
 
@@ -525,8 +540,12 @@ export default function PatientsClient({
                                                 }}>
                                                     Create invoice
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => handleDelete(patient.id)} className="text-red-600 focus:text-red-600">
-                                                    Delete
+                                                <DropdownMenuItem
+                                                    onClick={() => handleDelete(patient.id)}
+                                                    disabled={deletingId === patient.id}
+                                                    className="text-red-600 focus:text-red-600"
+                                                >
+                                                    {deletingId === patient.id ? "Deleting…" : "Delete"}
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>

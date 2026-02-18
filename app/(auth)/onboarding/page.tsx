@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,8 @@ import { toast } from "sonner"
 
 export default function OnboardingPage() {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const reasonNoClinic = searchParams.get("reason") === "no_clinic"
     const [isLoading, setIsLoading] = useState(false)
     const [clinicName, setClinicName] = useState("")
     const [adminName, setAdminName] = useState("")
@@ -58,13 +60,22 @@ export default function OnboardingPage() {
                     </div>
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 mb-2">
-                            Complete your setup
+                            {reasonNoClinic ? "No clinic assigned" : "Complete your setup"}
                         </h1>
                         <p className="text-slate-500 text-sm sm:text-base">
-                            Create your clinic to get started with DentalCare Pro
+                            {reasonNoClinic
+                                ? "Your account is not linked to a clinic yet. If your clinic administrator invited you, sign in with the email and temporary password they gave you—your account will then have access to your clinic's data. If you're setting up a new practice, create your clinic below."
+                                : "Create your clinic to get started with DentalCare Pro"}
                         </p>
                     </div>
                 </div>
+
+                {reasonNoClinic && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 mb-4">
+                        <p className="font-medium mb-1">Staff access</p>
+                        <p>Clinic admins add staff via <strong>Settings → Team → Invite Member</strong>. Once you're invited and you sign in with your temporary password, you'll see your clinic's patients, calendar, and messages.</p>
+                    </div>
+                )}
 
                 <Card className="glass border-0 shadow-2xl shadow-slate-200/50">
                     <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 via-emerald-400 to-blue-400 rounded-t-lg" />

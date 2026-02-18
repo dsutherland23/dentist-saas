@@ -137,14 +137,13 @@ export function ProfilePictureUpload({
                 body: formData,
             })
 
+            const data = await response.json().catch(() => ({})) as { url?: string; error?: string; details?: string }
             if (!response.ok) {
-                const error = await response.json()
-                throw new Error(error.error || "Upload failed")
+                const msg = data.error || data.details || "Upload failed"
+                throw new Error(msg)
             }
-
-            const data = await response.json()
             toast.success("Profile picture updated successfully")
-            onUploadComplete(data.url)
+            onUploadComplete(data.url!)
             handleClose()
         } catch (error: any) {
             toast.error(error.message || "Failed to upload image")

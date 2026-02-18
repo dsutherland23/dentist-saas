@@ -307,10 +307,10 @@ export default function MessagesPage() {
                 </Dialog>
             </div>
 
-            <Card className="shadow-sm h-[650px] overflow-hidden border-slate-200 min-w-0 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-12 h-full min-w-0">
+            <Card className="shadow-sm h-[calc(100vh-7rem)] sm:h-[calc(100vh-6rem)] max-h-[700px] md:max-h-none md:h-[650px] overflow-hidden border-slate-200 min-w-0 w-full flex flex-col">
+                <div className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-hidden">
                     {/* Conversations List */}
-                    <div className="md:col-span-4 border-r border-slate-200 bg-white min-w-0 flex flex-col">
+                    <div className="md:col-span-4 border-r border-slate-200 bg-white min-w-0 flex flex-col min-h-0 overflow-hidden">
                         {fetchError && (
                             <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-2">
                                 <span className="text-sm text-amber-800">{fetchError}</span>
@@ -330,7 +330,7 @@ export default function MessagesPage() {
                                 />
                             </div>
                         </div>
-                        <ScrollArea className="h-[calc(650px-80px)]">
+                        <ScrollArea className="flex-1 min-h-0">
                             <div className="p-2">
                                 {filteredSidebarList.length === 0 ? (
                                     <div className="text-center py-8 text-slate-400 text-sm italic">No staff found</div>
@@ -375,7 +375,7 @@ export default function MessagesPage() {
                     </div>
 
                     {/* Chat Area */}
-                    <div className="md:col-span-8 flex flex-col bg-slate-50/30 min-w-0">
+                    <div className="md:col-span-8 flex flex-col bg-slate-50/30 min-w-0 min-h-0 overflow-hidden">
                         {selectedConversation ? (
                             <>
                                 <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm">
@@ -495,7 +495,7 @@ export default function MessagesPage() {
                                     </div>
                                 </div>
 
-                                <ScrollArea className="flex-1 p-6">
+                                <ScrollArea className="flex-1 min-h-0 p-6">
                                     <div className="space-y-6">
                                         {(messages ?? [])
                                             .filter((m: any) => m.sender_id === selectedConversation.personId || m.receiver_id === selectedConversation.personId)
@@ -553,7 +553,7 @@ export default function MessagesPage() {
                                     </div>
                                 </ScrollArea>
 
-                                <div className="p-4 bg-white border-t border-slate-200">
+                                <div className="shrink-0 p-4 bg-white border-t border-slate-200">
                                     <input
                                         ref={fileInputRef}
                                         type="file"
@@ -583,7 +583,7 @@ export default function MessagesPage() {
                                             ))}
                                         </div>
                                     )}
-                                    <div className="flex items-end gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors">
+                                    <div className="flex items-end gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-100 hover:border-slate-200 transition-colors min-h-[52px] sm:min-h-[44px]">
                                         <Button
                                             type="button"
                                             variant="ghost"
@@ -605,7 +605,7 @@ export default function MessagesPage() {
                                                 }
                                             }}
                                             rows={1}
-                                            className="flex-1 min-h-[36px] max-h-32 resize-none border-none bg-transparent px-2 py-2 text-sm focus-visible:ring-0 focus-visible:outline-none placeholder:text-slate-400"
+                                            className="flex-1 min-h-[44px] sm:min-h-[36px] max-h-32 resize-none border-none bg-transparent px-2 py-2 text-sm focus-visible:ring-0 focus-visible:outline-none placeholder:text-slate-400"
                                         />
                                         <Button
                                             type="button"

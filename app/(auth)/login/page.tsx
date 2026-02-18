@@ -1,21 +1,51 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Stethoscope, Sparkles, ArrowRight, ShieldCheck, Mail, Lock } from "lucide-react"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { Stethoscope, Sparkles, ArrowRight, ShieldCheck, Mail, Lock, Loader2 } from "lucide-react"
 
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
 
+function getDomainFromInput(value: string): string | null {
+    const trimmed = value.trim().toLowerCase()
+    if (!trimmed) return null
+    if (trimmed.includes("@")) {
+        const part = trimmed.split("@")[1]
+        return part && part.includes(".") ? part : null
+    }
+    return trimmed.includes(".") ? trimmed : null
+}
+
 export default function LoginPage() {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
+    const [ssoDialogOpen, setSsoDialogOpen] = useState(false)
+    const [ssoEmailOrDomain, setSsoEmailOrDomain] = useState("")
+    const [ssoLoading, setSsoLoading] = useState(false)
+    const searchParams = useSearchParams()
     const supabase = createClient()
+
+    useEffect(() => {
+        const err = searchParams.get("error")
+        if (err) {
+            toast.error(decodeURIComponent(err))
+            window.history.replaceState({}, "", "/login")
+        }
+    }, [searchParams])
 
     async function onSubmit(event: React.FormEvent) {
         event.preventDefault()
@@ -42,6 +72,43 @@ export default function LoginPage() {
             toast.error(error instanceof Error ? error.message : "Invalid login credentials")
         } finally {
             setIsLoading(false)
+        }
+    }
+
+    async function handleSsoSubmit(e: React.FormEvent) {
+        e.preventDefault()
+        const domain = getDomainFromInput(ssoEmailOrDomain)
+        if (!domain) {
+            toast.error("Enter your work email (e.g. you@company.com) or organization domain (e.g. company.com)")
+            return
+        }
+        setSsoLoading(true)
+        try {
+            const origin = typeof window !== "undefined" ? window.location.origin : ""
+            const { data, error } = await supabase.auth.signInWithSSO({
+                domain,
+                options: {
+                    redirectTo: `${origin}/auth/callback?next=/dashboard`,
+                },
+            })
+            if (error) {
+                if (error.message?.toLowerCase().includes("provider") || error.message?.toLowerCase().includes("domain")) {
+                    toast.error("No SSO provider found for this domain. Ask your admin to enable SSO for your organization, or sign in with email and password.")
+                } else {
+                    toast.error(error.message || "SSO sign-in failed")
+                }
+                return
+            }
+            if (data?.url) {
+                toast.success("Redirecting to your organization's sign-in…")
+                window.location.href = data.url
+            } else {
+                toast.error("SSO sign-in could not be started. Try email and password.")
+            }
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "SSO sign-in failed")
+        } finally {
+            setSsoLoading(false)
         }
     }
 
@@ -147,6 +214,7 @@ export default function LoginPage() {
                                 variant="outline"
                                 type="button"
                                 disabled={isLoading}
+                                onClick={() => setSsoDialogOpen(true)}
                                 className="min-h-[44px] h-11 border-slate-200 bg-white/50 hover:bg-slate-50 transition-all font-semibold"
                             >
                                 <Sparkles className="h-4 w-4 mr-2 text-teal-600" />
@@ -154,6 +222,57 @@ export default function LoginPage() {
                             </Button>
                         </div>
                     </CardContent>
+
+                    <Dialog open={ssoDialogOpen} onOpenChange={setSsoDialogOpen}>
+                        <DialogContent className="sm:max-w-[400px]">
+                            <DialogHeader>
+                                <DialogTitle>Enterprise SSO</DialogTitle>
+                                <DialogDescription>
+                                    Enter your work email or your organization&apos;s domain. You&apos;ll be redirected to your identity provider to sign in.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <form onSubmit={handleSsoSubmit} className="space-y-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="sso-email">Work email or domain</Label>
+                                    <Input
+                                        id="sso-email"
+                                        type="text"
+                                        inputMode="email"
+                                        autoComplete="email"
+                                        placeholder="you@company.com or company.com"
+                                        value={ssoEmailOrDomain}
+                                        onChange={(e) => setSsoEmailOrDomain(e.target.value)}
+                                        disabled={ssoLoading}
+                                        className="bg-white border-slate-200"
+                                    />
+                                </div>
+                                <DialogFooter className="gap-2 sm:gap-0">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setSsoDialogOpen(false)}
+                                        disabled={ssoLoading}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        disabled={ssoLoading || !ssoEmailOrDomain.trim()}
+                                        className="bg-teal-600 hover:bg-teal-700"
+                                    >
+                                        {ssoLoading ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                Redirecting…
+                                            </>
+                                        ) : (
+                                            "Continue with SSO"
+                                        )}
+                                    </Button>
+                                </DialogFooter>
+                            </form>
+                        </DialogContent>
+                    </Dialog>
                     <CardFooter className="flex flex-col space-y-4 pt-2 pb-6 sm:pb-8 px-4 sm:px-6 text-center bg-slate-50/50 backdrop-blur-sm border-t border-slate-100">
                         <div className="text-sm text-slate-600">
                             Don't have an account?{" "}

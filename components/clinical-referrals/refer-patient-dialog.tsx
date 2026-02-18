@@ -20,9 +20,16 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Loader2, Copy, Mail, MessageCircle } from "lucide-react"
+import { Loader2, Copy, Mail, MessageCircle, Search, X } from "lucide-react"
 import { toast } from "sonner"
 import { buildReferralIntakeEmailContent, REFERRAL_INTAKE_EMAIL_SUBJECT, type ClinicBranding } from "@/lib/branding"
+
+interface PatientOption {
+    id: string
+    first_name: string
+    last_name: string
+    date_of_birth?: string | null
+}
 
 interface Specialist {
     id: string
@@ -59,6 +66,52 @@ export function ReferPatientDialog({
         reason: "",
     })
     const [consentChecked, setConsentChecked] = React.useState(false)
+    const [patients, setPatients] = React.useState<PatientOption[]>([])
+    const [patientsLoading, setPatientsLoading] = React.useState(false)
+    const [patientSearch, setPatientSearch] = React.useState("")
+    const [selectedPatient, setSelectedPatient] = React.useState<PatientOption | null>(null)
+    const [patientDropdownOpen, setPatientDropdownOpen] = React.useState(false)
+
+    React.useEffect(() => {
+        if (!open || intakeLink) return
+        setPatientsLoading(true)
+        fetch("/api/patients")
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data) => setPatients(Array.isArray(data) ? data : []))
+            .catch(() => setPatients([]))
+            .finally(() => setPatientsLoading(false))
+    }, [open, intakeLink])
+
+    const filteredPatients = React.useMemo(() => {
+        if (!patientSearch.trim()) return patients.slice(0, 8)
+        const q = patientSearch.toLowerCase()
+        return patients
+            .filter(
+                (p) =>
+                    p.first_name?.toLowerCase().includes(q) ||
+                    p.last_name?.toLowerCase().includes(q) ||
+                    `${p.first_name} ${p.last_name}`.toLowerCase().includes(q)
+            )
+            .slice(0, 8)
+    }, [patients, patientSearch])
+
+    const handleSelectPatient = (p: PatientOption) => {
+        setSelectedPatient(p)
+        setFormData((prev) => ({
+            ...prev,
+            patient_first_name: p.first_name || "",
+            patient_last_name: p.last_name || "",
+            dob: p.date_of_birth ? p.date_of_birth.split("T")[0] : "",
+        }))
+        setPatientSearch("")
+        setPatientDropdownOpen(false)
+    }
+
+    const handleClearPatient = () => {
+        setSelectedPatient(null)
+        setFormData((prev) => ({ ...prev, patient_first_name: "", patient_last_name: "", dob: "" }))
+        setPatientSearch("")
+    }
 
     const handleClose = (open: boolean) => {
         if (!open) {
@@ -71,6 +124,9 @@ export function ReferPatientDialog({
                 reason: "",
             })
             setConsentChecked(false)
+            setSelectedPatient(null)
+            setPatientSearch("")
+            setPatientDropdownOpen(false)
         }
         onOpenChange(open)
     }
@@ -220,10 +276,77 @@ export function ReferPatientDialog({
                     </div>
                 ) : (
                 <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                    {/* Patient Information */}
+                    {/* Patient search and select */}
+                    <div className="space-y-2">
+                        <Label>Patient *</Label>
+                        {selectedPatient ? (
+                            <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                <span className="text-sm font-medium text-slate-900">
+                                    {selectedPatient.first_name} {selectedPatient.last_name}
+                                    {selectedPatient.date_of_birth && (
+                                        <span className="ml-2 text-slate-500 font-normal">
+                                            DOB: {selectedPatient.date_of_birth.split("T")[0]}
+                                        </span>
+                                    )}
+                                </span>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="shrink-0 h-8 w-8 p-0"
+                                    onClick={handleClearPatient}
+                                    aria-label="Clear selection"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Input
+                                    placeholder="Search patient by name..."
+                                    value={patientSearch}
+                                    onChange={(e) => {
+                                        setPatientSearch(e.target.value)
+                                        setPatientDropdownOpen(true)
+                                    }}
+                                    onFocus={() => setPatientDropdownOpen(true)}
+                                    onBlur={() => setTimeout(() => setPatientDropdownOpen(false), 200)}
+                                    className="pl-9"
+                                />
+                                {patientDropdownOpen && (patientSearch.length > 0 || patients.length > 0) && (
+                                    <div className="absolute z-10 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg max-h-48 overflow-auto">
+                                        {patientsLoading ? (
+                                            <div className="p-3 text-sm text-slate-500 flex items-center gap-2">
+                                                <Loader2 className="h-4 w-4 animate-spin" /> Loading patients...
+                                            </div>
+                                        ) : filteredPatients.length === 0 ? (
+                                            <div className="p-3 text-sm text-slate-500">No patients found. Enter details below.</div>
+                                        ) : (
+                                            filteredPatients.map((p) => (
+                                                <button
+                                                    key={p.id}
+                                                    type="button"
+                                                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-100 flex items-center justify-between"
+                                                    onClick={() => handleSelectPatient(p)}
+                                                >
+                                                    <span>{p.first_name} {p.last_name}</span>
+                                                    {p.date_of_birth && (
+                                                        <span className="text-slate-500 text-xs">{p.date_of_birth.split("T")[0]}</span>
+                                                    )}
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Patient details (prefilled when selected, editable) */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label htmlFor="patient_first_name">Patient First Name *</Label>
+                            <Label htmlFor="patient_first_name">First Name *</Label>
                             <Input
                                 id="patient_first_name"
                                 value={formData.patient_first_name}
@@ -232,7 +355,7 @@ export function ReferPatientDialog({
                             />
                         </div>
                         <div>
-                            <Label htmlFor="patient_last_name">Patient Last Name *</Label>
+                            <Label htmlFor="patient_last_name">Last Name *</Label>
                             <Input
                                 id="patient_last_name"
                                 value={formData.patient_last_name}
