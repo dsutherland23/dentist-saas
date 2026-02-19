@@ -18,7 +18,7 @@ import {
     parseISO,
     startOfDay
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download, X, Stethoscope, User } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download, X, Stethoscope, User, MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
@@ -46,6 +46,13 @@ import {
     SheetContent,
 } from "@/components/ui/sheet"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { differenceInMinutes, addMinutes, isAfter } from "date-fns"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { CheckoutPaymentModal } from "@/components/calendar/checkout-payment-modal"
@@ -152,6 +159,11 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             .catch(() => { if (!cancelled) setPatientVerificationData(null) })
         return () => { cancelled = true }
     }, [selectedApptForDetail?.patient_id])
+
+    // Default to Day view on mobile so the grid isn't cramped
+    useEffect(() => {
+        if (isMobile) setView((prev) => (prev === "week" ? "day" : prev))
+    }, [isMobile])
 
     // Open "View All" from dashboard link and clear URL so refresh doesn't reopen
     useEffect(() => {
@@ -669,118 +681,184 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             {/* Header with Period Label and Controls */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3 shrink-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
-                    <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 truncate">
-                        {getPeriodLabel()}
+                    <h2 className={cn(
+                        "font-bold text-slate-800 truncate",
+                        isMobile ? "text-base" : "text-lg sm:text-xl md:text-2xl"
+                    )}>
+                        {isMobile
+                                ? view === "day"
+                                    ? format(currentDate, "MMM d")
+                                    : view === "week"
+                                        ? format(startOfWeek(currentDate, { weekStartsOn: 1 }), "MMM d") + " – " + format(endOfWeek(currentDate, { weekStartsOn: 1 }), "MMM d")
+                                        : format(currentDate, "MMM yyyy")
+                                : getPeriodLabel()}
                     </h2>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    {currentUserId && (
-                        <AllAppointmentsDialog
-                            currentUserId={currentUserId}
-                            dentists={dentists}
-                            open={allAppointmentsDialogOpen}
-                            onOpenChange={setAllAppointmentsDialogOpen}
-                            trigger={
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 sm:h-9 text-xs border-slate-200 hover:border-teal-300 hover:bg-teal-50"
+                {isMobile ? (
+                    /* Mobile: compact toolbar + More menu */
+                    <div className="flex flex-col gap-2 w-full sm:w-auto">
+                        <div className="flex items-center gap-2">
+                            <div className="flex items-center rounded-md border bg-white shadow-sm overflow-hidden border-slate-200 shrink-0">
+                                <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-9 w-9 hover:bg-slate-50 hover:text-teal-600"><ChevronLeft className="h-4 w-4" /></Button>
+                                <Button variant="ghost" onClick={today} className="px-3 font-bold rounded-none border-r border-slate-100 h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600">Today</Button>
+                                <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-9 w-9 hover:bg-slate-50 hover:text-teal-600"><ChevronRight className="h-4 w-4" /></Button>
+                            </div>
+                            <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
+                                {(["day", "week", "month"] as const).map((v) => (
+                                    <button
+                                        key={v}
+                                        onClick={() => setView(v)}
+                                        className={cn(
+                                            "px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all capitalize",
+                                            view === v ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                        )}
+                                    >
+                                        {v}
+                                    </button>
+                                ))}
+                            </div>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 border-slate-200">
+                                        <MoreVertical className="h-4 w-4" />
+                                        <span className="sr-only">More</span>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-48">
+                                    {currentUserId && (
+                                        <DropdownMenuItem onClick={() => setAllAppointmentsDialogOpen(true)}>
+                                            <Calendar className="h-3.5 w-3.5 mr-2" />
+                                            View All
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem onClick={exportSchedule}>
+                                        <Download className="h-3.5 w-3.5 mr-2" />
+                                        Export
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setStaffFilterId(null)}>
+                                        <Users className="h-3.5 w-3.5 mr-2" />
+                                        All staff
+                                    </DropdownMenuItem>
+                                    {dentists.map((d) => (
+                                        <DropdownMenuItem key={d.id} onClick={() => setStaffFilterId(d.id)}>
+                                            Dr. {d.last_name}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <NewAppointmentDialog
+                                patients={patients}
+                                dentists={dentists}
+                                trigger={
+                                    <Button size="sm" className="h-9 bg-teal-600 hover:bg-teal-700 text-xs shrink-0 ml-auto">
+                                        <Plus className="h-4 w-4 mr-1" /> New
+                                    </Button>
+                                }
+                                open={isNewAppointmentOpen}
+                                onOpenChange={(o) => {
+                                    setIsNewAppointmentOpen(o)
+                                    if (!o) setNewAppointmentStart(undefined)
+                                }}
+                                initialStartDate={newAppointmentStart}
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    /* Desktop: full toolbar */
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        {currentUserId && (
+                            <AllAppointmentsDialog
+                                currentUserId={currentUserId}
+                                dentists={dentists}
+                                open={allAppointmentsDialogOpen}
+                                onOpenChange={setAllAppointmentsDialogOpen}
+                                trigger={
+                                    <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs border-slate-200 hover:border-teal-300 hover:bg-teal-50">
+                                        <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                        View All
+                                    </Button>
+                                }
+                            />
+                        )}
+                        <Button variant="outline" size="sm" onClick={exportSchedule} className="h-8 sm:h-9 text-xs border-slate-200 hover:border-blue-300 hover:bg-blue-50">
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            Export
+                        </Button>
+                        <div className="flex items-center rounded-md border bg-white shadow-sm overflow-hidden border-slate-200">
+                            <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronLeft className="h-4 w-4" /></Button>
+                            <Button variant="ghost" onClick={today} className="px-2 sm:px-4 font-bold rounded-none border-r border-slate-100 h-8 sm:h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600 transition-colors">Today</Button>
+                            <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronRight className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            {(["day", "week", "month"] as const).map((v) => (
+                                <button
+                                    key={v}
+                                    onClick={() => setView(v)}
+                                    className={cn(
+                                        "px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all capitalize",
+                                        view === v ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                    )}
                                 >
-                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                                    View All
+                                    {v}
+                                </button>
+                            ))}
+                        </div>
+                        <Select value={staffFilterId ?? "all"} onValueChange={(v) => setStaffFilterId(v === "all" ? null : v)}>
+                            <SelectTrigger className="w-[140px] sm:w-[160px] h-8 sm:h-9 text-xs border-slate-200 bg-white">
+                                <Users className="h-3.5 w-3.5 text-slate-400 mr-1.5 shrink-0" />
+                                <SelectValue placeholder="All staff" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all" className="text-xs">All staff</SelectItem>
+                                {dentists.map((d) => (
+                                    <SelectItem key={d.id} value={d.id} className="text-xs">
+                                        Dr. {d.last_name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <NewAppointmentDialog
+                            patients={patients}
+                            dentists={dentists}
+                            trigger={
+                                <Button size="sm" className="bg-teal-600 hover:bg-teal-700 text-xs sm:text-sm shrink-0" onClick={() => { setNewAppointmentStart(undefined); setIsNewAppointmentOpen(true) }}>
+                                    <Plus className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> New Appointment
                                 </Button>
                             }
+                            open={isNewAppointmentOpen}
+                            onOpenChange={(o) => { setIsNewAppointmentOpen(o); if (!o) setNewAppointmentStart(undefined) }}
+                            initialStartDate={newAppointmentStart}
                         />
-                    )}
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={exportSchedule}
-                        className="h-8 sm:h-9 text-xs border-slate-200 hover:border-blue-300 hover:bg-blue-50"
-                    >
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        Export
-                    </Button>
-                    <div className="flex items-center rounded-md border bg-white shadow-sm overflow-hidden border-slate-200">
-                        <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronLeft className="h-4 w-4" /></Button>
-                        <Button variant="ghost" onClick={today} className="px-2 sm:px-4 font-bold rounded-none border-r border-slate-100 h-8 sm:h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600 transition-colors">Today</Button>
-                        <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronRight className="h-4 w-4" /></Button>
                     </div>
-                    <div className="flex bg-slate-100 p-1 rounded-lg">
-                        {(["day", "week", "month"] as const).map((v) => (
-                            <button
-                                key={v}
-                                onClick={() => setView(v)}
-                                className={cn(
-                                    "px-2 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all capitalize",
-                                    view === v ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
-                                )}
-                            >
-                                {v}
-                            </button>
-                        ))}
-                    </div>
-                    <Select value={staffFilterId ?? "all"} onValueChange={(v) => setStaffFilterId(v === "all" ? null : v)}>
-                        <SelectTrigger className="w-[140px] sm:w-[160px] h-8 sm:h-9 text-xs border-slate-200 bg-white">
-                            <Users className="h-3.5 w-3.5 text-slate-400 mr-1.5 shrink-0" />
-                            <SelectValue placeholder="All staff" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all" className="text-xs">All staff</SelectItem>
-                            {dentists.map((d) => (
-                                <SelectItem key={d.id} value={d.id} className="text-xs">
-                                    Dr. {d.last_name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <NewAppointmentDialog
-                        patients={patients}
-                        dentists={dentists}
-                        trigger={
-                            <Button
-                                size="sm"
-                                className="bg-teal-600 hover:bg-teal-700 text-xs sm:text-sm shrink-0"
-                                onClick={() => {
-                                    setNewAppointmentStart(undefined)
-                                    setIsNewAppointmentOpen(true)
-                                }}
-                            >
-                                <Plus className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" /> New Appointment
-                            </Button>
-                        }
-                        open={isNewAppointmentOpen}
-                        onOpenChange={(o) => {
-                            setIsNewAppointmentOpen(o)
-                            if (!o) setNewAppointmentStart(undefined)
-                        }}
-                        initialStartDate={newAppointmentStart}
-                    />
-                </div>
+                )}
             </div>
 
             {/* Statistics Panel */}
-            <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-white rounded-lg border border-slate-200 shadow-sm shrink-0">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-50 border border-slate-100">
+            <div className={cn(
+                "flex items-center gap-2 mb-4 p-3 bg-white rounded-lg border border-slate-200 shadow-sm shrink-0",
+                isMobile ? "overflow-x-auto overflow-y-hidden flex-nowrap pb-1" : "flex-wrap"
+            )}>
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-50 border border-slate-100 shrink-0">
                     <Calendar className="h-3.5 w-3.5 text-slate-600" />
-                    <span className="text-xs font-semibold text-slate-600">{stats.total} Total</span>
+                    <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">{stats.total} Total</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200 shrink-0">
                     <CheckCircle className="h-3.5 w-3.5 text-emerald-600" />
-                    <span className="text-xs font-semibold text-emerald-700">{stats.confirmed} Confirmed</span>
+                    <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">{stats.confirmed} Confirmed</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-50 border border-amber-200 shrink-0">
                     <Clock className="h-3.5 w-3.5 text-amber-600" />
-                    <span className="text-xs font-semibold text-amber-700">{stats.pending} Pending</span>
+                    <span className="text-xs font-semibold text-amber-700 whitespace-nowrap">{stats.pending} Pending</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-rose-50 border border-rose-200">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-rose-50 border border-rose-200 shrink-0">
                     <XCircle className="h-3.5 w-3.5 text-rose-600" />
-                    <span className="text-xs font-semibold text-rose-700">{stats.cancelled} Cancelled</span>
+                    <span className="text-xs font-semibold text-rose-700 whitespace-nowrap">{stats.cancelled} Cancelled</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200 shrink-0">
                     <Activity className="h-3.5 w-3.5 text-blue-600" />
-                    <span className="text-xs font-semibold text-blue-700">{chairUtilization}% Chair Use</span>
+                    <span className="text-xs font-semibold text-blue-700 whitespace-nowrap">{chairUtilization}% Chair Use</span>
                 </div>
             </div>
 
@@ -965,18 +1043,10 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     return "bg-amber-100 border-amber-200 text-amber-700"
                 }
 
-                return (
-                    <div
-                        className={cn(
-                            "shrink-0 flex flex-col border-l border-slate-100 bg-white overflow-hidden",
-                            "transition-[width] duration-300 ease-in-out",
-                            isOpen ? "w-64" : "w-0"
-                        )}
-                    >
-                        {appt && (
-                            <div className="w-64 flex flex-col h-full overflow-hidden">
-                                {/* Header */}
-                                <div className={cn("shrink-0 px-3 py-3 border-b border-slate-100", accent.light)}>
+                const detailSections = appt ? (
+                    <>
+                        {/* Header */}
+                        <div className={cn("shrink-0 px-3 py-3 border-b border-slate-100", accent.light)}>
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="flex items-center gap-2 min-w-0">
                                             <Avatar className={cn("h-8 w-8 shrink-0 border-2 border-white shadow ring-1", accent.ring)}>
@@ -1225,9 +1295,30 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                         </Button>
                                     </div>
                                 </div>
+                        </>
+                ) : null
+
+                return (
+                    <>
+                        {!isMobile && (
+                            <div
+                                className={cn(
+                                    "shrink-0 flex flex-col border-l border-slate-100 bg-white overflow-hidden",
+                                    "transition-[width] duration-300 ease-in-out",
+                                    isOpen ? "w-64" : "w-0"
+                                )}
+                            >
+                                {detailSections && <div className="w-64 flex flex-col h-full overflow-hidden">{detailSections}</div>}
                             </div>
                         )}
-                    </div>
+                        {isMobile && (
+                            <Sheet open={isOpen} onOpenChange={(open) => !open && closeDetail()}>
+                                <SheetContent side="bottom" className="max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0">
+                                    {detailSections && <div className="flex flex-col h-full w-full min-w-0 overflow-hidden">{detailSections}</div>}
+                                </SheetContent>
+                            </Sheet>
+                        )}
+                    </>
                 )
             })()}
 
