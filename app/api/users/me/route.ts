@@ -23,14 +23,14 @@ export async function PATCH(request: Request) {
             if (trimmed.length > 100) {
                 return NextResponse.json({ error: "First name must be 100 characters or less" }, { status: 400 })
             }
-            updates.first_name = trimmed || null
+            updates.first_name = trimmed || undefined
         }
         if (typeof last_name === "string") {
             const trimmed = last_name.trim()
             if (trimmed.length > 100) {
                 return NextResponse.json({ error: "Last name must be 100 characters or less" }, { status: 400 })
             }
-            updates.last_name = trimmed || null
+            updates.last_name = trimmed || undefined
         }
 
         if (Object.keys(updates).length === 0) {
