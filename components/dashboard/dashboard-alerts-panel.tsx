@@ -70,8 +70,8 @@ export function DashboardAlertsPanel({ refreshKey = 0 }: { refreshKey?: number }
                         <AlertCircle className="h-10 w-10 mx-auto mb-2 opacity-40" aria-hidden />
                         <p className="text-sm font-medium">No unpaid invoices</p>
                         <p className="text-xs mt-0.5 mb-4">Invoices with a balance due will appear here</p>
-                        <Button variant="outline" size="sm" onClick={() => router.push("/billing")}>
-                            Go to Billing
+                        <Button variant="outline" size="sm" onClick={() => router.push("/invoices")}>
+                            Go to Invoices
                             <ChevronRight className="h-3.5 w-3.5 ml-1" />
                         </Button>
                     </div>
@@ -82,7 +82,7 @@ export function DashboardAlertsPanel({ refreshKey = 0 }: { refreshKey?: number }
                                 <button
                                     type="button"
                                     className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-colors"
-                                    onClick={() => router.push("/billing")}
+                                    onClick={() => router.push("/invoices")}
                                 >
                                     <div className="h-9 w-9 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
                                         <FileText className="h-4 w-4 text-amber-700" aria-hidden />

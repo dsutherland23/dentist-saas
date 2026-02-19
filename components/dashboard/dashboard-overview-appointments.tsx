@@ -97,19 +97,19 @@ export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?:
                     </div>
                 ) : (
                     <>
-                        {/* Mobile / small: compact card list — time stays readable, no horizontal scroll */}
+                        {/* Mobile / small: compact card list — time and name never overlap */}
                         <div className="md:hidden space-y-2">
                             {schedule.slice(0, 8).map((item) => (
                                 <button
                                     key={item.id}
                                     type="button"
                                     onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
-                                    className="w-full text-left flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-white hover:bg-slate-50/80 hover:border-slate-200 transition-colors"
+                                    className="w-full text-left flex items-start sm:items-center gap-3 p-3 rounded-lg border border-slate-100 bg-white hover:bg-slate-50/80 hover:border-slate-200 transition-colors"
                                 >
-                                    <span className="shrink-0 w-14 text-xs font-semibold text-slate-700 tabular-nums whitespace-nowrap">
+                                    <span className="shrink-0 min-w-[5.5rem] max-w-[5.5rem] text-xs font-semibold text-slate-700 tabular-nums break-words text-left">
                                         {item.time}
                                     </span>
-                                    <div className="flex-1 min-w-0">
+                                    <div className="flex-1 min-w-0 overflow-hidden">
                                         <p className="text-sm font-semibold text-slate-900 truncate">{item.patient}</p>
                                         <p className="text-xs text-slate-500 truncate">{item.treatment}</p>
                                     </div>
