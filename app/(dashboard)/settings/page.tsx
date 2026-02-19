@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +25,14 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User, Copy } from "lucide-react"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User, Copy, Key, Pencil, MoreVertical } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ProfilePictureUpload } from "@/components/patients/profile-picture-upload"
 import { Textarea } from "@/components/ui/textarea"
@@ -38,15 +45,26 @@ import { useTrialLock } from "@/lib/hooks/use-trial-lock"
 import { PRICING, getRevenueCatPurchases } from "@/lib/revenuecat"
 import { ExternalLink } from "lucide-react"
 
+type SettingsTab = "general" | "notifications" | "security" | "billing" | "team" | "support"
+
+const SETTINGS_SECTIONS: { value: SettingsTab; label: string; icon: typeof Building2 }[] = [
+    { value: "general", label: "General", icon: Building2 },
+    { value: "notifications", label: "Notifications", icon: Bell },
+    { value: "security", label: "Security", icon: Shield },
+    { value: "billing", label: "Billing", icon: CreditCard },
+    { value: "team", label: "Team", icon: Users },
+    { value: "support", label: "Support", icon: LifeBuoy },
+]
+
 export default function SettingsPage() {
-    const { profile, user } = useAuth()
+    const { profile, user, refreshProfile } = useAuth()
     const { customerInfo, isPro, loading: rcLoading, refresh } = useRevenueCat(user?.id ?? profile?.id)
     const { isTrialActive, isTrialExpired, trialDaysLeft } = useTrialLock()
     const [isLoading, setIsLoading] = useState(true)
     const [isSaving, setIsSaving] = useState(false)
     const [mounted, setMounted] = useState(false)
     const [purchasingPlan, setPurchasingPlan] = useState<"monthly" | "yearly" | "lifetime" | null>(null)
-    const [activeTab, setActiveTab] = useState<"general" | "notifications" | "security" | "billing" | "team" | "support">("general")
+    const [activeTab, setActiveTab] = useState<SettingsTab>("general")
 
     useEffect(() => {
         setMounted(true)
@@ -78,7 +96,8 @@ export default function SettingsPage() {
             weekday: "9:00 AM - 6:00 PM",
             weekend: "Closed"
         },
-        require_consent_in_visit_flow: false
+        require_consent_in_visit_flow: false,
+        use_fullscreen: false
     })
 
     const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,6 +161,11 @@ export default function SettingsPage() {
     const [tempPassword, setTempPassword] = useState<string | null>(null)
     const [updatingRoleUserId, setUpdatingRoleUserId] = useState<string | null>(null)
     const [removingUserId, setRemovingUserId] = useState<string | null>(null)
+    const [resettingPasswordUserId, setResettingPasswordUserId] = useState<string | null>(null)
+    const [resetCredentials, setResetCredentials] = useState<{ email: string; temp_password: string; memberName: string } | null>(null)
+    const [changeEmailMember, setChangeEmailMember] = useState<{ id: string; email: string; first_name?: string; last_name?: string } | null>(null)
+    const [changeEmailValue, setChangeEmailValue] = useState("")
+    const [changingEmail, setChangingEmail] = useState(false)
 
     // Security State
     const [passwords, setPasswords] = useState({
@@ -154,9 +178,48 @@ export default function SettingsPage() {
     const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
     const [userProfilePicture, setUserProfilePicture] = useState<string | null>(null)
 
+    // Your Profile editable fields (synced from profile)
+    const [profileFirstName, setProfileFirstName] = useState("")
+    const [profileLastName, setProfileLastName] = useState("")
+    const [savingProfile, setSavingProfile] = useState(false)
+    useEffect(() => {
+        if (profile) {
+            setProfileFirstName(profile.first_name ?? "")
+            setProfileLastName(profile.last_name ?? "")
+        }
+    }, [profile])
+
     // Support State
     const [suggestion, setSuggestion] = useState("")
     const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false)
+
+    const handleSaveProfile = async () => {
+        const first = profileFirstName.trim()
+        const last = profileLastName.trim()
+        if (!first && !last) {
+            toast.error("Enter at least first or last name.")
+            return
+        }
+        setSavingProfile(true)
+        try {
+            const res = await fetch("/api/users/me", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ first_name: first || undefined, last_name: last || undefined }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
+                toast.success("Profile updated!")
+                await refreshProfile()
+            } else {
+                toast.error(data.error || "Failed to update profile")
+            }
+        } catch {
+            toast.error("Failed to update profile")
+        } finally {
+            setSavingProfile(false)
+        }
+    }
 
     const handleSubmitSuggestion = async () => {
         const text = suggestion.trim()
@@ -283,7 +346,11 @@ export default function SettingsPage() {
 
                 if (clinicRes.ok) {
                     const clinicData = await clinicRes.json()
-                    setClinic({ ...clinicData, require_consent_in_visit_flow: clinicData.require_consent_in_visit_flow ?? false })
+                    setClinic({
+                        ...clinicData,
+                        require_consent_in_visit_flow: clinicData.require_consent_in_visit_flow ?? false,
+                        use_fullscreen: clinicData.use_fullscreen ?? false
+                    })
                 }
 
                 if (teamRes.ok) {
@@ -384,6 +451,64 @@ export default function SettingsPage() {
         }
     }
 
+    const handleResetPassword = async (member: { id: string; first_name?: string; last_name?: string; email?: string }) => {
+        setResettingPasswordUserId(member.id)
+        setResetCredentials(null)
+        try {
+            const res = await fetch("/api/staff/reset-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ staff_id: member.id }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
+                const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim() || "Staff"
+                setResetCredentials({
+                    email: data.email ?? member.email ?? "",
+                    temp_password: data.temp_password ?? "",
+                    memberName: name,
+                })
+                toast.success("Password reset. Share the new temporary password with them.")
+            } else {
+                toast.error(data.error || "Failed to reset password")
+            }
+        } catch {
+            toast.error("Failed to reset password")
+        } finally {
+            setResettingPasswordUserId(null)
+        }
+    }
+
+    const handleChangeEmail = async () => {
+        if (!changeEmailMember || !changeEmailValue.trim()) return
+        const trimmed = changeEmailValue.trim().toLowerCase()
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+            toast.error("Enter a valid email address")
+            return
+        }
+        setChangingEmail(true)
+        try {
+            const res = await fetch("/api/staff/change-email", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ staff_id: changeEmailMember.id, new_email: trimmed }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (res.ok) {
+                toast.success("Email updated. Share the new email with the staff member.")
+                setTeam(prev => prev.map(m => m.id === changeEmailMember.id ? { ...m, email: trimmed } : m))
+                setChangeEmailMember(null)
+                setChangeEmailValue("")
+            } else {
+                toast.error(data.error || "Failed to update email")
+            }
+        } catch {
+            toast.error("Failed to update email")
+        } finally {
+            setChangingEmail(false)
+        }
+    }
+
     const handleSavePreferences = async () => {
         setIsSaving(true)
         try {
@@ -444,7 +569,11 @@ export default function SettingsPage() {
             })
 
             if (res.ok) {
+                const data = await res.json().catch(() => ({}))
                 toast.success("Clinic settings updated successfully")
+                if (data.warning) {
+                    toast.info(data.warning, { duration: 8000 })
+                }
             } else {
                 const errData = await res.json()
                 toast.error(errData.error || errData.details || "Failed to update clinic settings")
@@ -484,41 +613,54 @@ export default function SettingsPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={(val) => {
-                const v = val as typeof activeTab
+                const v = val as SettingsTab
                 if (isTrialExpired && !isPro && v !== "billing") {
                     toast.error("Your 7‑day trial has ended. Please subscribe on the Billing tab to continue.")
                     return
                 }
                 setActiveTab(v)
             }} className="space-y-4 sm:space-y-6 min-w-0 max-w-full">
-                {/* Scrollable tab list on small screens */}
-                <div className="w-full min-w-0 overflow-x-auto overflow-y-hidden -mx-1 px-1 pb-1 scrollbar-thin">
-                    <TabsList className="inline-flex h-9 sm:h-10 w-max min-h-[2.25rem] items-center justify-start gap-0.5 bg-white border border-slate-200 p-1 rounded-md">
-                        <TabsTrigger value="general" className="gap-1 sm:gap-2 shrink-0 rounded-md px-2 sm:px-3 text-xs sm:text-sm whitespace-nowrap">
-                            <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
-                            General
-                        </TabsTrigger>
-                        <TabsTrigger value="notifications" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <Bell className="h-4 w-4 shrink-0" />
-                            Notifications
-                        </TabsTrigger>
-                        <TabsTrigger value="security" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <Shield className="h-4 w-4 shrink-0" />
-                            Security
-                        </TabsTrigger>
-                        <TabsTrigger value="billing" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <CreditCard className="h-4 w-4 shrink-0" />
-                            Billing
-                        </TabsTrigger>
-                        <TabsTrigger value="team" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <Users className="h-4 w-4 shrink-0" />
-                            Team
-                        </TabsTrigger>
-                        <TabsTrigger value="support" className="gap-1.5 sm:gap-2 shrink-0 rounded-md px-2.5 sm:px-3 whitespace-nowrap">
-                            <LifeBuoy className="h-4 w-4 shrink-0" />
-                            Support
-                        </TabsTrigger>
-                    </TabsList>
+                {/* Section dropdown — single control, works on all screen sizes */}
+                <div className="w-full min-w-0 max-w-sm">
+                    <Select
+                        value={activeTab}
+                        onValueChange={(val) => {
+                            const v = val as SettingsTab
+                            if (isTrialExpired && !isPro && v !== "billing") {
+                                toast.error("Your 7‑day trial has ended. Please subscribe on the Billing tab to continue.")
+                                return
+                            }
+                            setActiveTab(v)
+                        }}
+                    >
+                        <SelectTrigger className="h-11 w-full items-center gap-2.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition-colors hover:bg-slate-50 focus:ring-2 focus:ring-teal-500/20 focus:ring-offset-0">
+                            {(() => {
+                                const current = SETTINGS_SECTIONS.find((s) => s.value === activeTab) ?? SETTINGS_SECTIONS[0]
+                                const Icon = current.icon
+                                return (
+                                    <>
+                                        <Icon className="h-4 w-4 shrink-0 text-teal-600" />
+                                        <span className="flex-1 text-left">{current.label}</span>
+                                    </>
+                                )
+                            })()}
+                        </SelectTrigger>
+                        <SelectContent className="min-w-[12rem] rounded-xl border-slate-200 shadow-lg" align="start">
+                            {SETTINGS_SECTIONS.map((section) => {
+                                const Icon = section.icon
+                                return (
+                                    <SelectItem
+                                        key={section.value}
+                                        value={section.value}
+                                        className="flex cursor-pointer items-center gap-2 rounded-lg py-2.5 focus:bg-teal-50 focus:text-teal-900"
+                                    >
+                                        <Icon className="h-4 w-4 shrink-0 text-slate-500" />
+                                        {section.label}
+                                    </SelectItem>
+                                )
+                            })}
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 {/* General (includes Your Profile + Practice Information + Regional) */}
@@ -567,11 +709,23 @@ export default function SettingsPage() {
                             <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label className="text-xs sm:text-sm">First Name</Label>
-                                    <Input value={profile?.first_name || ''} disabled className="bg-slate-50 text-sm min-w-0" />
+                                    <Input
+                                        value={profileFirstName}
+                                        onChange={(e) => setProfileFirstName(e.target.value)}
+                                        placeholder="First name"
+                                        className="text-sm min-w-0"
+                                        disabled={savingProfile}
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label className="text-xs sm:text-sm">Last Name</Label>
-                                    <Input value={profile?.last_name || ''} disabled className="bg-slate-50 text-sm min-w-0" />
+                                    <Input
+                                        value={profileLastName}
+                                        onChange={(e) => setProfileLastName(e.target.value)}
+                                        placeholder="Last name"
+                                        className="text-sm min-w-0"
+                                        disabled={savingProfile}
+                                    />
                                 </div>
                                 <div className="space-y-1.5 sm:col-span-2">
                                     <Label className="text-xs sm:text-sm">Email</Label>
@@ -582,7 +736,17 @@ export default function SettingsPage() {
                                     <Input value={profile?.role?.replace('_', ' ') || ''} disabled className="bg-slate-50 capitalize text-sm min-w-0" />
                                 </div>
                             </div>
-                            <p className="text-[11px] sm:text-xs text-slate-400">To update your name or email, contact your clinic administrator.</p>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                    onClick={handleSaveProfile}
+                                    disabled={savingProfile || (profileFirstName === (profile?.first_name ?? '') && profileLastName === (profile?.last_name ?? ''))}
+                                    className="bg-teal-600 hover:bg-teal-700"
+                                >
+                                    {savingProfile ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                                    Save profile
+                                </Button>
+                            </div>
+                            <p className="text-[11px] sm:text-xs text-slate-400">You can update your name above. Email and role are managed by your clinic administrator.</p>
                         </CardContent>
                     </Card>
 
@@ -756,6 +920,20 @@ export default function SettingsPage() {
                                     onCheckedChange={checked => setClinic({ ...clinic, require_consent_in_visit_flow: !!checked })}
                                 />
                             </div>
+
+                            {canManageTeam && (
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="use-fullscreen">Fullscreen mode</Label>
+                                        <p className="text-sm text-slate-500">When on, all staff can expand the app to fill the screen and hide the browser address bar. They use the fullscreen button in the top bar to enter or exit.</p>
+                                    </div>
+                                    <Switch
+                                        id="use-fullscreen"
+                                        checked={!!clinic.use_fullscreen}
+                                        onCheckedChange={checked => setClinic({ ...clinic, use_fullscreen: !!checked })}
+                                    />
+                                </div>
+                            )}
 
                             <div className="flex justify-end">
                                 <Button
@@ -1127,20 +1305,20 @@ export default function SettingsPage() {
 
                 {/* Team Settings */}
                 <TabsContent value="team" className="space-y-4 min-w-0 overflow-x-hidden">
-                    <Card className="shadow-sm">
-                        <CardHeader>
-                            <CardTitle>Team Members</CardTitle>
+                    <Card className="min-w-0 overflow-hidden shadow-sm">
+                        <CardHeader className="space-y-1.5">
+                            <CardTitle className="text-lg">Team Members</CardTitle>
                             <CardDescription>Manage team access and permissions. Only clinic admins can invite, change roles, or remove members.</CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
+                        <CardContent className="min-w-0 space-y-4 p-4 sm:p-6 pt-0">
                             {canManageTeam && (
                                 <>
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="min-w-0">
                                             <h3 className="font-semibold">Invite Team Members</h3>
                                             <p className="text-sm text-slate-500">Add new members; they will receive a temporary password to sign in.</p>
                                         </div>
-                                        <Button className="bg-teal-600 hover:bg-teal-700" onClick={() => { setInviteDialogOpen(true); setTempPassword(null); }}>
+                                        <Button className="bg-teal-600 hover:bg-teal-700 shrink-0" onClick={() => { setInviteDialogOpen(true); setTempPassword(null); }}>
                                             <Mail className="mr-2 h-4 w-4" />
                                             Invite Member
                                         </Button>
@@ -1152,23 +1330,26 @@ export default function SettingsPage() {
                                 <p className="text-sm text-slate-500 rounded-lg bg-slate-50 p-3">Only clinic admins can manage team roles and invitations. Ask your admin to change your role if needed.</p>
                             )}
 
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {team.length > 0 ? (
                                     team
                                         .filter((m) => m.is_active !== false)
                                         .map((member) => (
-                                            <div key={member.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg border border-slate-100">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold">
+                                            <div
+                                                key={member.id}
+                                                className="flex flex-col gap-3 rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                                            >
+                                                <div className="flex min-w-0 flex-shrink-0 items-center gap-3 sm:min-w-0">
+                                                    <div className="h-10 w-10 shrink-0 rounded-full bg-gradient-to-br from-teal-100 to-teal-50 flex items-center justify-center text-sm font-semibold text-teal-700 ring-2 ring-white shadow-sm">
                                                         {member.first_name?.[0]}{member.last_name?.[0]}
                                                     </div>
-                                                    <div>
-                                                        <p className="font-medium">{member.first_name} {member.last_name}</p>
-                                                        <p className="text-sm text-slate-500">{member.email}</p>
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate font-medium text-slate-900">{member.first_name} {member.last_name}</p>
+                                                        <p className="truncate text-sm text-slate-500">{member.email}</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Badge variant="outline" className="capitalize">{member.role?.replace(/_/g, " ")}</Badge>
+                                                <div className="flex min-w-0 flex-wrap items-center gap-2 border-t border-slate-100 pt-3 sm:border-t-0 sm:pt-0 sm:justify-end">
+                                                    <Badge variant="secondary" className="shrink-0 capitalize font-medium">{member.role?.replace(/_/g, " ")}</Badge>
                                                     {canManageTeam && (
                                                         <>
                                                             <Select
@@ -1176,7 +1357,7 @@ export default function SettingsPage() {
                                                                 onValueChange={(val) => handleUpdateRole(member.id, val)}
                                                                 disabled={updatingRoleUserId === member.id}
                                                             >
-                                                                <SelectTrigger className="w-32 h-8">
+                                                                <SelectTrigger className="h-9 w-full min-w-0 max-w-[8rem] shrink-0 sm:max-w-[9rem]">
                                                                     {updatingRoleUserId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <SelectValue />}
                                                                 </SelectTrigger>
                                                                 <SelectContent>
@@ -1187,15 +1368,44 @@ export default function SettingsPage() {
                                                                     <SelectItem value="accountant">Accountant</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                                onClick={() => handleRemoveMember(member)}
-                                                                disabled={removingUserId === member.id || member.id === profile?.id}
-                                                            >
-                                                                {removingUserId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
-                                                            </Button>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="h-9 w-9 shrink-0 border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                                                        aria-label="Member actions"
+                                                                    >
+                                                                        <MoreVertical className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end" className="w-52">
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => handleResetPassword(member)}
+                                                                        disabled={resettingPasswordUserId === member.id}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        {resettingPasswordUserId === member.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                                                                        Reset password
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => { setChangeEmailMember({ id: member.id, email: member.email ?? "", first_name: member.first_name, last_name: member.last_name }); setChangeEmailValue(""); }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Pencil className="mr-2 h-4 w-4" />
+                                                                        Change email
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onClick={() => handleRemoveMember(member)}
+                                                                        disabled={removingUserId === member.id || member.id === profile?.id}
+                                                                        className="cursor-pointer text-red-600 focus:text-red-700 focus:bg-red-50"
+                                                                    >
+                                                                        {removingUserId === member.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin shrink-0" /> : null}
+                                                                        Remove from team
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
                                                         </>
                                                     )}
                                                 </div>
@@ -1273,6 +1483,80 @@ export default function SettingsPage() {
                                         </Button>
                                     </DialogFooter>
                                 </>
+                            )}
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Reset password credentials dialog */}
+                    <Dialog open={!!resetCredentials} onOpenChange={(open) => { if (!open) setResetCredentials(null); }}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Share new password</DialogTitle>
+                                <DialogDescription>
+                                    Share these credentials with {resetCredentials?.memberName}. They will be required to set a new password on next login.
+                                </DialogDescription>
+                            </DialogHeader>
+                            {resetCredentials && (
+                                <div className="space-y-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500">Email</Label>
+                                        <div className="flex items-center gap-2">
+                                            <code className="flex-1 rounded bg-slate-100 px-3 py-2 text-sm font-mono break-all">{resetCredentials.email}</code>
+                                            <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(resetCredentials.email); toast.success("Copied"); }}>
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500">Temporary password</Label>
+                                        <div className="flex items-center gap-2">
+                                            <code className="flex-1 rounded bg-amber-50 px-3 py-2 text-sm font-mono break-all">{resetCredentials.temp_password}</code>
+                                            <Button variant="outline" size="icon" onClick={() => { navigator.clipboard.writeText(resetCredentials.temp_password); toast.success("Copied"); }}>
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <DialogFooter>
+                                        <Button onClick={() => setResetCredentials(null)}>Done</Button>
+                                    </DialogFooter>
+                                </div>
+                            )}
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Change email dialog */}
+                    <Dialog open={!!changeEmailMember} onOpenChange={(open) => { if (!open) { setChangeEmailMember(null); setChangeEmailValue(""); } }}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle>Change email</DialogTitle>
+                                <DialogDescription>
+                                    Update this staff member&apos;s login email. They will need to use the new email to sign in. You can reset their password after to send them new credentials.
+                                </DialogDescription>
+                            </DialogHeader>
+                            {changeEmailMember && (
+                                <div className="space-y-4 py-2">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-xs text-slate-500">Current email</Label>
+                                        <Input value={changeEmailMember.email} disabled className="bg-slate-50 text-sm" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>New email *</Label>
+                                        <Input
+                                            type="email"
+                                            placeholder="newemail@practice.com"
+                                            value={changeEmailValue}
+                                            onChange={(e) => setChangeEmailValue(e.target.value)}
+                                            disabled={changingEmail}
+                                        />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => { setChangeEmailMember(null); setChangeEmailValue(""); }}>Cancel</Button>
+                                        <Button className="bg-teal-600 hover:bg-teal-700" onClick={handleChangeEmail} disabled={changingEmail || !changeEmailValue.trim()}>
+                                            {changingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            Update email
+                                        </Button>
+                                    </DialogFooter>
+                                </div>
                             )}
                         </DialogContent>
                     </Dialog>
@@ -1363,12 +1647,12 @@ export default function SettingsPage() {
                                     onChange={(e) => setSuggestion(e.target.value)}
                                 />
                             </div>
-                            <div className="flex justify-between items-center bg-teal-50/50 p-4 rounded-lg border border-teal-100 italic text-sm text-teal-800">
-                                <p>Suggestions help us prioritize our roadmap. Thank you for your partnership!</p>
+                            <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-teal-100 bg-teal-50/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="min-w-0 italic text-sm text-teal-800">Suggestions help us prioritize our roadmap. Thank you for your partnership!</p>
                                 <Button
                                     onClick={handleSubmitSuggestion}
                                     disabled={isSubmittingSuggestion}
-                                    className="bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-500/20 px-8"
+                                    className="shrink-0 bg-teal-600 text-white shadow-md shadow-teal-500/20 hover:bg-teal-700 px-6 sm:px-8"
                                 >
                                     {isSubmittingSuggestion ? (
                                         <>
@@ -1383,15 +1667,15 @@ export default function SettingsPage() {
                         </CardContent>
                     </Card>
 
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                         <Button
                             asChild
                             variant="ghost"
-                            className="h-auto py-4 flex flex-col gap-1 items-start text-left"
+                            className="h-auto min-w-0 py-4 flex flex-col gap-1.5 items-start text-left"
                         >
-                            <Link href="/help-center">
-                                <span className="font-semibold text-teal-700">Help Center</span>
-                                <span className="text-xs text-slate-500">
+                            <Link href="/help-center" className="block w-full min-w-0 rounded-md p-1 -m-1">
+                                <span className="block font-semibold text-teal-700">Help Center</span>
+                                <span className="block text-xs text-slate-500 break-words">
                                     Guides, tutorials, and best practices for running your clinic on Dental Clinic Pro.
                                 </span>
                             </Link>
@@ -1399,11 +1683,11 @@ export default function SettingsPage() {
                         <Button
                             asChild
                             variant="ghost"
-                            className="h-auto py-4 flex flex-col gap-1 items-start text-left"
+                            className="h-auto min-w-0 py-4 flex flex-col gap-1.5 items-start text-left"
                         >
-                            <a href="mailto:support@antigravitydental.com">
-                                <span className="font-semibold text-blue-700">Contact Support</span>
-                                <span className="text-xs text-slate-500">
+                            <a href="mailto:support@antigravitydental.com" className="block w-full min-w-0 rounded-md p-1 -m-1">
+                                <span className="block font-semibold text-blue-700">Contact Support</span>
+                                <span className="block text-xs text-slate-500 break-words">
                                     Email our team anytime. We typically respond within one business day.
                                 </span>
                             </a>
@@ -1411,11 +1695,11 @@ export default function SettingsPage() {
                         <Button
                             asChild
                             variant="ghost"
-                            className="h-auto py-4 flex flex-col gap-1 items-start text-left"
+                            className="h-auto min-w-0 py-4 flex flex-col gap-1.5 items-start text-left"
                         >
-                            <Link href="/system-status">
-                                <span className="font-semibold text-purple-700">System Status</span>
-                                <span className="text-xs text-slate-500">
+                            <Link href="/system-status" className="block w-full min-w-0 rounded-md p-1 -m-1">
+                                <span className="block font-semibold text-purple-700">System Status</span>
+                                <span className="block text-xs text-slate-500 break-words">
                                     Check current uptime, past incidents, and how to contact us if something looks off.
                                 </span>
                             </Link>

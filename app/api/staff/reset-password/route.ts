@@ -64,13 +64,24 @@ export async function POST(request: Request) {
         const adminClient = createAdminClient()
         const newTempPassword = generateTempPassword()
 
-        // Update the Auth user's password
+        // Update the Auth user's password (staff_id must exist in auth.users)
         const { error: updateError } = await adminClient.auth.admin.updateUserById(staff_id, {
             password: newTempPassword,
         })
 
         if (updateError) {
             console.error("[RESET_PASSWORD_ERROR]", updateError)
+            const msg = updateError.message ?? ""
+            const isAuthUserNotFound =
+                msg.toLowerCase().includes("user not found") ||
+                msg.toLowerCase().includes("not found") ||
+                msg.toLowerCase().includes("no user found")
+            if (isAuthUserNotFound) {
+                return NextResponse.json({
+                    error: "This team member doesn't have a login account. They may have been added from demo data or outside the app. Remove them from the team and use Settings → Team → Invite Member to create a proper account with email and password.",
+                    code: "auth_user_not_found",
+                }, { status: 404 })
+            }
             return NextResponse.json({
                 error: updateError.message || "Failed to reset password",
             }, { status: 400 })

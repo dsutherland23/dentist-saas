@@ -89,6 +89,9 @@ export async function PUT(request: Request) {
         if (typeof body.require_consent_in_visit_flow === "boolean") {
             updatePayload.require_consent_in_visit_flow = body.require_consent_in_visit_flow
         }
+        if (typeof body.use_fullscreen === "boolean") {
+            updatePayload.use_fullscreen = body.use_fullscreen
+        }
         Object.keys(updatePayload).forEach((k) => {
             if (updatePayload[k] === undefined) delete updatePayload[k]
         })
@@ -101,12 +104,32 @@ export async function PUT(request: Request) {
             .single()
 
         if (error) {
-            console.error("Supabase clinic update error:", error)
             const isColumnMissing = error.message?.includes("column") && error.message?.includes("does not exist")
+            if (isColumnMissing && updatePayload.use_fullscreen !== undefined) {
+                const payloadWithoutFullscreen = { ...updatePayload }
+                delete (payloadWithoutFullscreen as Record<string, unknown>).use_fullscreen
+                const { data: retryData, error: retryError } = await supabase
+                    .from("clinics")
+                    .update(payloadWithoutFullscreen)
+                    .eq("id", userData.clinic_id)
+                    .select()
+                    .single()
+                if (!retryError) {
+                    return NextResponse.json({
+                        success: true,
+                        data: retryData,
+                        warning: "Other settings saved. To enable Fullscreen mode, run the database migration: 20260230000001_clinic_use_fullscreen.sql (adds use_fullscreen column to clinics table)."
+                    })
+                }
+            }
+            console.error("Supabase clinic update error:", error)
+            const hint = isColumnMissing
+                ? (error.message?.includes("use_fullscreen")
+                    ? "To enable Fullscreen mode, run migration: 20260230000001_clinic_use_fullscreen.sql"
+                    : "Database may need an update. Run the migration that adds the missing column.")
+                : undefined
             return NextResponse.json({
-                error: isColumnMissing
-                    ? "Database may need an update. Run your Supabase migration (e.g. 20260226000001_require_consent_visit_flow.sql) to enable all settings."
-                    : "Failed to update clinic",
+                error: hint || "Failed to update clinic",
                 details: error.message,
                 code: error.code
             }, { status: 500 })

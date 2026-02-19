@@ -26,6 +26,7 @@ import { ManagePatientDialog } from "@/app/(dashboard)/patients/manage-patient-d
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Users, Calendar, FileText } from "lucide-react"
 import { NotificationCenter } from "./notification-center"
+import { FullscreenButton } from "./fullscreen-button"
 import { useState, useEffect, useRef } from "react"
 import { NewAppointmentDialog } from "@/app/(dashboard)/calendar/new-appointment-dialog"
 import { NewInvoiceDialog } from "@/app/(dashboard)/invoices/new-invoice-dialog"
@@ -237,11 +238,15 @@ export function Topbar() {
                     {/* Notifications */}
                     <NotificationCenter />
 
+                    {/* Fullscreen (when clinic has use_fullscreen enabled) */}
+                    <FullscreenButton />
+
                     {/* User Menu */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="relative h-10 gap-2 pl-2 pr-3 hover:bg-slate-100 transition-all">
                                 <Avatar className="h-8 w-8 border-2 border-teal-500/20">
+                                    <AvatarImage src={profile?.profile_picture_url ?? undefined} alt="" />
                                     <AvatarFallback className="bg-gradient-to-br from-teal-500 to-teal-600 text-white text-sm font-semibold">
                                         {initial}
                                     </AvatarFallback>

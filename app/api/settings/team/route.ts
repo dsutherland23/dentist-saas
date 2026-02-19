@@ -92,6 +92,32 @@ export async function PUT(request: Request) {
             }, { status: 400 })
         }
 
+        // Prevent demoting the last clinic admin (clinic must always have at least one admin)
+        const isDemotingToNonAdmin = role !== "clinic_admin" && role !== "super_admin"
+        if (isDemotingToNonAdmin) {
+            const { data: targetUser } = await supabase
+                .from("users")
+                .select("role")
+                .eq("id", userId)
+                .eq("clinic_id", userData.clinic_id)
+                .single()
+            if (targetUser && isAdmin(targetUser.role)) {
+                const { count } = await supabase
+                    .from("users")
+                    .select("id", { count: "exact", head: true })
+                    .eq("clinic_id", userData.clinic_id)
+                    .neq("role", "patient")
+                    .in("role", ["clinic_admin", "super_admin"])
+                    .or("is_active.is.null,is_active.eq.true")
+                if (count !== null && count <= 1) {
+                    return NextResponse.json(
+                        { error: "Cannot change role: the clinic must have at least one admin. Add another admin first, or promote someone else to Admin." },
+                        { status: 400 }
+                    )
+                }
+            }
+        }
+
         const admin = createAdminClient()
         const { error } = await admin
             .from("users")

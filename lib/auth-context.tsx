@@ -12,6 +12,7 @@ type Profile = {
     last_name: string
     email: string
     role: string
+    profile_picture_url?: string | null
     allowed_sections?: string[] | null
     limits?: Record<string, number> | null
     must_change_password?: boolean
@@ -26,6 +27,7 @@ type AuthContextType = {
     session: Session | null
     isLoading: boolean
     signOut: () => Promise<void>
+    refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -103,8 +105,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.location.href = "/login"
     }
 
+    const refreshProfile = async () => {
+        if (user?.id) await fetchProfile(user.id)
+    }
+
     return (
-        <AuthContext.Provider value={{ user, profile, session, isLoading, signOut }}>
+        <AuthContext.Provider value={{ user, profile, session, isLoading, signOut, refreshProfile }}>
             {children}
         </AuthContext.Provider>
     )
