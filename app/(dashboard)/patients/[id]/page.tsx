@@ -1,15 +1,13 @@
+import { use } from "react"
 import { createClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import PatientProfileClient from "./patient-profile-client"
 
 export const dynamic = "force-dynamic"
 
-export default async function PatientPage({
-    params,
-}: {
-    params: Promise<{ id: string }>
-}) {
-    const { id } = await params
+/** Unwrap params with React.use() to satisfy Next.js 16 async params (avoids enumeration warning). */
+export default function PatientPage(props: { params: Promise<{ id: string }> }) {
+    const { id } = use(props.params)
     return <PatientPageContent id={id} />
 }
 

@@ -96,59 +96,86 @@ export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?:
                         </Button>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto -mx-1">
-                        <table className="w-full min-w-[360px] border-collapse" role="table" aria-label="Upcoming appointments">
-                            <thead>
-                                <tr className="border-b border-slate-100">
-                                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
-                                        Time
-                                    </th>
-                                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
-                                        Patient
-                                    </th>
-                                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
-                                        Treatment
-                                    </th>
-                                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
-                                        Status
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {schedule.slice(0, 8).map((item) => (
-                                    <tr
-                                        key={item.id}
-                                        className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors"
+                    <>
+                        {/* Mobile / small: compact card list — time stays readable, no horizontal scroll */}
+                        <div className="md:hidden space-y-2">
+                            {schedule.slice(0, 8).map((item) => (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
+                                    className="w-full text-left flex items-center gap-3 p-3 rounded-lg border border-slate-100 bg-white hover:bg-slate-50/80 hover:border-slate-200 transition-colors"
+                                >
+                                    <span className="shrink-0 w-14 text-xs font-semibold text-slate-700 tabular-nums whitespace-nowrap">
+                                        {item.time}
+                                    </span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-slate-900 truncate">{item.patient}</p>
+                                        <p className="text-xs text-slate-500 truncate">{item.treatment}</p>
+                                    </div>
+                                    <span
+                                        className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusBadgeClass(item.status)}`}
                                     >
-                                        <td className="py-3 px-2">
-                                            <span className="text-sm font-medium text-slate-900 tabular-nums">
-                                                {item.time}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 px-2">
-                                            <button
-                                                type="button"
-                                                className="text-sm font-medium text-slate-900 hover:text-teal-600 text-left truncate max-w-[120px] block"
-                                                onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
-                                            >
-                                                {item.patient}
-                                            </button>
-                                        </td>
-                                        <td className="py-3 px-2 text-sm text-slate-600 truncate max-w-[140px]">
-                                            {item.treatment}
-                                        </td>
-                                        <td className="py-3 px-2">
-                                            <span
-                                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClass(item.status)}`}
-                                            >
-                                                {getAppointmentStatusLabel(item.status)}
-                                            </span>
-                                        </td>
+                                        {getAppointmentStatusLabel(item.status)}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                        {/* Desktop: table */}
+                        <div className="hidden md:block overflow-x-auto -mx-1">
+                            <table className="w-full border-collapse" role="table" aria-label="Upcoming appointments">
+                                <thead>
+                                    <tr className="border-b border-slate-100">
+                                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
+                                            Time
+                                        </th>
+                                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
+                                            Patient
+                                        </th>
+                                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
+                                            Treatment
+                                        </th>
+                                        <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">
+                                            Status
+                                        </th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody>
+                                    {schedule.slice(0, 8).map((item) => (
+                                        <tr
+                                            key={item.id}
+                                            className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors"
+                                        >
+                                            <td className="py-3 px-2">
+                                                <span className="text-sm font-medium text-slate-900 tabular-nums whitespace-nowrap">
+                                                    {item.time}
+                                                </span>
+                                            </td>
+                                            <td className="py-3 px-2">
+                                                <button
+                                                    type="button"
+                                                    className="text-sm font-medium text-slate-900 hover:text-teal-600 text-left truncate max-w-[120px] block"
+                                                    onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
+                                                >
+                                                    {item.patient}
+                                                </button>
+                                            </td>
+                                            <td className="py-3 px-2 text-sm text-slate-600 truncate max-w-[140px]">
+                                                {item.treatment}
+                                            </td>
+                                            <td className="py-3 px-2">
+                                                <span
+                                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getStatusBadgeClass(item.status)}`}
+                                                >
+                                                    {getAppointmentStatusLabel(item.status)}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
                 )}
             </div>
         </div>

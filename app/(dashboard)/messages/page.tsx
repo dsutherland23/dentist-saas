@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Search, Send, Phone, Video, MoreVertical, Paperclip, MessageSquare, Loader2, Plus, X, FileText, Image as ImageIcon, User, Mail, Copy } from "lucide-react"
+import { Search, Send, Phone, Video, MoreVertical, Paperclip, MessageSquare, Loader2, Plus, X, FileText, Image as ImageIcon, User, Mail, Copy, ChevronLeft } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -21,8 +21,22 @@ import {
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 
+const MOBILE_BREAKPOINT = 768
+function useIsMobile() {
+    const [isMobile, setIsMobile] = useState(false)
+    useEffect(() => {
+        const mq = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+        setIsMobile(mq.matches)
+        const fn = () => setIsMobile(mq.matches)
+        mq.addEventListener("change", fn)
+        return () => mq.removeEventListener("change", fn)
+    }, [])
+    return isMobile
+}
+
 export default function MessagesPage() {
     const { user } = useAuth()
+    const isMobile = useIsMobile()
     const [searchQuery, setSearchQuery] = useState("")
     const [messages, setMessages] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
@@ -249,8 +263,15 @@ export default function MessagesPage() {
         )
     }
 
+    const showPageHeader = !isMobile || !selectedConvId
+    const cardFullHeightMobile = isMobile && !!selectedConvId
+
     return (
-        <div className="p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8 bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border">
+        <div className={cn(
+            "bg-slate-50 min-h-screen min-w-0 w-full overflow-x-hidden box-border",
+            cardFullHeightMobile ? "p-0" : "p-4 sm:p-6 md:p-8 space-y-6 sm:space-y-8"
+        )}>
+            {showPageHeader && (
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="min-w-0">
                     <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 truncate">Messages</h2>
@@ -306,11 +327,18 @@ export default function MessagesPage() {
                     </DialogContent>
                 </Dialog>
             </div>
+            )}
 
-            <Card className="shadow-sm h-[calc(100vh-7rem)] sm:h-[calc(100vh-6rem)] max-h-[700px] md:max-h-none md:h-[650px] overflow-hidden border-slate-200 min-w-0 w-full flex flex-col">
+            <Card className={cn(
+                "shadow-sm overflow-hidden border-slate-200 min-w-0 w-full flex flex-col",
+                cardFullHeightMobile ? "h-[100dvh] rounded-none border-0 border-t" : "h-[calc(100dvh-10rem)] sm:h-[calc(100dvh-8rem)] max-h-[700px] md:max-h-none md:h-[650px]"
+            )}>
                 <div className="grid grid-cols-1 md:grid-cols-12 flex-1 min-h-0 overflow-hidden">
-                    {/* Conversations List */}
-                    <div className="md:col-span-4 border-r border-slate-200 bg-white min-w-0 flex flex-col min-h-0 overflow-hidden">
+                    {/* Conversations List - hidden on mobile when a thread is open */}
+                    <div className={cn(
+                        "md:col-span-4 border-r border-slate-200 bg-white min-w-0 flex flex-col min-h-0 overflow-hidden",
+                        selectedConvId && "hidden md:flex"
+                    )}>
                         {fetchError && (
                             <div className="p-3 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-2">
                                 <span className="text-sm text-amber-800">{fetchError}</span>
@@ -340,7 +368,7 @@ export default function MessagesPage() {
                                             key={s.personId}
                                             onClick={() => setSelectedConvId(s.personId)}
                                             className={cn(
-                                                "p-4 rounded-xl cursor-pointer transition-all mb-2",
+                                                "p-4 rounded-xl cursor-pointer transition-all mb-2 min-h-[52px] flex items-center active:bg-slate-100",
                                                 selectedConvId === s.personId || (selectedConvId === null && index === 0)
                                                     ? "bg-teal-50 border border-teal-100 shadow-sm"
                                                     : "hover:bg-slate-50"
@@ -374,19 +402,31 @@ export default function MessagesPage() {
                         </ScrollArea>
                     </div>
 
-                    {/* Chat Area */}
-                    <div className="md:col-span-8 flex flex-col bg-slate-50/30 min-w-0 min-h-0 overflow-hidden">
+                    {/* Chat Area - hidden on mobile when no conversation selected */}
+                    <div className={cn(
+                        "md:col-span-8 flex flex-col bg-slate-50/30 min-w-0 min-h-0 overflow-hidden",
+                        !selectedConvId && "hidden md:flex"
+                    )}>
                         {selectedConversation ? (
                             <>
-                                <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm">
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-10 w-10 border border-slate-100 font-semibold">
+                                <div className="p-3 sm:p-4 bg-white border-b border-slate-200 flex items-center justify-between gap-2 shadow-sm shrink-0">
+                                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="md:hidden shrink-0 h-9 w-9 text-slate-600 hover:text-teal-600"
+                                            onClick={() => setSelectedConvId(null)}
+                                            aria-label="Back to conversations"
+                                        >
+                                            <ChevronLeft className="h-5 w-5" />
+                                        </Button>
+                                        <Avatar className="h-9 w-9 sm:h-10 sm:w-10 border border-slate-100 font-semibold shrink-0">
                                             <AvatarFallback className="bg-teal-500 text-white">
-                                                {selectedConversation.name.split(' ').map((n: string) => n[0]).join('')}
+                                                {selectedConversation.name.split(" ").map((n: string) => n[0]).join("")}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <div>
-                                            <h3 className="font-semibold text-slate-900">{selectedConversation.name}</h3>
+                                        <div className="min-w-0">
+                                            <h3 className="font-semibold text-slate-900 truncate">{selectedConversation.name}</h3>
                                             <div className="flex items-center gap-1.5">
                                                 <div className={cn("h-1.5 w-1.5 rounded-full", selectedConversation.isOnShift ? "bg-emerald-500" : "bg-slate-300")} />
                                                 <span className="text-[10px] text-slate-500 font-medium">
@@ -495,7 +535,7 @@ export default function MessagesPage() {
                                     </div>
                                 </div>
 
-                                <ScrollArea className="flex-1 min-h-0 p-6">
+                                <ScrollArea className="flex-1 min-h-0 overflow-auto p-4 sm:p-6">
                                     <div className="space-y-6">
                                         {(messages ?? [])
                                             .filter((m: any) => m.sender_id === selectedConversation.personId || m.receiver_id === selectedConversation.personId)
@@ -553,7 +593,7 @@ export default function MessagesPage() {
                                     </div>
                                 </ScrollArea>
 
-                                <div className="shrink-0 p-4 bg-white border-t border-slate-200">
+                                <div className="shrink-0 p-4 bg-white border-t border-slate-200 pb-[max(1rem,env(safe-area-inset-bottom))]">
                                     <input
                                         ref={fileInputRef}
                                         type="file"

@@ -32,6 +32,8 @@ export async function GET() {
 
         const clinicId = userData.clinic_id
 
+        // Unpaid = not paid/cancelled; use explicit status list (matches financial-metrics)
+        const UNPAID_STATUSES = ["draft", "sent", "partially_paid", "overdue"]
         const { data: invoices, error: invError } = await supabase
             .from("invoices")
             .select(`
@@ -43,7 +45,7 @@ export async function GET() {
                 patient:patients(first_name, last_name)
             `)
             .eq("clinic_id", clinicId)
-            .not("status", "in", "('paid','cancelled')")
+            .in("status", UNPAID_STATUSES)
             .order("due_date", { ascending: true })
             .limit(10)
 
@@ -52,15 +54,21 @@ export async function GET() {
             return NextResponse.json({ unpaidInvoices: [] } as DashboardAlertsResponse)
         }
 
-        const unpaidInvoices = (invoices || []).map((inv: any) => ({
-            id: inv.id,
-            invoice_number: inv.invoice_number ?? null,
-            balance_due: parseFloat(inv.balance_due || 0),
-            due_date: inv.due_date ?? null,
-            patient_name: inv.patient
-                ? `${inv.patient.first_name ?? ""} ${inv.patient.last_name ?? ""}`.trim()
-                : "Unknown",
-        }))
+        const unpaidInvoices = (invoices || [])
+            .filter((inv: any) => Number(inv.balance_due) > 0)
+            .map((inv: any) => {
+                const patient = inv.patient
+                const patientName = patient
+                    ? `${[patient.first_name, patient.last_name].filter(Boolean).join(" ")}`.trim()
+                    : "Unknown"
+                return {
+                    id: inv.id,
+                    invoice_number: inv.invoice_number ?? null,
+                    balance_due: parseFloat(inv.balance_due || 0),
+                    due_date: inv.due_date ?? null,
+                    patient_name: patientName || "Unknown",
+                }
+            })
 
         return NextResponse.json({ unpaidInvoices } as DashboardAlertsResponse)
     } catch (error) {
