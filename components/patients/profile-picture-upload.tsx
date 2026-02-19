@@ -139,7 +139,7 @@ export function ProfilePictureUpload({
 
             const data = await response.json().catch(() => ({})) as { url?: string; error?: string; details?: string }
             if (!response.ok) {
-                const msg = data.error || data.details || "Upload failed"
+                const msg = [data.error, data.details].filter(Boolean).join(": ") || "Upload failed"
                 throw new Error(msg)
             }
             toast.success("Profile picture updated successfully")

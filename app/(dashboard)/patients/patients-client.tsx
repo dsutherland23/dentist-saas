@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { MoreHorizontal, Search, Filter, CalendarCheck, UserCheck, Users, UserPlus, Plus, AlertCircle, Download, Upload, FileSpreadsheet, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ManagePatientDialog } from "./manage-patient-dialog"
 import { NewInvoiceDialog } from "@/app/(dashboard)/invoices/new-invoice-dialog"
 import { ImportPatientsDialog } from "@/components/patients/import-patients-dialog"
@@ -37,6 +37,42 @@ import {
 } from "@/components/ui/popover"
 import { Checkbox } from "@/components/ui/checkbox"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
+
+/** Avatar for patient list: resolves signed URL when profile picture is in private storage. */
+function PatientListAvatar({
+    patientId,
+    profilePictureUrl,
+    firstName,
+    lastName,
+}: { patientId: string; profilePictureUrl?: string | null; firstName: string; lastName: string }) {
+    const [src, setSrc] = useState<string | null>(null)
+    useEffect(() => {
+        const raw = profilePictureUrl?.trim()
+        if (!raw) {
+            setSrc(null)
+            return
+        }
+        const match = raw.match(/\/patient-files\/(.+)$/)
+        if (match) {
+            const path = decodeURIComponent(match[1])
+            fetch(`/api/patients/${patientId}/file-url?path=${encodeURIComponent(path)}`)
+                .then((res) => (res.ok ? res.json() : null))
+                .then((data: { url?: string } | null) => setSrc(data?.url ?? null))
+                .catch(() => setSrc(null))
+        } else {
+            setSrc(raw)
+        }
+    }, [patientId, profilePictureUrl])
+    return (
+        <Avatar className="h-9 w-9">
+            <AvatarImage src={src ?? undefined} alt="" />
+            <AvatarFallback className="bg-teal-100 text-teal-700 font-medium">
+                {firstName[0]}
+                {lastName[0]}
+            </AvatarFallback>
+        </Avatar>
+    )
+}
 
 export interface TodayAppointment {
     id: string
@@ -60,6 +96,7 @@ interface Patient {
     insurance_policy_number?: string
     emergency_contact_name?: string
     emergency_contact_phone?: string
+    profile_picture_url?: string | null
     created_at: string
 }
 
@@ -465,11 +502,12 @@ export default function PatientsClient({
                             filteredPatients.map((patient) => (
                                 <TableRow key={patient.id} className="hover:bg-slate-50/50">
                                     <TableCell>
-                                        <Avatar className="h-9 w-9">
-                                            <AvatarFallback className="bg-teal-100 text-teal-700 font-medium">
-                                                {patient.first_name[0]}{patient.last_name[0]}
-                                            </AvatarFallback>
-                                        </Avatar>
+                                        <PatientListAvatar
+                                            patientId={patient.id}
+                                            profilePictureUrl={patient.profile_picture_url}
+                                            firstName={patient.first_name}
+                                            lastName={patient.last_name}
+                                        />
                                     </TableCell>
                                     <TableCell className="font-medium">
                                         <Link href={`/patients/${patient.id}`} className="hover:underline text-slate-900">

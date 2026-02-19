@@ -145,7 +145,28 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [createdInvoice, setCreatedInvoice] = useState<{ id: string; invoice_number: string; total_amount: number } | null>(null)
     const [patientInvoices, setPatientInvoices] = useState<{ id: string; invoice_number: string; total_amount: number; status: string; created_at: string }[]>([])
     const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
+    const [avatarImageUrl, setAvatarImageUrl] = useState<string | null>(null)
     const [medicalImageTab, setMedicalImageTab] = useState<"xray" | "intraoral" | "3d_scan" | "add">("xray")
+
+    // Resolve profile picture to a signed URL when it's in private storage (patient-files)
+    useEffect(() => {
+        const raw = patient.profile_picture_url
+        if (!raw?.trim()) {
+            setAvatarImageUrl(null)
+            return
+        }
+        const match = raw.match(/\/patient-files\/(.+)$/)
+        if (match) {
+            const path = decodeURIComponent(match[1])
+            fetch(`/api/patients/${patient.id}/file-url?path=${encodeURIComponent(path)}`)
+                .then((res) => res.ok ? res.json() : null)
+                .then((data: { url?: string } | null) => data?.url ?? null)
+                .then(setAvatarImageUrl)
+                .catch(() => setAvatarImageUrl(null))
+        } else {
+            setAvatarImageUrl(raw)
+        }
+    }, [patient.id, patient.profile_picture_url])
     const [reportDialogOpen, setReportDialogOpen] = useState(false)
     const [reportSections, setReportSections] = useState({ summary: true, treatments: true, appointments: true, billing: true })
     const [reportFormat, setReportFormat] = useState<"csv" | "text">("csv")
@@ -825,7 +846,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 <div className="absolute bottom-0 left-4 sm:left-8 transform translate-y-1/2">
                     <div className="relative">
                         <Avatar className="h-32 w-32 sm:h-40 sm:w-40 border-4 border-white shadow-lg">
-                            <AvatarImage src={patient.profile_picture_url || undefined} />
+                            <AvatarImage src={avatarImageUrl || undefined} alt="" />
                             <AvatarFallback className="text-3xl sm:text-4xl bg-teal-100 text-teal-700">
                                 {patient.first_name[0]}{patient.last_name[0]}
                             </AvatarFallback>
@@ -1340,6 +1361,15 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 onOpenChange={setProfilePictureDialogOpen}
                 currentImageUrl={patient.profile_picture_url}
                 onUploadComplete={(url) => {
+                    const match = url?.match(/\/patient-files\/(.+)$/)
+                    if (match) {
+                        const path = decodeURIComponent(match[1])
+                        fetch(`/api/patients/${patient.id}/file-url?path=${encodeURIComponent(path)}`)
+                            .then((res) => res.ok ? res.json() : null)
+                            .then((data: { url?: string } | null) => data?.url && setAvatarImageUrl(data.url))
+                    } else if (url) {
+                        setAvatarImageUrl(url)
+                    }
                     router.refresh()
                     toast.success("Profile picture updated")
                 }}

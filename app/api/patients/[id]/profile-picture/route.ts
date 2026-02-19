@@ -63,15 +63,27 @@ export async function POST(
             .from("patient-files")
             .getPublicUrl(pathWithinBucket)
 
-        const { error: updateError } = await supabase
+        const { data: updated, error: updateError } = await supabase
             .from("patients")
             .update({ profile_picture_url: publicUrl })
             .eq("id", id)
+            .select("id")
+            .single()
 
         if (updateError) {
             console.error("Database update error:", updateError)
+            const isNoRows = /0 rows|no rows|PGRST116/i.test(updateError.message)
+            const details = isNoRows
+                ? "Update had no effect. You may not have permission to update this patient."
+                : updateError.message
             return NextResponse.json(
-                { error: "Failed to save profile picture", details: updateError.message },
+                { error: "Failed to save profile picture", details },
+                { status: 500 }
+            )
+        }
+        if (!updated) {
+            return NextResponse.json(
+                { error: "Failed to save profile picture", details: "Update had no effect." },
                 { status: 500 }
             )
         }
