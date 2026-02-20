@@ -15,6 +15,7 @@ import { DashboardQuickStats } from "@/components/dashboard/dashboard-quick-stat
 import { DashboardOverviewAppointments } from "@/components/dashboard/dashboard-overview-appointments"
 import { DashboardTreatmentPlanPipeline } from "@/components/dashboard/dashboard-treatment-plan-pipeline"
 import { DashboardAlertsPanel } from "@/components/dashboard/dashboard-alerts-panel"
+import { DashboardUpcomingReminders } from "@/components/dashboard/dashboard-upcoming-reminders"
 import { QuickActionsFab } from "@/components/dashboard/quick-actions-fab"
 import { useDashboardData, getLast7DaysChartLabels } from "@/lib/use-dashboard-data"
 
@@ -148,6 +149,10 @@ export default function DashboardPage() {
                                 <DashboardTreatmentPlanPipeline refreshKey={refreshKey} />
                             </div>
                         </div>
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-semibold text-slate-600 mb-4">Send reminders</h2>
+                        <DashboardUpcomingReminders refreshKey={refreshKey} />
                     </div>
                     <div>
                         <h2 className="text-sm font-semibold text-slate-600 mb-4">Alerts</h2>

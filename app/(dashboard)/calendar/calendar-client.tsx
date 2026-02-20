@@ -16,11 +16,13 @@ import {
     isSameMonth,
     setHours,
     parseISO,
-    startOfDay
+    startOfDay,
+    isBefore
 } from "date-fns"
 import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download, X, Stethoscope, User, MoreVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { NewAppointmentDialog } from "./new-appointment-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
@@ -333,13 +335,10 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const filteredDentists = staffFilterId
         ? dentists.filter(d => d.id === staffFilterId)
         : dentists
-    // Always filter to show only current user's appointments
-    const appointmentsByUser = currentUserId
-        ? appointments.filter(a => a.dentist_id === currentUserId)
-        : appointments
+    // Show all clinic appointments; staff dropdown filters by dentist when selected
     const filteredAppointments = staffFilterId
-        ? appointmentsByUser.filter(a => a.dentist_id === staffFilterId)
-        : appointmentsByUser
+        ? appointments.filter(a => a.dentist_id === staffFilterId)
+        : appointments
     const filteredBlockedSlots = staffFilterId
         ? blockedSlots.filter(b => b.staff_id === staffFilterId)
         : blockedSlots
@@ -350,8 +349,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         startDate = startOfDay(currentDate)
         endDate = startOfDay(currentDate)
     } else if (view === "week") {
-        startDate = startOfWeek(currentDate, { weekStartsOn: 1 })
-        endDate = endOfWeek(currentDate, { weekStartsOn: 1 })
+        startDate = startOfDay(currentDate)
+        endDate = addDays(startDate, 6)
     } else {
         startDate = startOfWeek(startOfMonth(currentDate), { weekStartsOn: 1 })
         endDate = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 })
@@ -363,6 +362,15 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     const days = view === "day" ? [currentDate] : eachDayOfInterval({ start: startDate, end: endDate })
     const hours = Array.from({ length: maxHour - minHour + 1 }, (_, i) => i + minHour)
+
+    const todayRef = startOfDay(new Date())
+    const isPastDay = (day: Date) => isBefore(startOfDay(day), todayRef)
+    const isPastSlot = (day: Date, hour?: number) => {
+        if (isPastDay(day)) return true
+        if (hour === undefined) return false
+        const now = new Date()
+        return isSameDay(day, now) && hour < now.getHours()
+    }
 
     // Calculate statistics for current view period
     const viewAppointments = filteredAppointments.filter(appt => {
@@ -394,13 +402,13 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     const nextPeriod = () => {
         if (view === "day") setCurrentDate(current => addDays(current, 1))
-        else if (view === "week") setCurrentDate(current => addWeeks(current, 1))
+        else if (view === "week") setCurrentDate(current => addDays(current, 7))
         else setCurrentDate(current => addMonths(current, 1))
     }
 
     const prevPeriod = () => {
         if (view === "day") setCurrentDate(current => addDays(current, -1))
-        else if (view === "week") setCurrentDate(current => addWeeks(current, -1))
+        else if (view === "week") setCurrentDate(current => addDays(current, -7))
         else setCurrentDate(current => addMonths(current, -1))
     }
 
@@ -414,8 +422,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const getPeriodLabel = () => {
         if (view === "day") return format(currentDate, "MMMM d, yyyy")
         if (view === "week") {
-            const start = startOfWeek(currentDate, { weekStartsOn: 1 })
-            const end = endOfWeek(currentDate, { weekStartsOn: 1 })
+            const start = startDate
+            const end = endDate
             if (isSameMonth(start, end)) {
                 return `${format(start, "MMMM d")} – ${format(end, "d, yyyy")}`
             }
@@ -426,9 +434,21 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     const BlockedSlotCard = ({ blk, isMonthView = false }: { blk: any; isMonthView?: boolean }) => {
         const blockClass = "text-[10px] px-2 py-1 rounded bg-slate-200/70 text-slate-500 font-medium border border-slate-300/60 cursor-context-menu opacity-90"
-        const hoverTitle = blk.reason
-            ? `${blk.dentistName} – ${blk.reason}`
-            : `Blocked: ${blk.dentistName}`
+        const timeRange = `${format(blk.start, "h:mm a")} – ${format(blk.end, "h:mm a")}`
+        const tooltipContent = (
+            <div className="space-y-1 text-left max-w-[220px]">
+                <div className="font-semibold text-slate-900">{blk.dentistName}</div>
+                <div className="text-slate-600">{timeRange}</div>
+                {blk.reason ? (
+                    <div className="text-slate-600 border-t border-slate-200 pt-1.5 mt-1.5">
+                        <span className="text-slate-500 text-xs uppercase tracking-wide">Reason</span>
+                        <p className="text-sm mt-0.5">{blk.reason}</p>
+                    </div>
+                ) : (
+                    <div className="text-slate-500 text-xs">No reason given</div>
+                )}
+            </div>
+        )
 
         const onContextMenu = (e: React.MouseEvent) => {
             e.preventDefault()
@@ -437,8 +457,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             setContextMenuPos({ x: e.clientX, y: e.clientY })
         }
 
-        return isMonthView ? (
-            <div data-blocked onContextMenu={onContextMenu} className={cn(blockClass, "w-full truncate flex items-center gap-1")} title={hoverTitle}>
+        const cardContent = isMonthView ? (
+            <div data-blocked onContextMenu={onContextMenu} className={cn(blockClass, "w-full truncate flex items-center gap-1")}>
                 <Ban className="h-3 w-3 shrink-0 opacity-70" />
                 <span className="font-bold text-slate-500 uppercase text-[8px] shrink-0">{format(blk.start, "h a")}</span>
                 <span className="truncate">{blk.dentistName} blocked</span>
@@ -452,7 +472,6 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     top: `${(blk.start.getMinutes() / 60) * 100}%`,
                     height: `${Math.max((blk.end.getTime() - blk.start.getTime()) / 60000 / 60 * 100, 35)}%`,
                 }}
-                title={hoverTitle}
             >
                 <div className="truncate flex items-center gap-1">
                     <Ban className="h-3 w-3 shrink-0 opacity-70" />
@@ -461,13 +480,24 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 </div>
             </div>
         )
+
+        return (
+            <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                    <TooltipTrigger asChild>{cardContent}</TooltipTrigger>
+                    <TooltipContent side="right" className="z-[100]">
+                        {tooltipContent}
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        )
     }
 
     const STATUS_DROPDOWN_OPTIONS = [
         { value: "pending", label: "Pending" },
         { value: "unconfirmed", label: "Unconfirmed" },
         { value: "confirmed", label: "Confirm" },
-        { value: "checked_in", label: "Checked-In" },
+        { value: "checked_in", label: "Checked in" },
         { value: "no_show", label: "No-Show" },
         { value: "cancelled", label: "Canceled" },
     ] as const
@@ -502,29 +532,62 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             fetchVisitForAppointment(appt.id)
         }
 
-        if (isMonthView) {
-            return (
-                <div
-                    data-appointment
-                    data-appointment-id={appt.id}
-                    draggable
-                    role="button"
-                    tabIndex={0}
-                    onClick={openCard}
-                    onKeyDown={(e) => e.key === "Enter" && openCard(e as any)}
-                    onDragStart={(e) => {
-                        e.dataTransfer.setData("appointmentId", appt.id)
-                        e.dataTransfer.effectAllowed = "move"
-                    }}
-                    className={cn(cardBaseClass, "w-full truncate cursor-pointer")}
-                >
-                    <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
-                    <span className="truncate">{appt.patientName}</span>
+        const timeRange = `${format(appt.start, "h:mm a")} – ${format(appt.end, "h:mm a")}`
+        const statusLabel = (appt.status || "scheduled").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+        const appointmentTooltipContent = (
+            <div key={appt.id} className="w-[260px] text-left">
+                <p className="text-[15px] font-semibold text-slate-900 tracking-tight truncate" title={appt.patientName}>
+                    {appt.patientName}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    {timeRange}
+                </p>
+                {appt.treatment_type && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-100">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">Treatment</p>
+                        <p className="text-sm text-slate-700 mt-0.5 leading-snug">{appt.treatment_type}</p>
+                    </div>
+                )}
+                <p className="text-sm text-slate-600 mt-1.5 flex items-center gap-1.5">
+                    <Stethoscope className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                    {appt.dentistName}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="inline-flex items-center rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-700 capitalize">
+                        {statusLabel}
+                    </span>
                 </div>
-            )
-        }
+                {appt.patientPhone && (
+                    <p className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500 flex items-center gap-1.5">
+                        <Phone className="h-3 w-3 shrink-0 text-slate-400" />
+                        {appt.patientPhone}
+                    </p>
+                )}
+            </div>
+        )
 
-        return (
+        const monthViewCard = (
+            <div
+                data-appointment
+                data-appointment-id={appt.id}
+                draggable
+                role="button"
+                tabIndex={0}
+                onClick={openCard}
+                onKeyDown={(e) => e.key === "Enter" && openCard(e as any)}
+                onDragStart={(e) => {
+                    e.dataTransfer.setData("appointmentId", appt.id)
+                    e.dataTransfer.effectAllowed = "move"
+                }}
+                className={cn(cardBaseClass, "w-full truncate cursor-pointer")}
+            >
+                <span className="font-bold text-teal-600 uppercase text-[8px] mr-1 shrink-0">{format(appt.start, "h a")}</span>
+                <span className="truncate">{appt.patientName}</span>
+            </div>
+        )
+
+        const weekDayViewCard = (
             <div
                 data-appointment
                 data-appointment-id={appt.id}
@@ -551,10 +614,31 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 <div className="truncate pl-0 mt-0.5 opacity-80 text-[9px]">{appt.treatment_type}</div>
             </div>
         )
+
+        const cardContent = isMonthView ? monthViewCard : weekDayViewCard
+        return (
+            <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                    <TooltipTrigger asChild>{cardContent}</TooltipTrigger>
+                    <TooltipContent
+                        side="right"
+                        sideOffset={8}
+                        className="z-[100] w-auto max-w-[280px] rounded-lg border-slate-200/90 bg-white px-4 py-3 shadow-lg"
+                    >
+                        {appointmentTooltipContent}
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        )
     }
 
     const handleDrop = (day: Date, hour?: number) => (e: React.DragEvent) => {
         e.preventDefault()
+        const isPast = hour !== undefined ? isPastSlot(day, hour) : isPastDay(day)
+        if (isPast) {
+            setDraggedOver(null)
+            return
+        }
         const appointmentId = e.dataTransfer.getData("appointmentId")
         const appt = appointments.find(a => a.id === appointmentId)
 
@@ -601,6 +685,11 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     const handleDragOver = (day: Date, hour?: number) => (e: React.DragEvent) => {
         e.preventDefault()
+        const isPast = hour !== undefined ? isPastSlot(day, hour) : isPastDay(day)
+        if (isPast) {
+            if (draggedOver) setDraggedOver(null)
+            return
+        }
         if (draggedOver?.day !== day.toISOString() || draggedOver?.hour !== hour) {
             setDraggedOver({ day: day.toISOString(), hour })
         }
@@ -678,6 +767,17 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 }}
             />
             
+            {/* Global 'View All' dialog so it works from toolbar and mobile menu */}
+            {currentUserId && (
+                <AllAppointmentsDialog
+                    currentUserId={currentUserId}
+                    dentists={dentists}
+                    clinic={clinic}
+                    open={allAppointmentsDialogOpen}
+                    onOpenChange={setAllAppointmentsDialogOpen}
+                />
+            )}
+
             {/* Header with Period Label and Controls */}
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3 shrink-0">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-4 min-w-0">
@@ -769,18 +869,15 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     /* Desktop: full toolbar */
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {currentUserId && (
-                            <AllAppointmentsDialog
-                                currentUserId={currentUserId}
-                                dentists={dentists}
-                                open={allAppointmentsDialogOpen}
-                                onOpenChange={setAllAppointmentsDialogOpen}
-                                trigger={
-                                    <Button variant="outline" size="sm" className="h-8 sm:h-9 text-xs border-slate-200 hover:border-teal-300 hover:bg-teal-50">
-                                        <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                                        View All
-                                    </Button>
-                                }
-                            />
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 sm:h-9 text-xs border-slate-200 hover:border-teal-300 hover:bg-teal-50"
+                                onClick={() => setAllAppointmentsDialogOpen(true)}
+                            >
+                                <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                View All
+                            </Button>
                         )}
                         <Button variant="outline" size="sm" onClick={exportSchedule} className="h-8 sm:h-9 text-xs border-slate-200 hover:border-blue-300 hover:bg-blue-50">
                             <Download className="h-3.5 w-3.5 mr-1.5" />
@@ -880,9 +977,9 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                     TIME
                                 </div>
                                 {days.map(day => (
-                                    <div key={day.toString()} className={cn("p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0", isSameDay(day, new Date()) ? "bg-teal-50/30" : "")}>
-                                        <div className={cn("text-[9px] sm:text-[10px] font-bold uppercase truncate w-full", isSameDay(day, new Date()) ? "text-teal-600" : "text-slate-400")}>{format(day, "EEE")}</div>
-                                        <div className={cn("text-sm sm:text-xl font-bold h-6 w-6 sm:h-8 sm:w-8 flex items-center justify-center rounded-full shrink-0", isSameDay(day, new Date()) ? "bg-teal-600 text-white" : "text-slate-700")}>{format(day, "d")}</div>
+                                    <div key={day.toString()} className={cn("p-2 sm:p-4 border-r border-slate-100 text-center flex flex-col items-center justify-center gap-0.5 sm:gap-1 min-w-0", isSameDay(day, new Date()) ? "bg-teal-50/30" : "", isPastDay(day) ? "opacity-60 bg-slate-100 text-slate-400" : "")}>
+                                        <div className={cn("text-[9px] sm:text-[10px] font-bold uppercase truncate w-full", isSameDay(day, new Date()) ? "text-teal-600" : isPastDay(day) ? "text-slate-400" : "text-slate-400")}>{format(day, "EEE")}</div>
+                                        <div className={cn("text-sm sm:text-xl font-bold h-6 w-6 sm:h-8 sm:w-8 flex items-center justify-center rounded-full shrink-0", isSameDay(day, new Date()) ? "bg-teal-600 text-white" : isPastDay(day) ? "text-slate-500" : "text-slate-700")}>{format(day, "d")}</div>
                                     </div>
                                 ))}
                             </div>
@@ -904,21 +1001,25 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
                                         {days.map(day => {
                                             const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === hour
+                                            const past = isPastSlot(day, hour)
                                             return (
                                                 <div
                                                     key={day.toString()}
+                                                    title={past ? "Past date – cannot book" : undefined}
                                                     onDragOver={handleDragOver(day, hour)}
                                                     onDragLeave={handleDragLeave(day, hour)}
                                                     onDrop={handleDrop(day, hour)}
                                                     onClick={(e) => {
+                                                        if (past) return
                                                         if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
                                                         const slotStart = setHours(startOfDay(day), hour)
                                                         setNewAppointmentStart(slotStart)
                                                         setIsNewAppointmentOpen(true)
                                                     }}
                                                     className={cn(
-                                                        "border-r border-b border-slate-100 relative group transition-all p-0.5 sm:p-1 cursor-pointer min-h-[48px] sm:min-h-[80px] overflow-hidden",
-                                                        isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30"
+                                                        "border-r border-b border-slate-100 relative group transition-all p-0.5 sm:p-1 min-h-[48px] sm:min-h-[80px] overflow-hidden",
+                                                        past ? "bg-slate-50/80 opacity-70 cursor-not-allowed" : "cursor-pointer",
+                                                        !past && (isOver ? "bg-teal-500/10 ring-2 ring-inset ring-teal-500/40 z-10" : "hover:bg-slate-50/30")
                                                     )}
                                                 >
                                                     {filteredBlockedSlots.filter(blk =>
@@ -955,29 +1056,33 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             const dayBlocks = filteredBlockedSlots.filter(blk => isSameDay(blk.start, day))
                             const isCurrentMonth = isSameMonth(day, currentDate)
                             const isOver = draggedOver?.day === day.toISOString() && draggedOver?.hour === undefined
+                            const past = isPastDay(day)
 
                             return (
                                 <div
                                     key={day.toString()}
+                                    title={past ? "Past date – cannot book" : undefined}
                                     onDragOver={handleDragOver(day)}
                                     onDrop={handleDrop(day)}
                                     onClick={(e) => {
+                                        if (past) return
                                         if ((e.target as HTMLElement).closest("[data-appointment]") || (e.target as HTMLElement).closest("[data-blocked]")) return
                                         const slotStart = setHours(startOfDay(day), minHour)
                                         setNewAppointmentStart(slotStart)
                                         setIsNewAppointmentOpen(true)
                                     }}
                                     className={cn(
-                                        "min-h-[80px] sm:min-h-[120px] border-r border-b border-slate-100 p-1 sm:p-2 transition-all cursor-pointer min-w-0",
-                                        !isCurrentMonth ? "bg-slate-50/30 opacity-40" : "",
-                                        isSameDay(day, new Date()) ? "bg-teal-50/20" : "",
-                                        isOver ? "bg-teal-500/5 ring-2 ring-inset ring-teal-500/30 z-10" : "hover:bg-slate-50/30"
+                                        "min-h-[80px] sm:min-h-[120px] border-r border-b border-slate-100 p-1 sm:p-2 transition-all min-w-0",
+                                        past ? "bg-slate-50/80 opacity-70 cursor-not-allowed" : "cursor-pointer",
+                                        !past && !isCurrentMonth ? "bg-slate-50/30 opacity-40" : "",
+                                        !past && isSameDay(day, new Date()) ? "bg-teal-50/20" : "",
+                                        !past && (isOver ? "bg-teal-500/5 ring-2 ring-inset ring-teal-500/30 z-10" : "hover:bg-slate-50/30")
                                     )}
                                 >
                                     <div className="flex justify-between items-start mb-2">
                                         <span className={cn(
                                             "text-xs font-bold h-6 w-6 flex items-center justify-center rounded-full",
-                                            isSameDay(day, new Date()) ? "bg-teal-600 text-white" : "text-slate-600"
+                                            isSameDay(day, new Date()) ? "bg-teal-600 text-white" : past ? "text-slate-400" : "text-slate-600"
                                         )}>
                                             {format(day, "d")}
                                         </span>
@@ -1232,7 +1337,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                                     onClick={() => handleVisitTransition(appt.id, "ARRIVED")}
                                                 >
                                                     {visitTransitioning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
-                                                    Mark arrived
+                                                    Check in
                                                 </Button>
                                             ) : null}
                                         </div>

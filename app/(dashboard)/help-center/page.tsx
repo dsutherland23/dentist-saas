@@ -18,7 +18,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "How do I check in a patient or update visit progress?",
-    a: "Open the Calendar, click the appointment, and use the right-hand panel (or on mobile, the slide-out panel). Use \"Mark arrived\", \"Check In\", \"Start Treatment\", and \"Check Out\" as the patient moves through the visit.",
+    a: "Open the Calendar, click the appointment, and use the right-hand panel (or on mobile, the slide-out panel). Use \"Check in\", \"Start Treatment\", and \"Check Out\" as the patient moves through the visit.",
   },
   {
     q: "Can I change a team member's role?",
@@ -99,7 +99,7 @@ export default function HelpCenterPage() {
                 <p>
                   From the calendar, click an appointment to open the right‑hand visit panel.
                   Use the progress buttons to move a patient from{" "}
-                  <span className="font-semibold">Arrived → Checked In → In Treatment → Complete</span>.
+                  <span className="font-semibold">Check in → In Treatment → Complete</span>.
                   This keeps your team aligned on who is in the chair and who is waiting.
                 </p>
               </div>

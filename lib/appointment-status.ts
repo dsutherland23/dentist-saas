@@ -6,7 +6,7 @@ export function getAppointmentStatusLabel(status: string | null | undefined): st
     unconfirmed: "Unconfirmed",
     scheduled: "Scheduled",
     confirmed: "Confirmed",
-    checked_in: "Checked In",
+    checked_in: "Checked in",
     in_treatment: "In Treatment",
     completed: "Completed",
     cancelled: "Canceled",

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase-server"
 import { redirect } from "next/navigation"
 import CalendarClient from "./calendar-client"
 import { getClinicId } from "@/app/(dashboard)/patients/actions"
+import { AppointmentReminderModal } from "@/components/dashboard/appointment-reminder-modal"
 
 export const dynamic = "force-dynamic"
 
@@ -74,16 +75,19 @@ export default async function CalendarPage({ searchParams: searchParamsPromise }
     const currentUserRole = currentUserRes.data?.role ?? null
 
     return (
-        <CalendarClient
-            initialAppointments={appsRes.data || []}
-            initialBlockedSlots={blockedSlots}
-            patients={patientsRes.data || []}
-            dentists={dentists}
-            clinic={clinic}
-            currentUserId={user.id}
-            currentUserRole={currentUserRole}
-            initialAppointmentId={appointmentId}
-            initialOpenAll={openAll}
-        />
+        <>
+            <AppointmentReminderModal />
+            <CalendarClient
+                initialAppointments={appsRes.data || []}
+                initialBlockedSlots={blockedSlots}
+                patients={patientsRes.data || []}
+                dentists={dentists}
+                clinic={clinic}
+                currentUserId={user.id}
+                currentUserRole={currentUserRole}
+                initialAppointmentId={appointmentId}
+                initialOpenAll={openAll}
+            />
+        </>
     )
 }

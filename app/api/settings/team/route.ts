@@ -173,16 +173,53 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: "You cannot remove yourself. Use a different account to remove your access." }, { status: 400 })
         }
 
-        const admin = createAdminClient()
-        const { error } = await admin
+        // 1. Deactivate in public.users using the requester's session (RLS allows admins to update users in their clinic)
+        const { data: updated, error } = await supabase
             .from("users")
             .update({ is_active: false })
             .eq("id", userId)
             .eq("clinic_id", userData.clinic_id)
+            .select("id")
+            .maybeSingle()
 
         if (error) {
-            console.error("[Team DELETE] error:", error)
-            return NextResponse.json({ error: error.message || "Failed to remove member" }, { status: 500 })
+            console.error("[Team DELETE] update error:", error)
+            return NextResponse.json({
+                error: error.message || "Failed to remove member",
+                code: error.code,
+            }, { status: 500 })
+        }
+
+        if (!updated) {
+            return NextResponse.json({
+                error: "Staff member not found or not in your clinic.",
+            }, { status: 404 })
+        }
+
+        // 2. Delete from Supabase Auth so they cannot log in (best-effort; requires service role)
+        try {
+            const admin = createAdminClient()
+            const { error: authError } = await admin.auth.admin.deleteUser(userId)
+            if (authError) {
+                const msg = authError.message ?? ""
+                const isUserNotFound =
+                    msg.toLowerCase().includes("user not found") ||
+                    msg.toLowerCase().includes("not found") ||
+                    msg.toLowerCase().includes("no user found")
+                console.error("[Team DELETE] auth delete error:", authError)
+                return NextResponse.json({
+                    success: true,
+                    warning: isUserNotFound
+                        ? "Staff removed from team. This person did not have a login account."
+                        : "Staff removed from team. Their login account could not be deleted—they may still be able to sign in. Remove them from Supabase Dashboard → Authentication → Users if needed.",
+                })
+            }
+        } catch (adminError) {
+            console.error("[Team DELETE] admin client or auth delete error:", adminError)
+            return NextResponse.json({
+                success: true,
+                warning: "Staff removed from team. Their login could not be removed (check SUPABASE_SERVICE_ROLE_KEY). They may still sign in until removed from Supabase Dashboard → Authentication → Users.",
+            })
         }
 
         return NextResponse.json({ success: true })

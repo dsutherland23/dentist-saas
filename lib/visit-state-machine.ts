@@ -129,7 +129,7 @@ export const VISIT_PROGRESS_STEPS: VisitState[] = [
 export const VISIT_STATE_LABELS: Record<VisitState, string> = {
   SCHEDULED: "Scheduled",
   ARRIVED: "Arrived",
-  CHECKED_IN: "Checked In",
+  CHECKED_IN: "Checked in",
   MEDICAL_REVIEWED: "Medical Reviewed",
   IN_CHAIR: "In Chair",
   EXAM_COMPLETED: "Exam Completed",

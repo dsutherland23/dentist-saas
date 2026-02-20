@@ -33,6 +33,7 @@ import { fetchWithAuth } from "@/lib/fetch-client"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { TreatmentDialog } from "./treatment-dialog"
+import { QueueReceiptDialog, type QueueReceiptData } from "./queue-receipt-dialog"
 
 interface Appointment {
     id: string
@@ -47,10 +48,19 @@ interface Appointment {
     dentists?: { first_name: string; last_name: string }
 }
 
+interface ClinicBranding {
+    name?: string
+    logo_url?: string | null
+    phone?: string | null
+    website?: string | null
+}
+
 interface AllAppointmentsDialogProps {
     trigger?: React.ReactNode
     currentUserId?: string | null
     dentists?: Array<{ id: string; first_name?: string; last_name: string }>
+    /** Clinic branding for queue receipt (logo, name, phone). When provided, queue receipt can show and print. */
+    clinic?: ClinicBranding | null
     /** When provided with onOpenChange, dialog open state is controlled (e.g. from URL ?openAll=true) */
     open?: boolean
     onOpenChange?: (open: boolean) => void
@@ -60,7 +70,7 @@ const STATUS_DROPDOWN_OPTIONS = [
     { value: "pending", label: "Pending" },
     { value: "unconfirmed", label: "Unconfirmed" },
     { value: "confirmed", label: "Confirm" },
-    { value: "checked_in", label: "Checked-In" },
+    { value: "checked_in", label: "Checked in" },
     { value: "no_show", label: "No-Show" },
     { value: "cancelled", label: "Canceled" },
 ] as const
@@ -70,14 +80,14 @@ const STATUS_FILTER_OPTIONS = [
     { value: "pending", label: "Pending", color: "bg-amber-100 text-amber-800 border-amber-200" },
     { value: "unconfirmed", label: "Unconfirmed", color: "bg-amber-100 text-amber-800 border-amber-200" },
     { value: "confirmed", label: "Confirmed", color: "bg-amber-100 text-amber-800 border-amber-200" },
-    { value: "checked_in", label: "Checked-In", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
+    { value: "checked_in", label: "Checked in", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     { value: "in_treatment", label: "In Treatment", color: "bg-emerald-100 text-emerald-800 border-emerald-200" },
     { value: "completed", label: "Completed", color: "bg-slate-100 text-slate-700 border-slate-200" },
     { value: "cancelled", label: "Cancelled", color: "bg-rose-100 text-rose-800 border-rose-200" },
     { value: "no_show", label: "No-Show", color: "bg-rose-100 text-rose-800 border-rose-200" },
 ] as const
 
-export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], open: controlledOpen, onOpenChange }: AllAppointmentsDialogProps) {
+export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], clinic = null, open: controlledOpen, onOpenChange }: AllAppointmentsDialogProps) {
     const router = useRouter()
     const [internalOpen, setInternalOpen] = useState(false)
     const isControlled = controlledOpen !== undefined && onOpenChange !== undefined
@@ -92,6 +102,10 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], o
     const [treatmentDialogOpen, setTreatmentDialogOpen] = useState(false)
     const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null)
     const [availableTreatments, setAvailableTreatments] = useState<Array<{ id: string; name: string; price: number }>>([])
+    const [showPast, setShowPast] = useState(false)
+    const [receiptData, setReceiptData] = useState<QueueReceiptData | null>(null)
+    const [isReceiptOpen, setIsReceiptOpen] = useState(false)
+    const [pendingRedirectAppointmentId, setPendingRedirectAppointmentId] = useState<string | null>(null)
 
     useEffect(() => {
         if (open && currentUserId) {
@@ -145,13 +159,66 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], o
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ status: newStatus }),
             })
-            if (!res.ok) throw new Error("Update failed")
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok) throw new Error((json as { error?: string })?.error || "Update failed")
             toast.success("Status updated")
+
+            // When changing to Checked in: show queue receipt (if API returned queueNumber), then redirect to calendar
+            if (newStatus === "checked_in") {
+                const d = json as {
+                    queueNumber?: number
+                    patients?: { first_name: string; last_name: string; date_of_birth?: string | null }
+                    dentists?: { first_name: string; last_name: string }
+                    start_time: string
+                }
+                if (typeof d?.queueNumber === "number") {
+                    setReceiptData({
+                        queueNumber: d.queueNumber,
+                        patientName: d.patients
+                            ? `${d.patients.first_name} ${d.patients.last_name}`
+                            : "Unknown Patient",
+                        dateOfBirth: d.patients?.date_of_birth ?? null,
+                        doctorName: d.dentists
+                            ? `Dr. ${d.dentists.last_name}`
+                            : "Staff",
+                        dateTime: format(parseISO(d.start_time), "EEEE, MMM d 'at' h:mm a"),
+                    })
+                    setPendingRedirectAppointmentId(appointmentId)
+                    setIsReceiptOpen(true)
+                } else {
+                    setPendingRedirectAppointmentId(appointmentId)
+                }
+                const transitionRes = await fetch("/api/visits/transition", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ appointmentId, nextState: "ARRIVED" }),
+                })
+                if (!transitionRes.ok) {
+                    const errData = await transitionRes.json().catch(() => ({}))
+                    console.warn("[AllAppointments] visit transition failed:", errData)
+                }
+                // If we didn't show receipt, redirect now; otherwise redirect when receipt is closed
+                if (typeof d?.queueNumber !== "number") {
+                    setOpen(false)
+                    router.push(`/calendar?appointmentId=${appointmentId}`)
+                }
+                return
+            }
+
             await fetchAppointments()
         } catch (error) {
             toast.error("Failed to update status")
         } finally {
             setUpdatingStatusId(null)
+        }
+    }
+
+    const handleReceiptOpenChange = (open: boolean) => {
+        setIsReceiptOpen(open)
+        if (!open && pendingRedirectAppointmentId) {
+            setOpen(false)
+            router.push(`/calendar?appointmentId=${pendingRedirectAppointmentId}`)
+            setPendingRedirectAppointmentId(null)
         }
     }
 
@@ -206,14 +273,26 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], o
         ? appointments.filter(a => selectedStatuses.includes(a.status))
         : appointments
 
-    // Group appointments by relative time
+    // Group appointments by relative time and status
     const now = startOfDay(new Date())
     const upcomingAppointments = filteredAppointments
-        .filter(a => isFuture(parseISO(a.start_time)) || isToday(parseISO(a.start_time)))
+        .filter(a => {
+            const start = parseISO(a.start_time)
+            const isUpcomingByTime = isFuture(start) || isToday(start)
+            const isFinalStatus = ["completed", "cancelled", "no_show"].includes(a.status)
+            // Only show non-final statuses in Upcoming
+            return isUpcomingByTime && !isFinalStatus
+        })
         .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
     
     const pastAppointments = filteredAppointments
-        .filter(a => isPast(parseISO(a.start_time)) && !isToday(parseISO(a.start_time)))
+        .filter(a => {
+            const start = parseISO(a.start_time)
+            const isPastByTime = isPast(start) && !isToday(start)
+            const isFinalStatus = ["completed", "cancelled", "no_show"].includes(a.status)
+            // Treat completed / cancelled / no_show as history, even if marked early
+            return isPastByTime || isFinalStatus
+        })
         .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 
     const toggleStatusFilter = (status: string) => {
@@ -455,6 +534,7 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], o
     }
 
     return (
+        <>
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 {trigger || (
@@ -558,18 +638,32 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], o
                                 </div>
                             )}
 
-                            {/* Past Appointments */}
+                            {/* Past Appointments (collapsed by default) */}
                             {pastAppointments.length > 0 && (
                                 <div>
-                                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <Calendar className="h-4 w-4" />
-                                        Past ({pastAppointments.length})
-                                    </h3>
-                                    <Accordion type="single" collapsible className="space-y-0">
-                                        {pastAppointments.map((appt) => (
-                                            <AppointmentAccordionItem key={appt.id} appt={appt} section="past" />
-                                        ))}
-                                    </Accordion>
+                                    <button
+                                        type="button"
+                                        className="w-full flex items-center justify-between mb-2 text-slate-600 hover:text-slate-800"
+                                        onClick={() => setShowPast((prev) => !prev)}
+                                    >
+                                        <span className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
+                                            <Calendar className="h-4 w-4" />
+                                            Past ({pastAppointments.length})
+                                        </span>
+                                        <ChevronRight
+                                            className={cn(
+                                                "h-4 w-4 transition-transform duration-150",
+                                                showPast ? "rotate-90" : ""
+                                            )}
+                                        />
+                                    </button>
+                                    {showPast && (
+                                        <Accordion type="single" collapsible className="space-y-0">
+                                            {pastAppointments.map((appt) => (
+                                                <AppointmentAccordionItem key={appt.id} appt={appt} section="past" />
+                                            ))}
+                                        </Accordion>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -612,5 +706,14 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], o
                 )}
             </DialogContent>
         </Dialog>
+
+            {/* Queue receipt when marking Checked in */}
+            <QueueReceiptDialog
+                open={isReceiptOpen}
+                onOpenChange={handleReceiptOpenChange}
+                data={receiptData}
+                clinic={clinic ?? undefined}
+            />
+        </>
     )
 }

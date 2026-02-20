@@ -440,6 +440,7 @@ export default function SettingsPage() {
             const data = await res.json().catch(() => ({}))
             if (res.ok) {
                 toast.success("Team member removed")
+                if (data.warning) toast.info(data.warning)
                 setTeam(prev => prev.filter(m => m.id !== member.id))
             } else {
                 toast.error(data.error || "Failed to remove member")

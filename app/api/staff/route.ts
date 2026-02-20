@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase-server"
+import { createAdminClient } from "@/lib/supabase-admin"
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
@@ -192,7 +193,11 @@ export async function DELETE(request: Request) {
             .eq("id", user.id)
             .single()
 
-        if (adminData?.role !== 'clinic_admin' && adminData?.role !== 'super_admin') {
+        if (!adminData?.clinic_id) {
+            return NextResponse.json({ error: "No clinic found" }, { status: 404 })
+        }
+
+        if (adminData.role !== "clinic_admin" && adminData.role !== "super_admin") {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 })
         }
 
@@ -203,16 +208,66 @@ export async function DELETE(request: Request) {
             return NextResponse.json({ error: "Missing Staff ID" }, { status: 400 })
         }
 
-        // Instead of hard delete, we could also just set is_active to false
-        const { error } = await supabase
+        if (staffId === user.id) {
+            return NextResponse.json(
+                { error: "You cannot remove yourself. Use a different account to remove your access." },
+                { status: 400 },
+            )
+        }
+
+        // 1. Deactivate staff member in public.users (soft delete) using admin's session + RLS
+        const { data: updated, error } = await supabase
             .from("users")
-            .delete()
+            .update({ is_active: false })
             .eq("id", staffId)
             .eq("clinic_id", adminData.clinic_id)
+            .select("id")
+            .maybeSingle()
 
-        if (error) throw error
+        if (error) {
+            console.error("[STAFF_DELETE] update error:", error)
+            return NextResponse.json(
+                { error: error.message || "Failed to remove staff member", code: error.code },
+                { status: 500 },
+            )
+        }
 
-        return new NextResponse(null, { status: 204 })
+        if (!updated) {
+            return NextResponse.json(
+                { error: "Staff member not found or not in your clinic." },
+                { status: 404 },
+            )
+        }
+
+        // 2. Best-effort: delete Supabase Auth user so they cannot log in
+        try {
+            const adminClient = createAdminClient()
+            const { error: authError } = await adminClient.auth.admin.deleteUser(staffId)
+            if (authError) {
+                const msg = authError.message ?? ""
+                const isUserNotFound =
+                    msg.toLowerCase().includes("user not found") ||
+                    msg.toLowerCase().includes("not found") ||
+                    msg.toLowerCase().includes("no user found")
+                console.error("[STAFF_DELETE] auth delete error:", authError)
+                return NextResponse.json({
+                    success: true,
+                    warning: isUserNotFound
+                        ? "Staff removed from team. This person did not have a login account."
+                        : "Staff removed from team. Their login account could not be deleted—they may still be able to sign in. Remove them from Supabase Dashboard → Authentication → Users if needed.",
+                })
+            }
+        } catch (adminError) {
+            const err = adminError as Error
+            console.error("[STAFF_DELETE] admin client or auth delete error:", err?.message ?? adminError)
+            return NextResponse.json({
+                success: true,
+                warning:
+                    "Staff removed from team. Their login could not be removed automatically. They may still sign in until removed from Supabase Dashboard → Authentication → Users. (Check server logs for details.)",
+            })
+        }
+
+        return NextResponse.json({ success: true })
     } catch (error) {
         console.error("[STAFF_DELETE]", error)
         return NextResponse.json({ error: "Internal server error" }, { status: 500 })

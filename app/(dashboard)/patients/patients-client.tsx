@@ -360,7 +360,7 @@ export default function PatientsClient({
                         <UserCheck className="h-6 w-6 text-emerald-600" />
                     </div>
                     <div>
-                        <p className="text-sm font-medium text-slate-500">Checked In</p>
+                        <p className="text-sm font-medium text-slate-500">Checked in</p>
                         <p className="text-2xl font-bold text-slate-900">{checkedInCount}</p>
                         <p className="text-xs text-slate-400">Currently checked in</p>
                     </div>
@@ -381,7 +381,7 @@ export default function PatientsClient({
                                     : "text-slate-600 hover:text-slate-900"
                             }`}
                         >
-                            {tab === "all" ? "All Patients" : tab === "expected_today" ? "Expected Today" : "Checked In"}
+                            {tab === "all" ? "All Patients" : tab === "expected_today" ? "Expected Today" : "Checked in"}
                         </button>
                     ))}
                 </div>

@@ -106,11 +106,14 @@ export default function StaffPage() {
                 method: 'DELETE'
             })
 
+            const data = await res.json().catch(() => ({}))
+
             if (res.ok) {
                 toast.success("Staff member removed")
+                if (data.warning) toast.info(data.warning)
                 fetchStaff()
             } else {
-                toast.error("Failed to remove staff member")
+                toast.error(data.error || "Failed to remove staff member")
             }
         } catch (error) {
             toast.error("An error occurred")
