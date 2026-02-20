@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { TreatmentDialog } from "./treatment-dialog"
 import { QueueReceiptDialog, type QueueReceiptData } from "./queue-receipt-dialog"
+import type { ClinicBranding } from "@/lib/branding"
 
 interface Appointment {
     id: string
@@ -46,13 +47,6 @@ interface Appointment {
     patient_id: string
     patients?: { first_name: string; last_name: string; phone?: string | null }
     dentists?: { first_name: string; last_name: string }
-}
-
-interface ClinicBranding {
-    name?: string
-    logo_url?: string | null
-    phone?: string | null
-    website?: string | null
 }
 
 interface AllAppointmentsDialogProps {
