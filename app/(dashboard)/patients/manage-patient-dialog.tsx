@@ -16,8 +16,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { savePatient } from "./actions"
 import { toast } from "sonner"
-import { Plus, UserPlus } from "lucide-react"
+import { Plus, UserPlus, ScanLine } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DocumentScanFlow } from "@/components/patients/document-scan-flow"
 
 type PatientOption = {
     id: string
@@ -56,6 +57,9 @@ export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogP
     const [selectedExisting, setSelectedExisting] = useState<PatientOption | null>(null)
     const [newFirstName, setNewFirstName] = useState("")
     const [newLastName, setNewLastName] = useState("")
+    const [newEmail, setNewEmail] = useState("")
+    const [newPhone, setNewPhone] = useState("")
+    const [scanOpen, setScanOpen] = useState(false)
 
     useEffect(() => {
         if (!open) {
@@ -65,6 +69,8 @@ export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogP
             setDateOfBirth("")
             setNewFirstName("")
             setNewLastName("")
+            setNewEmail("")
+            setNewPhone("")
             return
         }
         const fetchPatients = async () => {
@@ -134,6 +140,7 @@ export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogP
     }
 
     return (
+        <>
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 {trigger || (
@@ -236,6 +243,12 @@ export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogP
                 ) : (
                     <form onSubmit={handleSubmit}>
                         <div className="grid gap-4 py-4">
+                            <div className="flex justify-end">
+                                <Button type="button" variant="outline" size="sm" onClick={() => setScanOpen(true)}>
+                                    <ScanLine className="h-4 w-4 mr-2" />
+                                    Scan ID to fill
+                                </Button>
+                            </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="firstName" className="text-right">First Name</Label>
                                 <Input
@@ -260,11 +273,11 @@ export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogP
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="email" className="text-right">Email</Label>
-                                <Input id="email" name="email" type="email" className="col-span-3" />
+                                <Input id="email" name="email" type="email" className="col-span-3" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="phone" className="text-right">Phone</Label>
-                                <Input id="phone" name="phone" type="tel" className="col-span-3" />
+                                <Input id="phone" name="phone" type="tel" className="col-span-3" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
                             </div>
                             <div className="grid grid-cols-4 items-center gap-4">
                                 <Label htmlFor="dateOfBirth" className="text-right">DOB</Label>
@@ -296,5 +309,19 @@ export function ManagePatientDialog({ trigger, onSuccess }: ManagePatientDialogP
                 )}
             </DialogContent>
         </Dialog>
+        <DocumentScanFlow
+            open={scanOpen}
+            onOpenChange={setScanOpen}
+            mode="id"
+            onApplyId={(fields) => {
+                if (fields.firstName) setNewFirstName(fields.firstName)
+                if (fields.lastName) setNewLastName(fields.lastName)
+                if (fields.dateOfBirth) setDateOfBirth(fields.dateOfBirth)
+                if (fields.phone) setNewPhone(fields.phone)
+                if (fields.email) setNewEmail(fields.email)
+                toast.success("Form filled from scan. Review and save.")
+            }}
+        />
+        </>
     )
 }

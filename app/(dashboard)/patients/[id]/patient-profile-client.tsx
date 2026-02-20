@@ -33,7 +33,8 @@ import {
     DollarSign,
     FileBarChart,
     Shield,
-    Pill
+    Pill,
+    ScanLine
 } from "lucide-react"
 import { format } from "date-fns"
 import {
@@ -71,6 +72,8 @@ import { ProfilePictureUpload } from "@/components/patients/profile-picture-uplo
 import { AIInsightsCards } from "@/components/patients/ai-insights-cards"
 import { MedicalImageGallery } from "@/components/patients/medical-image-gallery"
 import { DentalChartV2Container } from "@/components/dental-chart-v2/DentalChartV2Container"
+import { DocumentScanFlow, type DocumentScanMode } from "@/components/patients/document-scan-flow"
+import { runOcr, parseIdFields, parseInsuranceFields, type IdFields, type InsuranceFields } from "@/lib/document-ocr"
 
 interface PatientProfileClientProps {
     patient: {
@@ -147,6 +150,11 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
     const [avatarImageUrl, setAvatarImageUrl] = useState<string | null>(null)
     const [medicalImageTab, setMedicalImageTab] = useState<"xray" | "intraoral" | "3d_scan" | "add">("xray")
+    const [scanOpen, setScanOpen] = useState(false)
+    const [scanMode, setScanMode] = useState<DocumentScanMode>("id")
+    const [extractDialogOpen, setExtractDialogOpen] = useState(false)
+    const [extractLoading, setExtractLoading] = useState(false)
+    const [extractResult, setExtractResult] = useState<{ idFields: IdFields; insuranceFields: InsuranceFields } | null>(null)
 
     // Resolve profile picture to a signed URL when it's in private storage (patient-files)
     useEffect(() => {
@@ -1428,6 +1436,16 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             <DialogDescription>Update contact details for {patient.first_name}.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full sm:w-auto"
+                                onClick={() => { setScanMode("id"); setScanOpen(true) }}
+                            >
+                                <ScanLine className="h-4 w-4 mr-2" />
+                                Scan ID or document
+                            </Button>
                             <div className="space-y-2">
                                 <Label htmlFor="phone">Phone Number</Label>
                                 <Input
@@ -1505,6 +1523,42 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 </DialogContent>
             </Dialog>
 
+            {/* Document scan (ID or insurance) */}
+            <DocumentScanFlow
+                open={scanOpen}
+                onOpenChange={setScanOpen}
+                mode={scanMode}
+                onApplyId={(fields: IdFields) => {
+                    setContactData((prev) => ({
+                        ...prev,
+                        phone: fields.phone || prev.phone,
+                        email: fields.email || prev.email,
+                        address: fields.address || prev.address,
+                    }))
+                    const demo: { first_name?: string; last_name?: string; date_of_birth?: string } = {}
+                    if (fields.firstName) demo.first_name = fields.firstName
+                    if (fields.lastName) demo.last_name = fields.lastName
+                    if (fields.dateOfBirth) demo.date_of_birth = fields.dateOfBirth
+                    if (Object.keys(demo).length > 0) {
+                        fetch(`/api/patients/${patient.id}/demographics`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(demo),
+                        }).then((res) => {
+                            if (res.ok) { router.refresh(); toast.success("Demographics updated") }
+                        }).catch(() => {})
+                    }
+                    toast.success("Contact form filled from scan. Review and save.")
+                }}
+                onApplyInsurance={(fields: InsuranceFields) => {
+                    setInsuranceData({
+                        insurance_provider: fields.insuranceProvider,
+                        insurance_policy_number: fields.policyOrMemberId,
+                    })
+                    toast.success("Insurance form filled from scan. Review and save.")
+                }}
+            />
+
             {/* Insurance Update Dialog */}
             <Dialog open={isInsuranceOpen} onOpenChange={setIsInsuranceOpen}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-md">
@@ -1514,6 +1568,16 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             <DialogDescription>Manage insurance provider and policy details for {patient.first_name}.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="w-full sm:w-auto"
+                                onClick={() => { setScanMode("insurance"); setScanOpen(true) }}
+                            >
+                                <ScanLine className="h-4 w-4 mr-2" />
+                                Scan insurance card
+                            </Button>
                             <div className="space-y-2">
                                 <Label htmlFor="provider">Insurance Provider</Label>
                                 <Input
@@ -1773,6 +1837,36 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                         />
                                     </label>
                                 </div>
+                                {fileData.file && fileData.file.type.startsWith("image/") && (
+                                    <div className="flex flex-col gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            disabled={extractLoading}
+                                            onClick={async () => {
+                                                if (!fileData.file) return
+                                                setExtractLoading(true)
+                                                setExtractResult(null)
+                                                try {
+                                                    const text = await runOcr(fileData.file!)
+                                                    setExtractResult({
+                                                        idFields: parseIdFields(text),
+                                                        insuranceFields: parseInsuranceFields(text),
+                                                    })
+                                                    setExtractDialogOpen(true)
+                                                } catch (err) {
+                                                    toast.error(err instanceof Error ? err.message : "Extraction failed")
+                                                } finally {
+                                                    setExtractLoading(false)
+                                                }
+                                            }}
+                                        >
+                                            {extractLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ScanLine className="h-4 w-4 mr-2" />}
+                                            Extract info from this image
+                                        </Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <DialogFooter>
@@ -1782,6 +1876,87 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Extracted info from document (after Extract info from this image) */}
+            <Dialog open={extractDialogOpen} onOpenChange={setExtractDialogOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Extracted info</DialogTitle>
+                        <DialogDescription>Apply to contact, insurance, or demographics as needed.</DialogDescription>
+                    </DialogHeader>
+                    {extractResult && (
+                        <div className="space-y-4 py-2">
+                            {(extractResult.idFields.firstName || extractResult.idFields.lastName || extractResult.idFields.dateOfBirth || extractResult.idFields.phone || extractResult.idFields.address || extractResult.idFields.email) && (
+                                <div className="rounded-lg border bg-slate-50 p-3 space-y-1 text-sm">
+                                    <p className="font-medium text-slate-700">ID / Document</p>
+                                    {(extractResult.idFields.firstName || extractResult.idFields.lastName) && (
+                                        <p>Name: {[extractResult.idFields.firstName, extractResult.idFields.lastName].filter(Boolean).join(" ")}</p>
+                                    )}
+                                    {extractResult.idFields.dateOfBirth && <p>DOB: {extractResult.idFields.dateOfBirth}</p>}
+                                    {extractResult.idFields.phone && <p>Phone: {extractResult.idFields.phone}</p>}
+                                    {extractResult.idFields.email && <p>Email: {extractResult.idFields.email}</p>}
+                                    {extractResult.idFields.address && <p>Address: {extractResult.idFields.address}</p>}
+                                    <div className="flex flex-wrap gap-2 pt-2">
+                                        <Button type="button" size="sm" variant="outline" onClick={() => {
+                                            setContactData((prev) => ({
+                                                ...prev,
+                                                phone: extractResult.idFields.phone || prev.phone,
+                                                email: extractResult.idFields.email || prev.email,
+                                                address: extractResult.idFields.address || prev.address,
+                                            }))
+                                            toast.success("Contact form filled. Save from Contact dialog.")
+                                            setExtractDialogOpen(false)
+                                        }}>
+                                            Apply to Contact
+                                        </Button>
+                                        {(extractResult.idFields.firstName || extractResult.idFields.lastName || extractResult.idFields.dateOfBirth) && (
+                                            <Button type="button" size="sm" variant="outline" onClick={() => {
+                                                const demo: { first_name?: string; last_name?: string; date_of_birth?: string } = {}
+                                                if (extractResult.idFields.firstName) demo.first_name = extractResult.idFields.firstName
+                                                if (extractResult.idFields.lastName) demo.last_name = extractResult.idFields.lastName
+                                                if (extractResult.idFields.dateOfBirth) demo.date_of_birth = extractResult.idFields.dateOfBirth
+                                                fetch(`/api/patients/${patient.id}/demographics`, {
+                                                    method: "PATCH",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify(demo),
+                                                }).then((res) => {
+                                                    if (res.ok) { router.refresh(); toast.success("Demographics updated") }
+                                                })
+                                                setExtractDialogOpen(false)
+                                            }}>
+                                                Apply to Demographics
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            {(extractResult.insuranceFields.insuranceProvider || extractResult.insuranceFields.policyOrMemberId) && (
+                                <div className="rounded-lg border bg-slate-50 p-3 space-y-1 text-sm">
+                                    <p className="font-medium text-slate-700">Insurance</p>
+                                    {extractResult.insuranceFields.insuranceProvider && <p>Provider: {extractResult.insuranceFields.insuranceProvider}</p>}
+                                    {extractResult.insuranceFields.policyOrMemberId && <p>Policy / ID: {extractResult.insuranceFields.policyOrMemberId}</p>}
+                                    <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => {
+                                        setInsuranceData({
+                                            insurance_provider: extractResult.insuranceFields.insuranceProvider,
+                                            insurance_policy_number: extractResult.insuranceFields.policyOrMemberId,
+                                        })
+                                        toast.success("Insurance form filled. Save from Insurance dialog.")
+                                        setExtractDialogOpen(false)
+                                    }}>
+                                        Apply to Insurance
+                                    </Button>
+                                </div>
+                            )}
+                            {!extractResult.idFields.firstName && !extractResult.idFields.lastName && !extractResult.idFields.phone && !extractResult.idFields.address && !extractResult.insuranceFields.insuranceProvider && !extractResult.insuranceFields.policyOrMemberId && (
+                                <p className="text-sm text-slate-500">No structured data could be extracted. Try a clearer image or different document.</p>
+                            )}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setExtractDialogOpen(false)}>Dismiss</Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

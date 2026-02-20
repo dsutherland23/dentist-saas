@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { DocumentScanFlow } from "@/components/patients/document-scan-flow"
 
 type NewWalkInDialogProps = {
   open: boolean
@@ -47,6 +48,7 @@ export function NewWalkInDialog({ open, onOpenChange, defaultPatientId }: NewWal
   const [reason, setReason] = useState("")
   const [duration, setDuration] = useState(30)
   const [submitting, setSubmitting] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -179,6 +181,7 @@ export function NewWalkInDialog({ open, onOpenChange, defaultPatientId }: NewWal
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
@@ -247,7 +250,12 @@ export function NewWalkInDialog({ open, onOpenChange, defaultPatientId }: NewWal
 
             {showCreatePatient && (
               <div className="mt-3 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-                <p className="text-xs font-medium text-slate-700">New patient details</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-slate-700">New patient details</p>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setScanOpen(true)}>
+                    Scan ID to fill
+                  </Button>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
                     <Label className="text-xs">First name</Label>
@@ -369,6 +377,19 @@ export function NewWalkInDialog({ open, onOpenChange, defaultPatientId }: NewWal
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <DocumentScanFlow
+      open={scanOpen}
+      onOpenChange={setScanOpen}
+      mode="id"
+      onApplyId={(fields) => {
+        if (fields.firstName) setNewFirstName(fields.firstName)
+        if (fields.lastName) setNewLastName(fields.lastName)
+        if (fields.phone) setNewPhone(fields.phone)
+        toast.success("Form filled from scan. Review and add patient.")
+      }}
+    />
+    </>
   )
 }
 

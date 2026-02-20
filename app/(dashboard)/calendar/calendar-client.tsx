@@ -533,7 +533,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         }
 
         const timeRange = `${format(appt.start, "h:mm a")} – ${format(appt.end, "h:mm a")}`
-        const statusLabel = (appt.status || "scheduled").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+        const statusLabel = (appt.status || "scheduled").replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
         const appointmentTooltipContent = (
             <div key={appt.id} className="w-[260px] text-left">
                 <p className="text-[15px] font-semibold text-slate-900 tracking-tight truncate" title={appt.patientName}>
