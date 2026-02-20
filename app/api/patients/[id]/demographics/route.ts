@@ -36,7 +36,7 @@ export async function PATCH(
             return NextResponse.json({ error: "No clinic assigned" }, { status: 403 })
         }
 
-        const updates: { first_name?: string; last_name?: string; date_of_birth?: string | null } = {}
+        const updates: { first_name?: string | null; last_name?: string | null; date_of_birth?: string | null } = {}
         if (typeof first_name === "string") {
             const t = first_name.trim()
             if (t.length > 100) return NextResponse.json({ error: "First name must be 100 characters or less" }, { status: 400 })
