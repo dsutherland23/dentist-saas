@@ -212,27 +212,27 @@ export default function SettingsWorkflowPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 bg-slate-50 min-h-screen max-w-4xl">
-      <div className="flex items-center gap-2 text-sm text-slate-500">
-        <Link href="/settings" className="hover:text-teal-600">Settings</Link>
-        <span>/</span>
-        <span className="text-slate-700 font-medium">Visit workflow</span>
+    <div className="p-3 sm:p-4 md:p-6 max-w-4xl mx-auto space-y-4 sm:space-y-6 bg-slate-50 min-h-screen min-w-0">
+      <div className="flex items-center gap-2 text-sm text-slate-500 min-w-0">
+        <Link href="/settings" className="hover:text-teal-600 truncate">Settings</Link>
+        <span className="shrink-0">/</span>
+        <span className="text-slate-700 font-medium truncate">Visit workflow</span>
       </div>
-      <div>
-        <h1 className="text-xl font-bold text-slate-900">Visit workflow</h1>
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-xl font-bold text-slate-900">Visit workflow</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Build the order of stages for patient visits. Use presets or create a custom flow (e.g. dentist + front desk only).
+          Build the order of stages for patient visits. Use presets or create a custom flow.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Active workflow</CardTitle>
-          <CardDescription>Choose a preset or a custom template. The flow below is editable for all.</CardDescription>
+      <Card className="min-w-0 overflow-hidden">
+        <CardHeader className="pb-2 sm:pb-4">
+          <CardTitle className="text-sm sm:text-base">Active workflow</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">Choose a preset or a custom template. The flow below is editable for all.</CardDescription>
         </CardHeader>
         <CardContent>
           <Select value={workflowSelectorValue} onValueChange={handleWorkflowSelect} disabled={saving}>
-            <SelectTrigger className="w-full max-w-sm">
+            <SelectTrigger className="w-full max-w-full sm:max-w-sm min-w-0">
               <SelectValue placeholder="Select workflow" />
             </SelectTrigger>
             <SelectContent>
@@ -248,51 +248,54 @@ export default function SettingsWorkflowPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Custom workflow</CardTitle>
-          <CardDescription>
+      <Card className="min-w-0 overflow-hidden">
+        <CardHeader className="pb-2 sm:pb-4">
+          <CardTitle className="text-sm sm:text-base">Custom workflow</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             {activeWorkflowId ? "Reorder or edit stages below, then Save." : "Add or remove stages and reorder. Save to create and activate your custom flow."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 min-w-0">
             <input
               type="text"
               value={templateName}
               onChange={(e) => setTemplateName(e.target.value.slice(0, 255))}
-              className="h-9 rounded-md border border-slate-200 px-3 text-sm w-48"
+              className="h-9 rounded-md border border-slate-200 px-3 text-sm w-full min-w-0 sm:w-48"
               placeholder="Template name"
             />
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving} className="shrink-0">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
             </Button>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 sm:p-3 space-y-2 min-w-0 overflow-hidden">
             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Flow (order of stages)</p>
             {nodes.length === 0 ? (
               <p className="text-sm text-slate-500 py-4">No stages. Add one below.</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2 min-w-0">
                 {nodes.map((node, index) => (
                   <li
                     key={`${node.state}-${index}`}
-                    className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5 shadow-sm"
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 rounded-lg border border-slate-200 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 shadow-sm min-w-0"
                   >
-                    <GripVertical className="h-4 w-4 text-slate-400 shrink-0" aria-hidden />
-                    <span className="flex-1 text-sm font-medium text-slate-900">{node.label || node.state}</span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 capitalize">
-                      {node.assigned_role.replace("_", " ")}
-                    </span>
-                    <div className="flex items-center gap-0.5">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <GripVertical className="h-4 w-4 text-slate-400 shrink-0" aria-hidden />
+                      <span className="flex-1 min-w-0 text-sm font-medium text-slate-900 truncate">{node.label || node.state}</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 capitalize shrink-0">
+                        {node.assigned_role.replace("_", " ")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-end sm:justify-start gap-0.5 shrink-0 self-end sm:self-auto">
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-8 w-8 sm:h-7 sm:w-7 touch-manipulation"
                         onClick={() => handleMove(index, "up")}
                         disabled={index === 0}
+                        aria-label="Move up"
                       >
                         <ArrowUp className="h-3.5 w-3.5" />
                       </Button>
@@ -300,9 +303,10 @@ export default function SettingsWorkflowPage() {
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-8 w-8 sm:h-7 sm:w-7 touch-manipulation"
                         onClick={() => handleMove(index, "down")}
                         disabled={index === nodes.length - 1}
+                        aria-label="Move down"
                       >
                         <ArrowDown className="h-3.5 w-3.5" />
                       </Button>
@@ -310,8 +314,9 @@ export default function SettingsWorkflowPage() {
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-slate-400 hover:text-rose-600"
+                        className="h-8 w-8 sm:h-7 sm:w-7 text-slate-400 hover:text-rose-600 touch-manipulation"
                         onClick={() => handleRemove(index)}
+                        aria-label="Remove stage"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -322,11 +327,11 @@ export default function SettingsWorkflowPage() {
             )}
 
             {availableStages.length > 0 && (
-              <div className="pt-2">
+              <div className="pt-2 min-w-0">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-9 gap-1">
-                      <Plus className="h-4 w-4" />
+                    <Button variant="outline" size="sm" className="h-9 gap-1 w-full sm:w-auto min-w-0">
+                      <Plus className="h-4 w-4 shrink-0" />
                       Add stage
                     </Button>
                   </DropdownMenuTrigger>
@@ -343,16 +348,16 @@ export default function SettingsWorkflowPage() {
           </div>
 
           {nodes.length > 0 && (
-            <p className="text-xs text-slate-500">
-              First stage must be Check-In, last must be Visit completed. Reorder with arrows, then Save to apply.
+            <p className="text-xs text-slate-500 min-w-0">
+              First stage: Check-In; last: Visit completed. Reorder with arrows, then Save.
             </p>
           )}
         </CardContent>
       </Card>
 
-      <div className="text-sm text-slate-500">
+      <div className="text-sm text-slate-500 min-w-0">
         <Link href="/settings" className="inline-flex items-center gap-1 text-teal-600 hover:underline">
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-4 w-4 shrink-0" />
           Back to Settings
         </Link>
       </div>

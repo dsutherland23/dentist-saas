@@ -188,8 +188,8 @@ export function Topbar() {
                     </form>
                 </div>
 
-                {/* Center: Quick Add, Notifications, User — in flow so no overlap; equal flex spacers keep it centered */}
-                <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+                {/* Right: Quick Add, Notifications, User — pushed to corner on small screens to avoid clashing with search */}
+                <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-auto md:ml-0">
                     {/* Quick Actions */}
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -283,8 +283,8 @@ export function Topbar() {
                     </DropdownMenu>
                 </div>
 
-                {/* Right spacer: equal flex to left so center stays visually centered at all widths */}
-                <div className="flex-1 min-w-0" aria-hidden />
+                {/* Right spacer: only from md so on small screens the right group sits in the corner */}
+                <div className="hidden md:flex flex-1 min-w-0" aria-hidden />
             </div>
         </div>
     )
