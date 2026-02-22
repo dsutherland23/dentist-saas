@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Stethoscope, Lock, User, ArrowRight, ShieldCheck } from "lucide-react"
+import { Stethoscope, Lock, User, ArrowRight, ShieldCheck, Eye, EyeOff } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
 
 export default function SetPasswordPage() {
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
+    const [showNewPassword, setShowNewPassword] = useState(false)
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const supabase = createClient()
 
     async function onSubmit(event: React.FormEvent) {
@@ -132,12 +134,22 @@ export default function SetPasswordPage() {
                                     <Input
                                         id="new_password"
                                         name="new_password"
-                                        type="password"
+                                        type={showNewPassword ? "text" : "password"}
                                         required
                                         minLength={8}
                                         placeholder="At least 8 characters"
-                                        className="pl-10 bg-white/50 border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
+                                        className="pl-10 pr-10 bg-white/50 border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
                                     />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9 text-slate-400 hover:text-slate-600"
+                                        onClick={() => setShowNewPassword((v) => !v)}
+                                        aria-label={showNewPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
                                 </div>
                             </div>
 
@@ -148,12 +160,22 @@ export default function SetPasswordPage() {
                                     <Input
                                         id="confirm_password"
                                         name="confirm_password"
-                                        type="password"
+                                        type={showConfirmPassword ? "text" : "password"}
                                         required
                                         minLength={8}
                                         placeholder="Confirm your password"
-                                        className="pl-10 bg-white/50 border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
+                                        className="pl-10 pr-10 bg-white/50 border-slate-200 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 transition-all"
                                     />
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9 text-slate-400 hover:text-slate-600"
+                                        onClick={() => setShowConfirmPassword((v) => !v)}
+                                        aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                    >
+                                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </Button>
                                 </div>
                             </div>
 

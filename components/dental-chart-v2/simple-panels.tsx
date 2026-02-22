@@ -5,7 +5,7 @@
  * These can be enhanced later with full functionality
  */
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -320,13 +320,68 @@ export function TreatmentPlanBuilder({ chartId, treatments }: TreatmentPlanBuild
 }
 
 // ==================== Clinical Notes Panel ====================
+const NOTE_TYPES = [
+  { value: "progress", label: "Progress Note" },
+  { value: "followup", label: "Follow-up" },
+  { value: "treatment", label: "Treatment Note" },
+  { value: "observation", label: "Observation" },
+  { value: "chief_complaint", label: "Chief Complaint" },
+] as const
+
 interface ClinicalNotesPanelProps {
+  patientId: string
   chartId: string
   notes: ClinicalNote[]
+  onNotesChange?: () => void
 }
 
-export function ClinicalNotesPanel({ chartId, notes }: ClinicalNotesPanelProps) {
+export function ClinicalNotesPanel({ patientId, chartId, notes: initialNotes, onNotesChange }: ClinicalNotesPanelProps) {
   const [showForm, setShowForm] = useState(false)
+  const [noteType, setNoteType] = useState<string>(NOTE_TYPES[0].value)
+  const [content, setContent] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [notes, setNotes] = useState<ClinicalNote[]>(initialNotes)
+
+  useEffect(() => {
+    setNotes(initialNotes)
+  }, [initialNotes])
+
+  useEffect(() => {
+    if (!patientId) return
+    fetch(`/api/v2/patients/${patientId}/chart/notes`)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => Array.isArray(data) && setNotes(data))
+      .catch(() => {})
+  }, [patientId])
+
+  const handleSaveNote = async () => {
+    if (!content.trim()) {
+      toast.error("Enter note content")
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/v2/patients/${patientId}/chart/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note_type: noteType, content: content.trim() }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to save note")
+      }
+      const saved = await res.json()
+      setNotes((prev) => [saved, ...prev])
+      toast.success("Note saved")
+      setContent("")
+      setShowForm(false)
+      onNotesChange?.()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save note")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Card>
@@ -364,27 +419,31 @@ export function ClinicalNotesPanel({ chartId, notes }: ClinicalNotesPanelProps) 
           <div className="space-y-3">
             <div className="space-y-2">
               <Label>Note Type</Label>
-              <Select>
+              <Select value={noteType} onValueChange={setNoteType}>
                 <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="progress">Progress Note</SelectItem>
-                  <SelectItem value="followup">Follow-up</SelectItem>
-                  <SelectItem value="treatment">Treatment Note</SelectItem>
-                  <SelectItem value="observation">Observation</SelectItem>
-                  <SelectItem value="chief_complaint">Chief Complaint</SelectItem>
+                  {NOTE_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
               <Label>Content</Label>
-              <Textarea placeholder="Enter clinical notes..." rows={4} />
+              <Textarea
+                placeholder="Enter clinical notes..."
+                rows={4}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+              />
             </div>
             <div className="flex gap-2">
-              <Button size="sm" className="flex-1">
+              <Button size="sm" className="flex-1" onClick={handleSaveNote} disabled={saving}>
+                {saving ? "Saving..." : null}
                 <Save className="h-4 w-4 mr-2" />
                 Save Note
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setShowForm(false)}>
+              <Button size="sm" variant="outline" onClick={() => setShowForm(false)} disabled={saving}>
                 Cancel
               </Button>
             </div>

@@ -82,11 +82,13 @@ interface PatientProfileClientProps {
         last_name: string;
         status?: string;
         date_of_birth?: string;
+        gender?: string;
         phone?: string;
         email?: string;
         address?: string;
         allergies?: string;
         medical_conditions?: string;
+        medications?: string;
         insurance_provider?: string;
         insurance_policy_number?: string;
         profile_picture_url?: string | null;
@@ -145,6 +147,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [isSaving, setIsSaving] = useState(false)
     const [isUploading, setIsUploading] = useState(false)
     const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false)
+    const [defaultInvoiceItems, setDefaultInvoiceItems] = useState<{ description: string; quantity: number; unit_price: number }[]>([])
     const [createdInvoice, setCreatedInvoice] = useState<{ id: string; invoice_number: string; total_amount: number } | null>(null)
     const [patientInvoices, setPatientInvoices] = useState<{ id: string; invoice_number: string; total_amount: number; status: string; created_at: string }[]>([])
     const [profilePictureDialogOpen, setProfilePictureDialogOpen] = useState(false)
@@ -155,6 +158,8 @@ export default function PatientProfileClient({ patient, appointments, treatments
     const [extractDialogOpen, setExtractDialogOpen] = useState(false)
     const [extractLoading, setExtractLoading] = useState(false)
     const [extractResult, setExtractResult] = useState<{ idFields: IdFields; insuranceFields: InsuranceFields } | null>(null)
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
 
     // Resolve profile picture to a signed URL when it's in private storage (patient-files)
     useEffect(() => {
@@ -216,13 +221,16 @@ export default function PatientProfileClient({ patient, appointments, treatments
     // Form States
     const [alertsData, setAlertsData] = useState({
         allergies: patient.allergies || "",
-        medical_conditions: patient.medical_conditions || ""
+        medical_conditions: patient.medical_conditions || "",
+        medications: patient.medications || ""
     })
 
     const [contactData, setContactData] = useState({
         phone: patient.phone || "",
         email: patient.email || "",
-        address: patient.address || ""
+        address: patient.address || "",
+        gender: patient.gender || "",
+        date_of_birth: patient.date_of_birth ? format(new Date(patient.date_of_birth), "yyyy-MM-dd") : ""
     })
 
     const [insuranceData, setInsuranceData] = useState({
@@ -444,10 +452,17 @@ export default function PatientProfileClient({ patient, appointments, treatments
         e.preventDefault()
         setIsSaving(true)
         try {
+            const payload = {
+                phone: contactData.phone,
+                email: contactData.email,
+                address: contactData.address,
+                gender: contactData.gender || null,
+                date_of_birth: contactData.date_of_birth || null
+            }
             const res = await fetch(`/api/patients/${patient.id}/contact`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(contactData)
+                body: JSON.stringify(payload)
             })
             if (res.ok) {
                 toast.success("Contact information updated")
@@ -875,16 +890,72 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     <p className="text-sm sm:text-base opacity-90">ID: PT-2024-{patient.id.slice(0, 3)}</p>
                 </div>
 
-                {/* Close Button */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => router.push("/patients")}
-                    className="absolute top-4 right-4 text-white hover:bg-white/20"
-                >
-                    <X className="h-5 w-5" />
-                </Button>
+                {/* Delete (with confirmation) and Close */}
+                <div className="absolute top-4 right-4 flex items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeleteConfirmOpen(true)}
+                        className="text-white hover:bg-white/20"
+                        title="Delete patient record"
+                        aria-label="Delete patient record"
+                    >
+                        <Trash2 className="h-5 w-5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => router.push("/patients")}
+                        className="text-white hover:bg-white/20"
+                        title="Back to patients"
+                        aria-label="Back to patients"
+                    >
+                        <X className="h-5 w-5" />
+                    </Button>
+                </div>
             </div>
+
+            {/* Delete confirmation dialog */}
+            <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Delete patient record</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete the record for {patient.first_name} {patient.last_name}? This action cannot be undone. If this patient has linked invoices, treatment plans, or files, you may need to remove or reassign those first.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)} disabled={isDeleting}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={async () => {
+                                setIsDeleting(true)
+                                try {
+                                    const res = await fetch(`/api/patients/${patient.id}`, { method: "DELETE" })
+                                    const data = await res.json().catch(() => ({}))
+                                    if (res.ok) {
+                                        toast.success("Patient record deleted")
+                                        setDeleteConfirmOpen(false)
+                                        router.push("/patients")
+                                    } else {
+                                        toast.error((data as { error?: string }).error || "Failed to delete patient")
+                                    }
+                                } catch {
+                                    toast.error("Failed to delete patient")
+                                } finally {
+                                    setIsDeleting(false)
+                                }
+                            }}
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                            {isDeleting ? "Deleting…" : "Delete record"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Patient Info Bar */}
             <div className="mt-20 sm:mt-24 px-4 sm:px-6 md:px-8 py-4 bg-white border-b border-slate-200">
@@ -1114,7 +1185,7 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     <Pill className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
                                     <div className="min-w-0">
                                         <p className="font-semibold text-sm text-blue-900">Medications</p>
-                                        <p className="text-sm text-blue-700 mt-1 break-words">Not recorded — add in medical conditions if needed</p>
+                                        <p className="text-sm text-blue-700 mt-1 break-words">{patient.medications || 'None'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -1293,7 +1364,28 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             </Button>
 
                             <Button
-                                onClick={() => setInvoiceDialogOpen(true)}
+                                onClick={async () => {
+                                    setDefaultInvoiceItems([])
+                                    if (treatmentPlans.length > 0) {
+                                        try {
+                                            const planId = treatmentPlans[0].id
+                                            const res = await fetch(`/api/treatment-plans?id=${planId}`)
+                                            if (res.ok) {
+                                                const plan = await res.json()
+                                                const items = plan?.items ?? []
+                                                const invoiceItems = items.map((it: { description?: string; quantity?: number; unit_price?: number; total_price?: number }) => ({
+                                                    description: it.description || "",
+                                                    quantity: Number(it.quantity) || 1,
+                                                    unit_price: Number(it.unit_price) ?? Number(it.total_price) ?? 0
+                                                })).filter((i: { description: string }) => i.description)
+                                                if (invoiceItems.length > 0) setDefaultInvoiceItems(invoiceItems)
+                                            }
+                                        } catch {
+                                            // open without prefill
+                                        }
+                                    }
+                                    setInvoiceDialogOpen(true)
+                                }}
                                 variant="outline"
                                 className="h-auto min-h-[80px] py-4 sm:py-6 flex flex-col gap-2 min-w-0 overflow-hidden whitespace-normal"
                                 aria-label="View billing"
@@ -1395,12 +1487,17 @@ export default function PatientProfileClient({ patient, appointments, treatments
                 onOpenChange={setAppointmentDialogOpen}
             />
             <NewInvoiceDialog
+                patients={[{ id: patient.id, first_name: patient.first_name, last_name: patient.last_name }]}
                 defaultPatientId={patient.id}
+                defaultItems={defaultInvoiceItems.length > 0 ? defaultInvoiceItems : undefined}
                 treatments={availableTreatments}
                 open={invoiceDialogOpen}
                 onOpenChange={(open) => {
                     setInvoiceDialogOpen(open)
-                    if (!open) setCreatedInvoice(null)
+                    if (!open) {
+                        setCreatedInvoice(null)
+                        setDefaultInvoiceItems([])
+                    }
                 }}
                 onSuccess={(inv) => {
                     if (inv) {
@@ -1425,7 +1522,13 @@ export default function PatientProfileClient({ patient, appointments, treatments
             <Dialog
                 open={isContactOpen}
                 onOpenChange={(open) => {
-                    if (open) setContactData({ phone: patient.phone || "", email: patient.email || "", address: patient.address || "" })
+                    if (open) setContactData({
+                        phone: patient.phone || "",
+                        email: patient.email || "",
+                        address: patient.address || "",
+                        gender: patient.gender || "",
+                        date_of_birth: patient.date_of_birth ? format(new Date(patient.date_of_birth), "yyyy-MM-dd") : ""
+                    })
                     setIsContactOpen(open)
                 }}
             >
@@ -1436,6 +1539,40 @@ export default function PatientProfileClient({ patient, appointments, treatments
                             <DialogDescription>Update contact details for {patient.first_name}.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
+                            {/* Read-only patient info */}
+                            <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2 text-sm">
+                                <p className="font-medium text-slate-700 mb-2">Patient info</p>
+                                <div className="grid gap-1.5">
+                                    <div className="flex flex-wrap gap-x-2">
+                                        <span className="text-slate-500 shrink-0">Email</span>
+                                        <span className="text-slate-900 break-all">{patient.email || "—"}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-2">
+                                        <span className="text-slate-500 shrink-0">Address</span>
+                                        <span className="text-slate-900 break-words">{patient.address || "—"}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-2">
+                                        <span className="text-slate-500 shrink-0">Gender</span>
+                                        <span className="text-slate-900">{patient.gender || "—"}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-2">
+                                        <span className="text-slate-500 shrink-0">Birthday</span>
+                                        <span className="text-slate-900">
+                                            {patient.date_of_birth ? format(new Date(patient.date_of_birth), "PPP") : "—"}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-2">
+                                        <span className="text-slate-500 shrink-0">Age</span>
+                                        <span className="text-slate-900">{patientAge != null ? `${patientAge} years` : "—"}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-x-2">
+                                        <span className="text-slate-500 shrink-0">Date added</span>
+                                        <span className="text-slate-900">
+                                            {patient.created_at ? format(new Date(patient.created_at), "PPP") : "—"}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1474,6 +1611,34 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     placeholder="123 Main St, City, State"
                                 />
                             </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="gender">Gender</Label>
+                                <Select
+                                    value={contactData.gender || "none"}
+                                    onValueChange={(v) => setContactData({ ...contactData, gender: v === "none" ? "" : v })}
+                                >
+                                    <SelectTrigger id="gender" className="w-full">
+                                        <SelectValue placeholder="Select gender" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">—</SelectItem>
+                                        <SelectItem value="Male">Male</SelectItem>
+                                        <SelectItem value="Female">Female</SelectItem>
+                                        <SelectItem value="Other">Other</SelectItem>
+                                        <SelectItem value="Prefer not to say">Prefer not to say</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="date_of_birth">Birthday</Label>
+                                <Input
+                                    id="date_of_birth"
+                                    type="date"
+                                    value={contactData.date_of_birth}
+                                    onChange={e => setContactData({ ...contactData, date_of_birth: e.target.value })}
+                                />
+                                <p className="text-xs text-slate-500">Age is calculated from birthday and updates when you save.</p>
+                            </div>
                         </div>
                         <DialogFooter>
                             <Button type="submit" disabled={isSaving} className="bg-teal-600">
@@ -1486,12 +1651,15 @@ export default function PatientProfileClient({ patient, appointments, treatments
             </Dialog>
 
             {/* Medical Alerts Update Dialog */}
-            <Dialog open={isAlertsOpen} onOpenChange={setIsAlertsOpen}>
+            <Dialog open={isAlertsOpen} onOpenChange={(open) => {
+                if (open) setAlertsData({ allergies: patient.allergies || "", medical_conditions: patient.medical_conditions || "", medications: patient.medications || "" })
+                setIsAlertsOpen(open)
+            }}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto w-[calc(100vw-2rem)] max-w-md">
                     <form onSubmit={handleUpdateAlerts}>
                         <DialogHeader>
                             <DialogTitle>Update Medical Alerts</DialogTitle>
-                            <DialogDescription>Manage allergies and medical conditions for {patient.first_name}.</DialogDescription>
+                            <DialogDescription>Manage allergies, medications, and medical conditions for {patient.first_name}.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                             <div className="space-y-2">
@@ -1501,6 +1669,15 @@ export default function PatientProfileClient({ patient, appointments, treatments
                                     value={alertsData.allergies}
                                     onChange={e => setAlertsData({ ...alertsData, allergies: e.target.value })}
                                     placeholder="List known allergies..."
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="medications">Medications</Label>
+                                <Textarea
+                                    id="medications"
+                                    value={alertsData.medications}
+                                    onChange={e => setAlertsData({ ...alertsData, medications: e.target.value })}
+                                    placeholder="Current medications (e.g. Aspirin 81mg, Lisinopril 10mg)..."
                                 />
                             </div>
                             <div className="space-y-2">

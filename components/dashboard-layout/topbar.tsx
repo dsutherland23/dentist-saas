@@ -135,60 +135,60 @@ export function Topbar() {
 
     return (
         <div className="sticky top-0 z-40 backdrop-blur-xl bg-white/80 border-b border-slate-200/50 shadow-sm">
-            <div className="flex h-14 sm:h-16 items-center gap-2 sm:gap-4 px-3 sm:px-4 md:px-6 min-w-0 w-full overflow-hidden">
-                {/* Sidebar Toggle (Desktop) */}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggle}
-                    className="hidden md:flex text-slate-500 hover:text-teal-600 hover:bg-teal-50 transition-all rounded-lg"
-                >
-                    {isCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
-                </Button>
-
-                {/* Mobile Menu: hamburger visible on small screens, sheet slides in from left */}
-                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                    <SheetTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="md:hidden shrink-0 h-10 w-10 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-                            aria-label="Open menu"
-                        >
-                            <Menu className="h-6 w-6" />
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent
-                        side="left"
-                        className="p-0 w-[min(288px,85vw)] max-w-[288px] bg-[#0F172A] border-r border-slate-800 rounded-none [&>button]:text-white [&>button]:hover:bg-white/10 [&>button]:right-3 [&>button]:top-3"
+            <div className="flex h-14 sm:h-16 items-center gap-2 sm:gap-3 md:gap-4 px-3 sm:px-4 md:px-6 min-w-0 w-full overflow-hidden">
+                {/* Left: sidebar toggle + search — flex-1 but constrained so center never overlaps */}
+                <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={toggle}
+                        className="hidden md:flex text-slate-500 hover:text-teal-600 hover:bg-teal-50 transition-all rounded-lg shrink-0"
                     >
-                        <SheetHeader className="sr-only">
-                            <SheetTitle>Navigation Menu</SheetTitle>
-                            <SheetDescription>
-                                Access clinic dashboard, patients, calendar, and more.
-                            </SheetDescription>
-                        </SheetHeader>
-                        <div className="h-full w-full overflow-y-auto flex flex-col min-h-0">
-                            <Sidebar className="w-full flex-1 min-h-0" forceExpanded onCloseMenu={() => setMobileMenuOpen(false)} />
+                        {isCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+                    </Button>
+
+                    <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                        <SheetTrigger asChild>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="md:hidden shrink-0 h-10 w-10 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                                aria-label="Open menu"
+                            >
+                                <Menu className="h-6 w-6" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent
+                            side="left"
+                            className="p-0 w-[min(288px,85vw)] max-w-[288px] bg-[#0F172A] border-r border-slate-800 rounded-none [&>button]:text-white [&>button]:hover:bg-white/10 [&>button]:right-3 [&>button]:top-3"
+                        >
+                            <SheetHeader className="sr-only">
+                                <SheetTitle>Navigation Menu</SheetTitle>
+                                <SheetDescription>
+                                    Access clinic dashboard, patients, calendar, and more.
+                                </SheetDescription>
+                            </SheetHeader>
+                            <div className="h-full w-full overflow-y-auto flex flex-col min-h-0">
+                                <Sidebar className="w-full flex-1 min-h-0" forceExpanded onCloseMenu={() => setMobileMenuOpen(false)} />
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+
+                    <form className="min-w-0 w-full max-w-[140px] sm:max-w-[200px] md:max-w-[240px] lg:max-w-xs xl:max-w-sm" onSubmit={handleSearchSubmit}>
+                        <div className="relative min-w-0 w-full">
+                            <Search className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none shrink-0" />
+                            <Input
+                                name="search"
+                                placeholder="Search..."
+                                value={searchValue}
+                                onChange={handleSearchChange}
+                                className="w-full min-w-0 pl-8 sm:pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-9 sm:h-10 text-sm"
+                            />
                         </div>
-                    </SheetContent>
-                </Sheet>
+                    </form>
+                </div>
 
-                {/* Search Bar: shrink on small screens */}
-                <form className="flex-1 min-w-0 max-w-[180px] sm:max-w-md md:max-w-xl w-full" onSubmit={handleSearchSubmit}>
-                    <div className="relative min-w-0">
-                        <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none shrink-0" />
-                        <Input
-                            name="search"
-                            placeholder="Search..."
-                            value={searchValue}
-                            onChange={handleSearchChange}
-                            className="w-full min-w-0 pl-8 sm:pl-10 bg-white/50 backdrop-blur-sm border-slate-200/50 focus:border-teal-300 focus:ring-2 focus:ring-teal-500/20 transition-all h-9 sm:h-10 text-sm"
-                        />
-                    </div>
-                </form>
-
-                {/* Right Section */}
+                {/* Center: Quick Add, Notifications, User — in flow so no overlap; equal flex spacers keep it centered */}
                 <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                     {/* Quick Actions */}
                     <DropdownMenu>
@@ -282,6 +282,9 @@ export function Topbar() {
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
+
+                {/* Right spacer: equal flex to left so center stays visually centered at all widths */}
+                <div className="flex-1 min-w-0" aria-hidden />
             </div>
         </div>
     )

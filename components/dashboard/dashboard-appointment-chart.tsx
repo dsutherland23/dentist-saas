@@ -17,19 +17,26 @@ interface DashboardAppointmentChartProps {
     loading?: boolean
     /** Day labels for last 7 days (e.g. from getLast7DaysChartLabels()); last is often "Today" */
     labels?: string[]
+    /** When true, render only the chart (no card wrapper or title); for use inside combined chart card */
+    embedded?: boolean
 }
 
 const DEFAULT_DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
-export function DashboardAppointmentChart({ trend, loading, labels: labelsProp }: DashboardAppointmentChartProps) {
-    if (loading || !trend?.length) {
+export function DashboardAppointmentChart({ trend, loading, labels: labelsProp, embedded }: DashboardAppointmentChartProps) {
+    const emptyOrLoading = loading || !trend?.length
+    if (emptyOrLoading) {
+        const inner = loading ? (
+            <div className="h-8 w-8 rounded-full border-2 border-slate-200 border-t-teal-500 animate-spin" />
+        ) : (
+            <p className="text-sm text-slate-500">No appointment data</p>
+        )
+        if (embedded) {
+            return <div className="h-[200px] flex items-center justify-center min-w-0">{inner}</div>
+        }
         return (
             <div className="dashboard-chart-card h-[240px] flex items-center justify-center">
-                {loading ? (
-                    <div className="h-8 w-8 rounded-full border-2 border-slate-200 border-t-teal-500 animate-spin" />
-                ) : (
-                    <p className="text-sm text-slate-500">No appointment data</p>
-                )}
+                {inner}
             </div>
         )
     }
@@ -40,10 +47,8 @@ export function DashboardAppointmentChart({ trend, loading, labels: labelsProp }
         count: value,
     }))
 
-    return (
-        <div className="dashboard-chart-card p-6">
-            <h3 className="text-sm font-semibold text-slate-600 mb-4">Appointment volume (last 7 days)</h3>
-            <div className="h-[200px] min-h-[200px] w-full min-w-0" style={{ minHeight: 200 }}>
+    const chartDiv = (
+        <div className="h-[200px] min-h-[200px] w-full min-w-0" style={{ minHeight: 200 }}>
                 <ResponsiveContainer width="100%" height="100%" minHeight={200}>
                     <LineChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -79,6 +84,12 @@ export function DashboardAppointmentChart({ trend, loading, labels: labelsProp }
                     </LineChart>
                 </ResponsiveContainer>
             </div>
+    )
+    if (embedded) return chartDiv
+    return (
+        <div className="dashboard-chart-card p-6">
+            <h3 className="text-sm font-semibold text-slate-600 mb-4">Appointment volume (last 7 days)</h3>
+            {chartDiv}
         </div>
     )
 }

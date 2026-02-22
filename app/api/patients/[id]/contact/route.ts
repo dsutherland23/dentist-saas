@@ -8,8 +8,14 @@ export async function PATCH(
 ) {
     try {
         const { id } = await params
-        const body = await req.json()
-        const { phone, email, address } = body
+        const body = await req.json().catch(() => ({}))
+        const { phone, email, address, gender, date_of_birth } = body as {
+            phone?: string
+            email?: string
+            address?: string
+            gender?: string | null
+            date_of_birth?: string | null
+        }
 
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
@@ -18,13 +24,32 @@ export async function PATCH(
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
+        const updates: { phone?: string; email?: string; address?: string; gender?: string | null; date_of_birth?: string | null } = {}
+        if (typeof phone === "string") updates.phone = phone
+        if (typeof email === "string") updates.email = email
+        if (typeof address === "string") updates.address = address
+        if (gender !== undefined) {
+            updates.gender = gender === null || gender === "" ? null : String(gender).trim().slice(0, 50)
+        }
+        if (date_of_birth !== undefined) {
+            if (date_of_birth === null || date_of_birth === "") {
+                updates.date_of_birth = null
+            } else if (typeof date_of_birth === "string") {
+                const d = new Date(date_of_birth)
+                if (Number.isNaN(d.getTime())) {
+                    return NextResponse.json({ error: "Invalid date of birth" }, { status: 400 })
+                }
+                updates.date_of_birth = date_of_birth.trim()
+            }
+        }
+
+        if (Object.keys(updates).length === 0) {
+            return NextResponse.json({ error: "No fields to update" }, { status: 400 })
+        }
+
         const { error } = await supabase
             .from("patients")
-            .update({
-                phone,
-                email,
-                address
-            })
+            .update(updates)
             .eq("id", id)
 
         if (error) {

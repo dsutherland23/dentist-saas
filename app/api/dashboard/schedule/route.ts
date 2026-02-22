@@ -39,7 +39,16 @@ export async function GET() {
                 status,
                 checked_in_at,
                 patient_id,
-                patients (first_name, last_name)
+                notes,
+                patients (
+                    first_name,
+                    last_name,
+                    email,
+                    address,
+                    gender,
+                    date_of_birth,
+                    created_at
+                )
             `)
             .eq("clinic_id", clinicId)
             .gte("start_time", todayStart.toISOString())
@@ -57,7 +66,16 @@ export async function GET() {
                 status,
                 checked_in_at,
                 patient_id,
-                patients (first_name, last_name)
+                notes,
+                patients (
+                    first_name,
+                    last_name,
+                    email,
+                    address,
+                    gender,
+                    date_of_birth,
+                    created_at
+                )
             `)
             .eq("clinic_id", clinicId)
             .in("status", ["checked_in", "in_treatment"])
@@ -132,14 +150,34 @@ export async function GET() {
             const isWalkIn = walkInsOnly.some((w: any) => w.id === appt.id)
             const timeLabel = isWalkIn ? `Walk-in · ${displayHours}:${displayMinutes} ${ampm}` : `${displayHours}:${displayMinutes} ${ampm}`
 
+            const p = appt.patients
+            const patientName = p ? `${p.first_name} ${p.last_name}` : "Unknown Patient"
+            let age: string | null = null
+            if (p?.date_of_birth) {
+                const dob = new Date(p.date_of_birth)
+                const today = new Date()
+                let a = today.getFullYear() - dob.getFullYear()
+                const m = today.getMonth() - dob.getMonth()
+                if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) a--
+                age = a >= 0 ? `${a} yr` : "—"
+            }
             return {
                 id: appt.id,
                 patient_id: appt.patient_id,
                 time: timeLabel,
-                patient: appt.patients ? `${appt.patients.first_name} ${appt.patients.last_name}` : "Unknown Patient",
+                patient: patientName,
                 treatment: appt.treatment_type || "General Appointment",
                 status: appt.status || "scheduled",
-                type: 'appointment'
+                type: 'appointment',
+                patient_details: p ? {
+                    email: p.email || null,
+                    address: p.address || null,
+                    gender: p.gender || null,
+                    date_of_birth: p.date_of_birth || null,
+                    age,
+                    created_at: p.created_at || null,
+                    note: appt.notes || null,
+                } : null,
             }
         })
 

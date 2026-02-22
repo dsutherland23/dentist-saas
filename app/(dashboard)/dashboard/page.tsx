@@ -8,14 +8,10 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { AppointmentReminderModal } from "@/components/dashboard/appointment-reminder-modal"
 import { DashboardKpiStrip } from "@/components/dashboard/dashboard-kpi-strip"
-import { DashboardRevenueChart } from "@/components/dashboard/dashboard-revenue-chart"
-import { DashboardAppointmentChart } from "@/components/dashboard/dashboard-appointment-chart"
+import { DashboardTrendChart } from "@/components/dashboard/dashboard-trend-chart"
 import { DashboardClaimsDonut } from "@/components/dashboard/dashboard-claims-donut"
-import { DashboardQuickStats } from "@/components/dashboard/dashboard-quick-stats"
-import { DashboardOverviewAppointments } from "@/components/dashboard/dashboard-overview-appointments"
-import { DashboardTreatmentPlanPipeline } from "@/components/dashboard/dashboard-treatment-plan-pipeline"
+import { DashboardTodaySection } from "@/components/dashboard/dashboard-today-section"
 import { DashboardAlertsPanel } from "@/components/dashboard/dashboard-alerts-panel"
-import { DashboardUpcomingReminders } from "@/components/dashboard/dashboard-upcoming-reminders"
 import { QuickActionsFab } from "@/components/dashboard/quick-actions-fab"
 import { useDashboardData, getLast7DaysChartLabels } from "@/lib/use-dashboard-data"
 
@@ -104,7 +100,7 @@ export default function DashboardPage() {
                     </div>
                 )}
 
-                {/* KPI strip */}
+                {/* KPI strip (includes quick stats: AR total, completion rate, new patients) */}
                 <section className="mb-8">
                     <DashboardKpiStrip
                         loading={loading}
@@ -113,47 +109,32 @@ export default function DashboardPage() {
                             revenue: { total: stats.revenue.total, change: stats.revenue.change },
                             claims: { outstanding: stats.claims.outstanding, count: stats.claims.count },
                             patients: { total: stats.patients.total },
+                            arTotal: stats.arTotal,
+                            completionRate: stats.completionRate,
+                            newPatientsThisMonth: stats.patients.newThisMonth,
                         } : null}
                         pendingTreatmentPlansCount={pendingTreatmentPlansCount}
                     />
                 </section>
 
-                {/* Middle: two columns - charts left, donut + quick stats right */}
+                {/* Middle: unified trend chart (Revenue | Appointments) + donut */}
                 <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                    <div className="lg:col-span-2 space-y-6">
-                        <DashboardRevenueChart trend={stats?.revenue?.trend ?? []} loading={loading} labels={getLast7DaysChartLabels()} />
-                        <DashboardAppointmentChart trend={stats?.appointments?.trend ?? []} loading={loading} labels={getLast7DaysChartLabels()} />
-                    </div>
-                    <div className="space-y-6">
-                        <DashboardClaimsDonut summary={claimsSummary} loading={loading} />
-                        <DashboardQuickStats
+                    <div className="lg:col-span-2">
+                        <DashboardTrendChart
+                            revenueTrend={stats?.revenue?.trend ?? []}
+                            appointmentTrend={stats?.appointments?.trend ?? []}
                             loading={loading}
-                            stats={stats ? {
-                                arTotal: stats.arTotal,
-                                completionRate: stats.completionRate,
-                                patients: { newThisMonth: stats.patients.newThisMonth },
-                            } : null}
+                            labels={getLast7DaysChartLabels()}
                         />
+                    </div>
+                    <div>
+                        <DashboardClaimsDonut summary={claimsSummary} loading={loading} />
                     </div>
                 </section>
 
-                {/* Lower: upcoming appointments, treatment plan pipeline, alerts */}
+                {/* Today: schedule, pipeline, reminders */}
                 <section className="space-y-8">
-                    <div>
-                        <h2 className="text-sm font-semibold text-slate-600 mb-4">Upcoming & pipeline</h2>
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-2">
-                                <DashboardOverviewAppointments refreshKey={refreshKey} />
-                            </div>
-                            <div>
-                                <DashboardTreatmentPlanPipeline refreshKey={refreshKey} />
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <h2 className="text-sm font-semibold text-slate-600 mb-4">Send reminders</h2>
-                        <DashboardUpcomingReminders refreshKey={refreshKey} />
-                    </div>
+                    <DashboardTodaySection refreshKey={refreshKey} />
                     <div>
                         <h2 className="text-sm font-semibold text-slate-600 mb-4">Alerts</h2>
                         <DashboardAlertsPanel refreshKey={refreshKey} />

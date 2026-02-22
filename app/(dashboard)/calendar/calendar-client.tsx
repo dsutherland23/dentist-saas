@@ -19,7 +19,7 @@ import {
     startOfDay,
     isBefore
 } from "date-fns"
-import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download, X, Stethoscope, User, MoreVertical } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, MapPin, Clock, Loader2, Activity, Ban, Unlock, Phone, Users, Calendar, CheckCircle, XCircle, Download, X, Stethoscope, User, MoreVertical, List } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -119,6 +119,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const isMobile = useIsMobile()
     const [allAppointmentsDialogOpen, setAllAppointmentsDialogOpen] = useState(!!initialOpenAll)
     const [currentDate, setCurrentDate] = useState(new Date())
+    const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
     const [view, setView] = useState<"day" | "week" | "month">("week")
     const [staffFilterId, setStaffFilterId] = useState<string | null>(null)
     const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
@@ -161,6 +162,14 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             .catch(() => { if (!cancelled) setPatientVerificationData(null) })
         return () => { cancelled = true }
     }, [selectedApptForDetail?.patient_id])
+
+    // Persist view mode: read from localStorage on mount
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem("calendar-view-mode")
+            if (stored === "list") setViewMode("list")
+        } catch { /* ignore */ }
+    }, [])
 
     // Default to Day view on mobile so the grid isn't cramped
     useEffect(() => {
@@ -343,9 +352,12 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         ? blockedSlots.filter(b => b.staff_id === staffFilterId)
         : blockedSlots
 
-    // Dynamic date calculations based on view
+    // Dynamic date calculations based on view (and list mode uses week range)
     let startDate: Date, endDate: Date
-    if (view === "day") {
+    if (viewMode === "list") {
+        startDate = startOfWeek(currentDate, { weekStartsOn: 1 })
+        endDate = endOfWeek(currentDate, { weekStartsOn: 1 })
+    } else if (view === "day") {
         startDate = startOfDay(currentDate)
         endDate = startOfDay(currentDate)
     } else if (view === "week") {
@@ -372,9 +384,12 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         return isSameDay(day, now) && hour < now.getHours()
     }
 
-    // Calculate statistics for current view period
+    // Calculate statistics for current view period (list mode uses week range)
     const viewAppointments = filteredAppointments.filter(appt => {
         const apptDate = appt.start
+        if (viewMode === "list") {
+            return apptDate >= startDate && apptDate <= endDate
+        }
         if (view === "day") {
             return isSameDay(apptDate, currentDate)
         } else if (view === "week") {
@@ -396,18 +411,20 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         return sum + differenceInMinutes(appt.end, appt.start) / 60
     }, 0)
     const uniqueRooms = new Set(viewAppointments.filter(a => a.room).map(a => a.room)).size || 1
-    const daysInPeriod = view === "day" ? 1 : view === "week" ? 7 : days.length
+    const daysInPeriod = viewMode === "list" ? 7 : view === "day" ? 1 : view === "week" ? 7 : days.length
     const availableHours = uniqueRooms * daysInPeriod * 8
     const chairUtilization = availableHours > 0 ? Math.round((totalAppointmentHours / availableHours) * 100) : 0
 
     const nextPeriod = () => {
-        if (view === "day") setCurrentDate(current => addDays(current, 1))
+        if (viewMode === "list") setCurrentDate(current => addDays(current, 7))
+        else if (view === "day") setCurrentDate(current => addDays(current, 1))
         else if (view === "week") setCurrentDate(current => addDays(current, 7))
         else setCurrentDate(current => addMonths(current, 1))
     }
 
     const prevPeriod = () => {
-        if (view === "day") setCurrentDate(current => addDays(current, -1))
+        if (viewMode === "list") setCurrentDate(current => addDays(current, -7))
+        else if (view === "day") setCurrentDate(current => addDays(current, -1))
         else if (view === "week") setCurrentDate(current => addDays(current, -7))
         else setCurrentDate(current => addMonths(current, -1))
     }
@@ -415,11 +432,14 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const today = () => {
         const now = new Date()
         setCurrentDate(now)
-        setView("day") // Switching to day view on "Today" click provides better immediate focus
+        if (viewMode === "calendar") setView("day")
     }
 
     // Helper to format the period label
     const getPeriodLabel = () => {
+        if (viewMode === "list") {
+            return `${format(startDate, "MMM d")} – ${format(endDate, "MMM d, yyyy")}`
+        }
         if (view === "day") return format(currentDate, "MMMM d, yyyy")
         if (view === "week") {
             const start = startDate
@@ -430,6 +450,13 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             return `${format(start, "MMM d")} – ${format(end, "MMM d, yyyy")}`
         }
         return format(currentDate, "MMMM yyyy")
+    }
+
+    const setViewModeAndPersist = (mode: "calendar" | "list") => {
+        setViewMode(mode)
+        try {
+            localStorage.setItem("calendar-view-mode", mode)
+        } catch { /* ignore */ }
     }
 
     const BlockedSlotCard = ({ blk, isMonthView = false }: { blk: any; isMonthView?: boolean }) => {
@@ -785,13 +812,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                         "font-bold text-slate-800 truncate",
                         isMobile ? "text-base" : "text-lg sm:text-xl md:text-2xl"
                     )}>
-                        {isMobile
-                                ? view === "day"
-                                    ? format(currentDate, "MMM d")
-                                    : view === "week"
-                                        ? format(startOfWeek(currentDate, { weekStartsOn: 1 }), "MMM d") + " – " + format(endOfWeek(currentDate, { weekStartsOn: 1 }), "MMM d")
-                                        : format(currentDate, "MMM yyyy")
-                                : getPeriodLabel()}
+                        {getPeriodLabel()}
                     </h2>
                 </div>
 
@@ -799,11 +820,38 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                     /* Mobile: compact toolbar + More menu */
                     <div className="flex flex-col gap-2 w-full sm:w-auto">
                         <div className="flex items-center gap-2">
+                            <div className="flex bg-slate-100 p-1 rounded-lg shrink-0" role="tablist" aria-label="Calendar or list view">
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={viewMode === "calendar"}
+                                    onClick={() => setViewModeAndPersist("calendar")}
+                                    className={cn(
+                                        "inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all",
+                                        viewMode === "calendar" ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                    )}
+                                >
+                                    <Calendar className="h-3.5 w-3.5" /> Calendar
+                                </button>
+                                <button
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={viewMode === "list"}
+                                    onClick={() => setViewModeAndPersist("list")}
+                                    className={cn(
+                                        "inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-md transition-all",
+                                        viewMode === "list" ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                    )}
+                                >
+                                    <List className="h-3.5 w-3.5" /> List
+                                </button>
+                            </div>
                             <div className="flex items-center rounded-md border bg-white shadow-sm overflow-hidden border-slate-200 shrink-0">
                                 <Button variant="ghost" size="icon" onClick={prevPeriod} className="rounded-none border-r border-slate-100 h-9 w-9 hover:bg-slate-50 hover:text-teal-600"><ChevronLeft className="h-4 w-4" /></Button>
                                 <Button variant="ghost" onClick={today} className="px-3 font-bold rounded-none border-r border-slate-100 h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600">Today</Button>
                                 <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-9 w-9 hover:bg-slate-50 hover:text-teal-600"><ChevronRight className="h-4 w-4" /></Button>
                             </div>
+                            {viewMode === "calendar" && (
                             <div className="flex bg-slate-100 p-1 rounded-lg shrink-0">
                                 {(["day", "week", "month"] as const).map((v) => (
                                     <button
@@ -818,6 +866,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                     </button>
                                 ))}
                             </div>
+                            )}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 border-slate-200">
@@ -868,6 +917,32 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                 ) : (
                     /* Desktop: full toolbar */
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                        <div className="flex bg-slate-100 p-1 rounded-lg" role="tablist" aria-label="Calendar or list view">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={viewMode === "calendar"}
+                                onClick={() => setViewModeAndPersist("calendar")}
+                                className={cn(
+                                    "inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all",
+                                    viewMode === "calendar" ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                )}
+                            >
+                                <Calendar className="h-3.5 w-3.5" /> Calendar
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={viewMode === "list"}
+                                onClick={() => setViewModeAndPersist("list")}
+                                className={cn(
+                                    "inline-flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-semibold rounded-md transition-all",
+                                    viewMode === "list" ? "bg-white shadow-sm text-teal-600" : "text-slate-500 hover:text-slate-900"
+                                )}
+                            >
+                                <List className="h-3.5 w-3.5" /> List
+                            </button>
+                        </div>
                         {currentUserId && (
                             <Button
                                 variant="outline"
@@ -888,6 +963,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                             <Button variant="ghost" onClick={today} className="px-2 sm:px-4 font-bold rounded-none border-r border-slate-100 h-8 sm:h-9 text-xs uppercase tracking-wider hover:bg-slate-50 hover:text-teal-600 transition-colors">Today</Button>
                             <Button variant="ghost" size="icon" onClick={nextPeriod} className="rounded-none h-8 w-8 sm:h-9 sm:w-9 hover:bg-slate-50 hover:text-teal-600 transition-colors"><ChevronRight className="h-4 w-4" /></Button>
                         </div>
+                        {viewMode === "calendar" && (
                         <div className="flex bg-slate-100 p-1 rounded-lg">
                             {(["day", "week", "month"] as const).map((v) => (
                                 <button
@@ -902,6 +978,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                 </button>
                             ))}
                         </div>
+                        )}
                         <Select value={staffFilterId ?? "all"} onValueChange={(v) => setStaffFilterId(v === "all" ? null : v)}>
                             <SelectTrigger className="w-[140px] sm:w-[160px] h-8 sm:h-9 text-xs border-slate-200 bg-white">
                                 <Users className="h-3.5 w-3.5 text-slate-400 mr-1.5 shrink-0" />
@@ -964,7 +1041,86 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
             {/* ── Calendar column ── */}
             <div className="flex-1 min-h-0 overflow-hidden flex flex-col min-w-0">
-                {view !== "month" ? (
+                {viewMode === "list" ? (
+                    /* List Calendar View: agenda by day for current week */
+                    <div className="flex-1 flex flex-col min-h-0 overflow-auto">
+                        {viewAppointments.length === 0 ? (
+                            <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+                                <Calendar className="h-12 w-12 text-slate-300" aria-hidden />
+                                <p className="text-sm font-medium text-slate-600">No appointments this week</p>
+                                <p className="text-xs text-slate-500">Use New Appointment to schedule.</p>
+                                <NewAppointmentDialog
+                                    patients={patients}
+                                    dentists={dentists}
+                                    trigger={
+                                        <Button size="sm" className="bg-teal-600 hover:bg-teal-700">
+                                            <Plus className="h-4 w-4 mr-1.5" /> New Appointment
+                                        </Button>
+                                    }
+                                    open={isNewAppointmentOpen}
+                                    onOpenChange={(o) => { setIsNewAppointmentOpen(o); if (!o) setNewAppointmentStart(undefined) }}
+                                    initialStartDate={newAppointmentStart}
+                                />
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-100">
+                                {days.map(day => {
+                                    const dayAppointments = viewAppointments
+                                        .filter(a => isSameDay(a.start, day))
+                                        .sort((a, b) => a.start.getTime() - b.start.getTime())
+                                    if (dayAppointments.length === 0) return null
+                                    return (
+                                        <div key={day.toISOString()}>
+                                            <div className={cn(
+                                                "sticky top-0 z-10 px-3 py-2 text-xs font-semibold uppercase tracking-wider shrink-0",
+                                                isSameDay(day, new Date()) ? "bg-teal-50 text-teal-700" : "bg-slate-50 text-slate-600"
+                                            )}>
+                                                {format(day, "EEE, MMM d")}
+                                            </div>
+                                            <ul className="divide-y divide-slate-50" role="list">
+                                                {dayAppointments.map(appt => {
+                                                    const statusLabel = (appt.status || "scheduled").replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase())
+                                                    const openDetail = () => {
+                                                        setSelectedApptForDetail(appt)
+                                                        setOpenAppointmentIdForVisit(appt.id)
+                                                        fetchVisitForAppointment(appt.id)
+                                                    }
+                                                    return (
+                                                        <li
+                                                            key={appt.id}
+                                                            data-appointment-id={appt.id}
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            onClick={openDetail}
+                                                            onKeyDown={(e) => e.key === "Enter" && openDetail()}
+                                                            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors"
+                                                        >
+                                                            <span className="text-xs font-semibold text-slate-500 tabular-nums shrink-0 w-20">
+                                                                {format(appt.start, "h:mm a")} – {format(appt.end, "h:mm a")}
+                                                            </span>
+                                                            <span className="text-sm font-medium text-slate-900 truncate min-w-0">
+                                                                {appt.patientName}
+                                                            </span>
+                                                            <span className="text-xs text-slate-600 truncate hidden sm:inline">
+                                                                {appt.treatment_type}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500 truncate hidden md:inline">
+                                                                {appt.dentistName}
+                                                            </span>
+                                                            <span className="ml-auto inline-flex items-center rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-700 capitalize shrink-0">
+                                                                {statusLabel}
+                                                            </span>
+                                                        </li>
+                                                    )
+                                                })}
+                                            </ul>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                ) : view !== "month" ? (
                     <>
                         <div className="flex-1 flex flex-col min-h-0 overflow-auto">
                             <div className={cn(

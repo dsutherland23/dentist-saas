@@ -257,8 +257,10 @@ export function DentalChartV2Container({ patientId }: DentalChartV2ContainerProp
 
         <TabsContent value="notes">
           <ClinicalNotesPanel
+            patientId={patientId}
             chartId={chart.chart_id}
             notes={chart.clinical_notes || []}
+            onNotesChange={() => loadChart()}
           />
         </TabsContent>
 

@@ -1,11 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { Button } from "@/components/ui/button"
-import { Calendar, ChevronRight, Loader2 } from "lucide-react"
+import { Calendar, ChevronRight, Loader2, Mail, MapPin, User, Cake, CalendarPlus, FileText } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { fetchWithAuth } from "@/lib/fetch-client"
+import { format } from "date-fns"
+
+interface PatientDetails {
+    email: string | null
+    address: string | null
+    gender: string | null
+    date_of_birth: string | null
+    age: string | null
+    created_at: string | null
+    note: string | null
+}
 
 interface ScheduleItem {
     id: string
@@ -14,6 +26,8 @@ interface ScheduleItem {
     treatment: string
     status: string
     type: string
+    patient_id?: string
+    patient_details?: PatientDetails | null
 }
 
 export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?: number }) {
@@ -38,6 +52,33 @@ export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?:
         }
         fetchSchedule()
     }, [refreshKey])
+
+    const [hoveredItem, setHoveredItem] = useState<{ item: ScheduleItem; left: number; top: number } | null>(null)
+    const hoverOpenRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const hoverCloseRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const handlePatientMouseEnter = (item: ScheduleItem, e: React.MouseEvent) => {
+        if (hoverCloseRef.current) {
+            clearTimeout(hoverCloseRef.current)
+            hoverCloseRef.current = null
+        }
+        const el = e.currentTarget as HTMLElement
+        const rect = el.getBoundingClientRect()
+        hoverOpenRef.current = setTimeout(() => {
+            setHoveredItem({
+                item,
+                left: rect.left,
+                top: rect.bottom + 4,
+            })
+        }, 350)
+    }
+    const handlePatientMouseLeave = () => {
+        if (hoverOpenRef.current) {
+            clearTimeout(hoverOpenRef.current)
+            hoverOpenRef.current = null
+        }
+        hoverCloseRef.current = setTimeout(() => setHoveredItem(null), 180)
+    }
 
     const getStatusBadgeClass = (status: string) => {
         switch (status) {
@@ -152,13 +193,19 @@ export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?:
                                                 </span>
                                             </td>
                                             <td className="py-3 px-2">
-                                                <button
-                                                    type="button"
-                                                    className="text-sm font-medium text-slate-900 hover:text-teal-600 text-left truncate max-w-[120px] block"
-                                                    onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
+                                                <div
+                                                    className="relative inline-block max-w-[120px]"
+                                                    onMouseEnter={(e) => handlePatientMouseEnter(item, e)}
+                                                    onMouseLeave={handlePatientMouseLeave}
                                                 >
-                                                    {item.patient}
-                                                </button>
+                                                    <button
+                                                        type="button"
+                                                        className="text-sm font-medium text-slate-900 hover:text-teal-600 text-left truncate max-w-[120px] block w-full"
+                                                        onClick={() => router.push(`/calendar?appointmentId=${item.id}`)}
+                                                    >
+                                                        {item.patient}
+                                                    </button>
+                                                </div>
                                             </td>
                                             <td className="py-3 px-2 text-sm text-slate-600 truncate max-w-[140px]">
                                                 {item.treatment}
@@ -178,6 +225,79 @@ export function DashboardOverviewAppointments({ refreshKey = 0 }: { refreshKey?:
                     </>
                 )}
             </div>
+
+            {/* Patient info card — rendered in portal so it surfaces above the panel */}
+            {typeof document !== "undefined" &&
+                hoveredItem?.item.patient_details &&
+                createPortal(
+                    <div
+                        className="fixed z-[9999] w-[320px] rounded-lg border border-slate-200 bg-white p-4 shadow-xl ring-1 ring-slate-900/10"
+                        style={{
+                            left: Math.min(hoveredItem.left, typeof window !== "undefined" ? window.innerWidth - 336 : hoveredItem.left),
+                            top: hoveredItem.top,
+                        }}
+                        onMouseEnter={() => {
+                            if (hoverCloseRef.current) {
+                                clearTimeout(hoverCloseRef.current)
+                                hoverCloseRef.current = null
+                            }
+                        }}
+                        onMouseLeave={handlePatientMouseLeave}
+                    >
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Patient info</p>
+                        <dl className="space-y-2.5 text-sm">
+                            <div className="flex gap-2.5">
+                                <Mail className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                                <div className="min-w-0">
+                                    <dt className="text-slate-500">Email</dt>
+                                    <dd className="font-medium text-slate-900 truncate">{hoveredItem.item.patient_details.email || "—"}</dd>
+                                </div>
+                            </div>
+                            <div className="flex gap-2.5">
+                                <MapPin className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                                <div className="min-w-0">
+                                    <dt className="text-slate-500">Address</dt>
+                                    <dd className="font-medium text-slate-900 line-clamp-2">{hoveredItem.item.patient_details.address || "—"}</dd>
+                                </div>
+                            </div>
+                            <div className="flex gap-2.5">
+                                <User className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                                <div className="min-w-0">
+                                    <dt className="text-slate-500">Gender</dt>
+                                    <dd className="font-medium text-slate-900">{hoveredItem.item.patient_details.gender || "—"}</dd>
+                                </div>
+                            </div>
+                            <div className="flex gap-2.5">
+                                <Cake className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                                <div className="min-w-0">
+                                    <dt className="text-slate-500">Birthday / Age</dt>
+                                    <dd className="font-medium text-slate-900">
+                                        {hoveredItem.item.patient_details.date_of_birth
+                                            ? `${format(new Date(hoveredItem.item.patient_details.date_of_birth), "MMM d, yyyy")}${hoveredItem.item.patient_details.age ? ` · ${hoveredItem.item.patient_details.age}` : ""}`
+                                            : "—"}
+                                    </dd>
+                                </div>
+                            </div>
+                            <div className="flex gap-2.5">
+                                <CalendarPlus className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                                <div className="min-w-0">
+                                    <dt className="text-slate-500">Date added</dt>
+                                    <dd className="font-medium text-slate-900">
+                                        {hoveredItem.item.patient_details.created_at ? format(new Date(hoveredItem.item.patient_details.created_at), "MMM d, yyyy") : "—"}
+                                    </dd>
+                                </div>
+                            </div>
+                            <div className="flex gap-2.5">
+                                <FileText className="h-4 w-4 shrink-0 text-slate-400 mt-0.5" />
+                                <div className="min-w-0">
+                                    <dt className="text-slate-500">Note</dt>
+                                    <dd className="font-medium text-slate-900 line-clamp-2">{hoveredItem.item.patient_details.note || "—"}</dd>
+                                </div>
+                            </div>
+                        </dl>
+                    </div>,
+                    document.body
+                )}
         </div>
     )
 }
