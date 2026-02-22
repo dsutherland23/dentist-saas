@@ -32,6 +32,7 @@ export const viewport = {
 
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "sonner";
+import { DevSuppressParamsWarning } from "@/components/dev-suppress-params-warning";
 
 export default function RootLayout({
   children,
@@ -43,6 +44,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${plusJakarta.variable} antialiased`}
       >
+        <DevSuppressParamsWarning />
         <AuthProvider>
           {children}
           <Toaster position="top-center" richColors />

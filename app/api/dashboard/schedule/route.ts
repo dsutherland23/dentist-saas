@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase-server"
 import { NextResponse } from "next/server"
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         const supabase = await createClient()
 
@@ -21,6 +21,8 @@ export async function GET() {
         }
 
         const clinicId = userData.clinic_id
+        const url = new URL(request.url)
+        const providerQueueOnly = url.searchParams.get("providerQueue") === "1"
 
         // Get today's details (use separate Date instances to avoid mutating)
         const now = new Date()
@@ -29,7 +31,7 @@ export async function GET() {
         const dayOfWeek = now.getDay() // 0-6
 
         // 1. Fetch today's appointments (scheduled for today)
-        const { data: todayAppointments, error: apptError } = await supabase
+        let todayQuery = supabase
             .from("appointments")
             .select(`
                 id,
@@ -39,6 +41,7 @@ export async function GET() {
                 status,
                 checked_in_at,
                 patient_id,
+                dentist_id,
                 notes,
                 patients (
                     first_name,
@@ -54,6 +57,10 @@ export async function GET() {
             .gte("start_time", todayStart.toISOString())
             .lte("start_time", todayEnd.toISOString())
             .order("start_time", { ascending: true })
+        if (providerQueueOnly) {
+            todayQuery = todayQuery.eq("dentist_id", user.id)
+        }
+        const { data: todayAppointments, error: apptError } = await todayQuery
 
         // 2. Fetch walk-ins: checked-in/in_treatment from OTHER days (patient showed up early/different day)
         const { data: activeWalkIns } = await supabase
@@ -66,6 +73,7 @@ export async function GET() {
                 status,
                 checked_in_at,
                 patient_id,
+                dentist_id,
                 notes,
                 patients (
                     first_name,
@@ -87,8 +95,25 @@ export async function GET() {
 
         // Merge and deduplicate (today's list may already include some checked_in)
         const todayIds = new Set((todayAppointments || []).map((a: any) => a.id))
-        const walkInsOnly = (walkInAppointments || []).filter((a: any) => !todayIds.has(a.id))
+        let walkInsOnly = (walkInAppointments || []).filter((a: any) => !todayIds.has(a.id))
+        if (providerQueueOnly) {
+            walkInsOnly = walkInsOnly.filter((a: any) => a.dentist_id === user.id)
+        }
         const appointments = [...walkInsOnly, ...(todayAppointments || [])]
+
+        // Fetch visit status for today's appointment ids (for queue / workflow v2)
+        const appointmentIds = appointments.map((a: any) => a.id)
+        const { data: visits } = appointmentIds.length > 0
+            ? await supabase
+                .from("visits")
+                .select("appointment_id, status")
+                .eq("clinic_id", clinicId)
+                .in("appointment_id", appointmentIds)
+            : { data: [] }
+        const visitByAppointmentId = (visits || []).reduce((acc: Record<string, string>, v: any) => {
+            acc[v.appointment_id] = v.status
+            return acc
+        }, {})
 
         // Fetch today's staff rota from staff_schedules
         const { data: staffRota, error: rotaError } = await supabase
@@ -168,6 +193,7 @@ export async function GET() {
                 patient: patientName,
                 treatment: appt.treatment_type || "General Appointment",
                 status: appt.status || "scheduled",
+                visit_status: visitByAppointmentId[appt.id] || null,
                 type: 'appointment',
                 patient_details: p ? {
                     email: p.email || null,

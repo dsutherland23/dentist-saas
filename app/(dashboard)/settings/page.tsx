@@ -32,7 +32,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User, Copy, Key, Pencil, MoreVertical } from "lucide-react"
+import { Building2, Bell, Shield, Palette, Globe, CreditCard, Users, Mail, Save, Loader2, LogOut, CheckCircle2, LifeBuoy, Info, Lock, MessageSquare, FileText, ChevronRight, Camera, User, Copy, Key, Pencil, MoreVertical, Workflow } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ProfilePictureUpload } from "@/components/patients/profile-picture-upload"
 import { Textarea } from "@/components/ui/textarea"
@@ -763,6 +763,24 @@ export default function SettingsPage() {
                         title="Update Your Profile Picture"
                         description="Upload a photo or take one with your camera"
                     />
+
+                    {/* Visit workflow builder (admin) */}
+                    {(profile?.role === "clinic_admin" || profile?.role === "super_admin") && (
+                        <Card className="shadow-sm overflow-hidden">
+                            <CardContent className="pt-6">
+                                <Link href="/settings/workflow" className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50/50 p-4 transition-colors hover:bg-slate-100/50 hover:border-teal-200">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <Workflow className="h-5 w-5 shrink-0 text-teal-600" />
+                                        <div className="min-w-0">
+                                            <p className="font-medium text-slate-900">Visit workflow</p>
+                                            <p className="text-sm text-slate-500">Customise patient visit stages and order (e.g. dentist + front desk only)</p>
+                                        </div>
+                                    </div>
+                                    <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" />
+                                </Link>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Practice Information */}
                     <Card className="shadow-sm overflow-hidden">

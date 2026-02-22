@@ -185,7 +185,7 @@ export function AllAppointmentsDialog({ trigger, currentUserId, dentists = [], c
                 const transitionRes = await fetch("/api/visits/transition", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ appointmentId, nextState: "ARRIVED" }),
+                    body: JSON.stringify({ appointmentId, nextState: "CHECKED_IN" }),
                 })
                 if (!transitionRes.ok) {
                     const errData = await transitionRes.json().catch(() => ({}))

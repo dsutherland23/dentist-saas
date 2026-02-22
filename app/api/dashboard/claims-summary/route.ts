@@ -30,20 +30,20 @@ export async function GET() {
 
         const [pendingRes, paidRes, rejectedRes] = await Promise.all([
             supabase
-                .from("insurance_claims")
+                .from("claims")
                 .select("id", { count: "exact", head: true })
                 .eq("clinic_id", clinicId)
                 .eq("status", "pending"),
             supabase
-                .from("insurance_claims")
+                .from("claims")
                 .select("id", { count: "exact", head: true })
                 .eq("clinic_id", clinicId)
                 .eq("status", "paid"),
             supabase
-                .from("insurance_claims")
+                .from("claims")
                 .select("id", { count: "exact", head: true })
                 .eq("clinic_id", clinicId)
-                .eq("status", "rejected"),
+                .eq("status", "denied"),
         ])
 
         const summary: ClaimsSummaryResponse = {

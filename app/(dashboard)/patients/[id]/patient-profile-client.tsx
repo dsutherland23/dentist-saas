@@ -68,6 +68,7 @@ import { getAppointmentStatusLabel } from "@/lib/appointment-status"
 import { NewInvoiceDialog } from "../../invoices/new-invoice-dialog"
 import { NewAppointmentDialog } from "../../calendar/new-appointment-dialog"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { ProfilePictureUpload } from "@/components/patients/profile-picture-upload"
 import { AIInsightsCards } from "@/components/patients/ai-insights-cards"
 import { MedicalImageGallery } from "@/components/patients/medical-image-gallery"
@@ -1206,14 +1207,19 @@ export default function PatientProfileClient({ patient, appointments, treatments
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between pb-3">
                             <CardTitle>Insurance Information</CardTitle>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-slate-400 hover:text-teal-600"
-                                onClick={() => setIsInsuranceOpen(true)}
-                            >
-                                <Pencil className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                                <Button variant="outline" size="sm" asChild>
+                                    <Link href={`/patients/${patient.id}/insurance`}>Manage insurance</Link>
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:text-teal-600"
+                                    onClick={() => setIsInsuranceOpen(true)}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="flex items-center gap-3">

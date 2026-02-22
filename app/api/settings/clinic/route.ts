@@ -92,6 +92,12 @@ export async function PUT(request: Request) {
         if (typeof body.use_fullscreen === "boolean") {
             updatePayload.use_fullscreen = body.use_fullscreen
         }
+        if (body.active_workflow_id !== undefined) {
+            updatePayload.active_workflow_id = body.active_workflow_id === null ? null : body.active_workflow_id
+        }
+        if (body.workflow_template === "default_clinic_workflow" || body.workflow_template === "full_clinic_workflow") {
+            updatePayload.workflow_template = body.workflow_template
+        }
         Object.keys(updatePayload).forEach((k) => {
             if (updatePayload[k] === undefined) delete updatePayload[k]
         })

@@ -62,6 +62,8 @@ import { useRouter } from "next/navigation"
 import { QueueReceiptDialog, type QueueReceiptData } from "@/components/calendar/queue-receipt-dialog"
 import { AllAppointmentsDialog } from "@/components/calendar/all-appointments-dialog"
 import { VisitProgressPanel, type VisitForPanel, type PatientVerificationData } from "@/components/calendar/visit-progress-panel"
+import { useOfflineVisitQueue } from "@/hooks/use-offline-visit-queue"
+import type { WorkflowTemplateConfig } from "@/lib/workflow-templates"
 
 interface Appointment {
     id: string
@@ -143,6 +145,8 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
     const [selectedApptForDetail, setSelectedApptForDetail] = useState<any | null>(null)
     const [openAppointmentIdForVisit, setOpenAppointmentIdForVisit] = useState<string | null>(null)
     const [visitData, setVisitData] = useState<VisitForPanel | null>(null)
+    const [workflowTemplate, setWorkflowTemplate] = useState<string | null>(null)
+    const [workflowConfig, setWorkflowConfig] = useState<WorkflowTemplateConfig | null>(null)
     const [visitLoading, setVisitLoading] = useState(false)
     const [patientVerificationData, setPatientVerificationData] = useState<PatientVerificationData | null>(null)
     const [patientSummaryHoverOpen, setPatientSummaryHoverOpen] = useState(false)
@@ -193,7 +197,11 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
             const res = await fetch(`/api/visits?appointmentId=${encodeURIComponent(appointmentId)}`)
             const json = await res.json().catch(() => ({}))
             if (openForVisitRef.current === appointmentId) {
-                if (res.ok && json.visit) setVisitData(json.visit)
+                if (res.ok) {
+                    if (json.visit) setVisitData(json.visit)
+                    setWorkflowTemplate(json.workflowTemplate ?? null)
+                    setWorkflowConfig((json.workflowConfig ?? null) as WorkflowTemplateConfig | null)
+                }
             }
         } catch {
             if (openForVisitRef.current === appointmentId) setVisitData(null)
@@ -202,9 +210,17 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         }
     }, [])
 
+    const { isOnline: isOnlineForQueue, pendingCount: offlinePendingCount, enqueueTransition } = useOfflineVisitQueue()
+
     const handleVisitTransition = useCallback(async (appointmentId: string, nextState: string, flags?: Record<string, boolean>) => {
         setVisitTransitioning(true)
         try {
+            if (!isOnlineForQueue) {
+                await enqueueTransition({ appointmentId, nextState, flags })
+                toast.success("Saved for sync when back online")
+                setVisitTransitioning(false)
+                return
+            }
             const res = await fetch("/api/visits/transition", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -221,7 +237,7 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
         } finally {
             setVisitTransitioning(false)
         }
-    }, [router])
+    }, [router, isOnlineForQueue, enqueueTransition])
 
     const closeContextMenu = useCallback(() => setContextMenuBlock(null), [])
 
@@ -781,14 +797,20 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
 
     return (
         <div className="flex flex-col min-h-[400px] h-[calc(100vh-8rem)] sm:h-[calc(100vh-100px)] bg-slate-50 p-3 sm:p-4 md:p-6 max-w-full w-full min-w-0 overflow-hidden">
+            {offlinePendingCount > 0 && (
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Pending sync ({offlinePendingCount}) — will sync when back online.
+                </div>
+            )}
             <CheckoutPaymentModal
                 open={!!checkoutAppt}
                 onOpenChange={(o) => !o && setCheckoutAppt(null)}
                 appointment={checkoutAppt ?? { id: "", patientName: "", treatment_type: "", patient_id: "" }}
                 onConfirmPaid={async () => {
                     if (checkoutAppt) {
+                        const apptId = checkoutAppt.id
                         setCheckoutAppt(null)
-                        await handleStatusChange(checkoutAppt.id, "completed")
+                        await handleVisitTransition(apptId, "PAYMENT_COMPLETED")
                         router.refresh()
                     }
                 }}
@@ -1485,12 +1507,14 @@ export default function CalendarClient({ initialAppointments, initialBlockedSlot
                                                     patientId={appt.patient_id}
                                                     patientVerificationData={patientVerificationData}
                                                     requireConsentInVisitFlow={clinic?.require_consent_in_visit_flow ?? false}
+                                                    workflowTemplate={workflowTemplate}
+                                                    workflowConfig={workflowConfig}
                                                 />
                                             ) : appt.status !== "completed" && appt.status !== "cancelled" ? (
                                                 <Button
                                                     className="w-full h-7 text-[11px] bg-teal-600 hover:bg-teal-700"
                                                     disabled={visitTransitioning}
-                                                    onClick={() => handleVisitTransition(appt.id, "ARRIVED")}
+                                                    onClick={() => handleVisitTransition(appt.id, "CHECKED_IN")}
                                                 >
                                                     {visitTransitioning ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
                                                     Check in

@@ -40,6 +40,7 @@ export default function InsuranceClaimsPage() {
     const [claims, setClaims] = useState<any[]>([])
     const [patients, setPatients] = useState<any[]>([])
     const [invoices, setInvoices] = useState<any[]>([])
+    const [patientPolicies, setPatientPolicies] = useState<any[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
     const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false)
@@ -49,9 +50,10 @@ export default function InsuranceClaimsPage() {
     const [newClaim, setNewClaim] = useState({
         patient_id: "",
         invoice_id: "none",
-        insurance_provider: "",
-        policy_number: "",
-        amount_claimed: 0
+        policy_id: "",
+        total_amount: 0,
+        insurance_estimate: "",
+        patient_responsibility: ""
     })
 
     const fetchClaims = async () => {
@@ -92,24 +94,55 @@ export default function InsuranceClaimsPage() {
         }
     }
 
+    const fetchPoliciesForPatient = async (patientId: string) => {
+        if (!patientId) {
+            setPatientPolicies([])
+            return
+        }
+        try {
+            const res = await fetch(`/api/patients/${patientId}/policies`)
+            if (res.ok) {
+                const data = await res.json()
+                setPatientPolicies(data)
+            } else {
+                setPatientPolicies([])
+            }
+        } catch {
+            setPatientPolicies([])
+        }
+    }
+
     useEffect(() => {
         fetchClaims()
         fetchPatients()
         fetchInvoices()
     }, [])
 
+    useEffect(() => {
+        fetchPoliciesForPatient(newClaim.patient_id)
+    }, [newClaim.patient_id])
+
     const handleCreateClaim = async () => {
-        if (!newClaim.patient_id || !newClaim.insurance_provider || newClaim.amount_claimed <= 0) {
-            toast.error("Please fill in all required fields")
+        if (!newClaim.patient_id || newClaim.total_amount <= 0) {
+            toast.error("Please select a patient and enter amount claimed")
             return
         }
 
         setIsSubmitting(true)
         try {
+            const payload: Record<string, unknown> = {
+                patient_id: newClaim.patient_id,
+                invoice_id: newClaim.invoice_id === "none" ? null : newClaim.invoice_id,
+                total_amount: newClaim.total_amount,
+            }
+            if (newClaim.policy_id) payload.policy_id = newClaim.policy_id
+            if (newClaim.insurance_estimate !== "") payload.insurance_estimate = parseFloat(newClaim.insurance_estimate)
+            if (newClaim.patient_responsibility !== "") payload.patient_responsibility = parseFloat(newClaim.patient_responsibility)
+
             const res = await fetch('/api/insurance-claims', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newClaim)
+                body: JSON.stringify(payload)
             })
 
             if (res.ok) {
@@ -118,9 +151,10 @@ export default function InsuranceClaimsPage() {
                 setNewClaim({
                     patient_id: "",
                     invoice_id: "none",
-                    insurance_provider: "",
-                    policy_number: "",
-                    amount_claimed: 0
+                    policy_id: "",
+                    total_amount: 0,
+                    insurance_estimate: "",
+                    patient_responsibility: ""
                 })
                 fetchClaims()
             } else {
@@ -174,17 +208,20 @@ export default function InsuranceClaimsPage() {
 
     const filteredClaims = claims.filter(claim => {
         const patientName = `${claim.patient?.first_name} ${claim.patient?.last_name}`.toLowerCase()
+        const providerName = (claim.policy as any)?.provider?.name ?? ""
         return patientName.includes(searchQuery.toLowerCase()) ||
             claim.claim_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            claim.insurance_provider.toLowerCase().includes(searchQuery.toLowerCase())
+            providerName.toLowerCase().includes(searchQuery.toLowerCase())
     })
 
     const getStatusVariant = (status: string) => {
-        switch (status.toLowerCase()) {
+        switch (status?.toLowerCase()) {
             case 'paid': return 'bg-emerald-100 text-emerald-700 border-emerald-200'
-            case 'approved': return 'bg-blue-100 text-blue-700 border-blue-200'
-            case 'rejected': return 'bg-rose-100 text-rose-700 border-rose-200'
+            case 'submitted': return 'bg-blue-100 text-blue-700 border-blue-200'
+            case 'denied': return 'bg-rose-100 text-rose-700 border-rose-200'
             case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200'
+            case 'resubmitted': return 'bg-violet-100 text-violet-700 border-violet-200'
+            case 'partially_paid': return 'bg-sky-100 text-sky-700 border-sky-200'
             default: return 'bg-slate-100 text-slate-700 border-slate-200'
         }
     }
@@ -240,11 +277,11 @@ export default function InsuranceClaimsPage() {
                                 <Select
                                     value={newClaim.invoice_id}
                                     onValueChange={(v) => {
-                                        const inv = invoices.find(i => i.id === v)
+                                        const inv = invoices.find((i: any) => i.id === v)
                                         setNewClaim(prev => ({
                                             ...prev,
                                             invoice_id: v,
-                                            amount_claimed: inv ? Number(inv.total_amount) : prev.amount_claimed
+                                            total_amount: inv ? Number(inv.total_amount) : prev.total_amount
                                         }))
                                     }}
                                 >
@@ -253,35 +290,64 @@ export default function InsuranceClaimsPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="none">No related invoice</SelectItem>
-                                        {invoices.filter(i => i.patient_id === newClaim.patient_id).map(i => (
+                                        {invoices.filter((i: any) => i.patient_id === newClaim.patient_id).map((i: any) => (
                                             <SelectItem key={i.id} value={i.id}>{i.invoice_number} (${i.total_amount})</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="grid gap-2">
-                                <Label>Insurance Provider</Label>
-                                <Input
-                                    placeholder="e.g. Delta Dental, MetLife"
-                                    value={newClaim.insurance_provider}
-                                    onChange={(e) => setNewClaim(prev => ({ ...prev, insurance_provider: e.target.value }))}
-                                />
+                                <Label>Insurance Policy (Optional)</Label>
+                                <Select
+                                    value={newClaim.policy_id || "none"}
+                                    onValueChange={(v) => setNewClaim(prev => ({ ...prev, policy_id: v === "none" ? "" : v }))}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select policy..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="none">No policy linked</SelectItem>
+                                        {patientPolicies.map((p: any) => (
+                                            <SelectItem key={p.id} value={p.id}>
+                                                {p.provider?.name ?? "Provider"} — {p.member_id || p.group_number || p.id.slice(0, 8)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="grid gap-2">
-                                <Label>Policy Number</Label>
-                                <Input
-                                    placeholder="Policy/Member ID"
-                                    value={newClaim.policy_number}
-                                    onChange={(e) => setNewClaim(prev => ({ ...prev, policy_number: e.target.value }))}
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <Label>Amount Claimed</Label>
+                                <Label>Total Amount Claimed</Label>
                                 <Input
                                     type="number"
-                                    value={newClaim.amount_claimed}
-                                    onChange={(e) => setNewClaim(prev => ({ ...prev, amount_claimed: parseFloat(e.target.value) || 0 }))}
+                                    min={0}
+                                    step={0.01}
+                                    value={newClaim.total_amount || ""}
+                                    onChange={(e) => setNewClaim(prev => ({ ...prev, total_amount: parseFloat(e.target.value) || 0 }))}
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="grid gap-2">
+                                    <Label>Insurance Estimate (Optional)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        placeholder="0"
+                                        value={newClaim.insurance_estimate}
+                                        onChange={(e) => setNewClaim(prev => ({ ...prev, insurance_estimate: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label>Patient Responsibility (Optional)</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        step={0.01}
+                                        placeholder="0"
+                                        value={newClaim.patient_responsibility}
+                                        onChange={(e) => setNewClaim(prev => ({ ...prev, patient_responsibility: e.target.value }))}
+                                    />
+                                </div>
                             </div>
                         </div>
                         <DialogFooter>
@@ -316,7 +382,7 @@ export default function InsuranceClaimsPage() {
                         <ShieldCheck className="h-4 w-4 text-teal-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">${claims.reduce((acc, c) => acc + Number(c.amount_claimed), 0).toLocaleString()}</div>
+                        <div className="text-2xl font-bold">${claims.reduce((acc, c) => acc + Number(c.total_amount ?? 0), 0).toLocaleString()}</div>
                         <p className="text-xs text-slate-500 mt-1">Value of all active submissions</p>
                     </CardContent>
                 </Card>
@@ -326,8 +392,8 @@ export default function InsuranceClaimsPage() {
                         <FileCheck className="h-4 w-4 text-emerald-600" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{claims.filter(c => c.status === 'approved' && new Date(c.updated_at).toDateString() === new Date().toDateString()).length}</div>
-                        <p className="text-xs text-slate-500 mt-1">Claims approved in the last 24h</p>
+                        <div className="text-2xl font-bold">{claims.filter(c => c.status === 'paid' && new Date(c.updated_at).toDateString() === new Date().toDateString()).length}</div>
+                        <p className="text-xs text-slate-500 mt-1">Claims paid today</p>
                     </CardContent>
                 </Card>
             </div>
@@ -370,17 +436,17 @@ export default function InsuranceClaimsPage() {
                                     <TableCell>{claim.patient?.first_name} {claim.patient?.last_name}</TableCell>
                                     <TableCell>
                                         <div className="flex flex-col">
-                                            <span className="font-medium">{claim.insurance_provider}</span>
-                                            <span className="text-xs text-slate-500">{claim.policy_number}</span>
+                                            <span className="font-medium">{(claim.policy as any)?.provider?.name ?? "—"}</span>
+                                            <span className="text-xs text-slate-500">{(claim.policy as any)?.member_id || (claim.policy as any)?.group_number || "—"}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="font-semibold">${Number(claim.amount_claimed).toLocaleString()}</TableCell>
+                                    <TableCell className="font-semibold">${Number(claim.total_amount ?? 0).toLocaleString()}</TableCell>
                                     <TableCell>
                                         <Badge variant="outline" className={getStatusVariant(claim.status)}>
                                             {claim.status.toUpperCase()}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-slate-500">{new Date(claim.submitted_at).toLocaleDateString()}</TableCell>
+                                    <TableCell className="text-slate-500">{claim.submitted_at ? new Date(claim.submitted_at).toLocaleDateString() : "—"}</TableCell>
                                     <TableCell className="text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -398,14 +464,14 @@ export default function InsuranceClaimsPage() {
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuLabel className="text-xs text-slate-500">Update Status</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => updateClaimStatus(claim.id, 'approved')}>
-                                                    <CheckCircle2 className="h-4 w-4 mr-2 text-blue-600" /> Mark Approved
+                                                <DropdownMenuItem onClick={() => updateClaimStatus(claim.id, 'submitted')}>
+                                                    <CheckCircle2 className="h-4 w-4 mr-2 text-blue-600" /> Mark Submitted
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => updateClaimStatus(claim.id, 'paid')}>
                                                     <Banknote className="h-4 w-4 mr-2 text-emerald-600" /> Mark Paid
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => updateClaimStatus(claim.id, 'rejected')}>
-                                                    <XCircle className="h-4 w-4 mr-2 text-rose-600" /> Mark Rejected
+                                                <DropdownMenuItem onClick={() => updateClaimStatus(claim.id, 'denied')}>
+                                                    <XCircle className="h-4 w-4 mr-2 text-rose-600" /> Mark Denied
                                                 </DropdownMenuItem>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuItem
@@ -464,18 +530,24 @@ export default function InsuranceClaimsPage() {
                                 <div className="space-y-3">
                                     <div className="space-y-1">
                                         <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Insurance Provider</Label>
-                                        <p className="font-medium">{selectedClaim.insurance_provider}</p>
+                                        <p className="font-medium">{(selectedClaim.policy as any)?.provider?.name ?? '—'}</p>
                                     </div>
                                     <div className="space-y-1">
-                                        <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Policy Number</Label>
-                                        <p className="font-medium font-mono">{selectedClaim.policy_number || 'N/A'}</p>
+                                        <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Member / Group</Label>
+                                        <p className="font-medium font-mono">{(selectedClaim.policy as any)?.member_id || (selectedClaim.policy as any)?.group_number || 'N/A'}</p>
                                     </div>
                                 </div>
                                 <div className="space-y-3">
                                     <div className="space-y-1 text-right">
-                                        <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Amount Claimed</Label>
-                                        <p className="text-2xl font-bold text-teal-600">${Number(selectedClaim.amount_claimed).toLocaleString()}</p>
+                                        <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Total Amount</Label>
+                                        <p className="text-2xl font-bold text-teal-600">${Number(selectedClaim.total_amount ?? 0).toLocaleString()}</p>
                                     </div>
+                                    {selectedClaim.insurance_estimate != null && (
+                                        <div className="space-y-1 text-right">
+                                            <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Insurance Estimate</Label>
+                                            <p className="font-medium">${Number(selectedClaim.insurance_estimate).toLocaleString()}</p>
+                                        </div>
+                                    )}
                                     <div className="space-y-1 text-right">
                                         <Label className="text-slate-500 text-xs text-uppercase tracking-wider">Related Invoice</Label>
                                         <p className="font-medium">{selectedClaim.invoice?.invoice_number || 'None Linked'}</p>
@@ -491,11 +563,11 @@ export default function InsuranceClaimsPage() {
                             )}
 
                             <div className="flex gap-2">
-                                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => updateClaimStatus(selectedClaim.id, 'approved')}>
-                                    Approve Claim
+                                <Button className="flex-1 bg-blue-600 hover:bg-blue-700" onClick={() => updateClaimStatus(selectedClaim.id, 'submitted')}>
+                                    Mark Submitted
                                 </Button>
                                 <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => updateClaimStatus(selectedClaim.id, 'paid')}>
-                                    Full Payout Received
+                                    Mark Paid
                                 </Button>
                             </div>
                         </div>

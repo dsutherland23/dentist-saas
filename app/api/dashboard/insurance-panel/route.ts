@@ -34,29 +34,29 @@ export async function GET() {
         ] = await Promise.all([
             // Claims submitted this month
             supabase
-                .from("insurance_claims")
-                .select("amount_claimed", { count: "exact" })
+                .from("claims")
+                .select("total_amount", { count: "exact" })
                 .eq("clinic_id", clinicId)
                 .gte("submitted_at", monthStart.toISOString()),
 
             // Claims pending > 14 days
             supabase
-                .from("insurance_claims")
-                .select("amount_claimed, submitted_at")
+                .from("claims")
+                .select("total_amount, submitted_at")
                 .eq("clinic_id", clinicId)
                 .eq("status", "pending"),
 
             // Denied claims
             supabase
-                .from("insurance_claims")
-                .select("amount_claimed", { count: "exact" })
+                .from("claims")
+                .select("total_amount", { count: "exact" })
                 .eq("clinic_id", clinicId)
-                .eq("status", "rejected")
+                .eq("status", "denied")
                 .gte("submitted_at", monthStart.toISOString()),
 
             // Paid claims for average days calculation
             supabase
-                .from("insurance_claims")
+                .from("claims")
                 .select("submitted_at, updated_at")
                 .eq("clinic_id", clinicId)
                 .eq("status", "paid")
@@ -64,15 +64,15 @@ export async function GET() {
 
             // All claims for totals
             supabase
-                .from("insurance_claims")
-                .select("amount_claimed, status")
+                .from("claims")
+                .select("total_amount, status")
                 .eq("clinic_id", clinicId)
         ])
 
         // Calculate claims submitted this month
         const claimsSubmitted = claimsThisMonthResult.count || 0
         const claimsSubmittedValue = claimsThisMonthResult.data?.reduce(
-            (sum, c: any) => sum + parseFloat(c.amount_claimed || 0),
+            (sum, c: any) => sum + parseFloat(c.total_amount || 0),
             0
         ) || 0
 
@@ -87,14 +87,14 @@ export async function GET() {
 
         const claimsPending14PlusCount = claimsPending14Plus.length
         const claimsPending14PlusValue = claimsPending14Plus.reduce(
-            (sum: number, c: any) => sum + parseFloat(c.amount_claimed || 0),
+            (sum: number, c: any) => sum + parseFloat(c.total_amount || 0),
             0
         )
 
         // Calculate denied claims
         const deniedClaimsCount = deniedClaimsResult.count || 0
         const deniedClaimsValue = deniedClaimsResult.data?.reduce(
-            (sum, c: any) => sum + parseFloat(c.amount_claimed || 0),
+            (sum, c: any) => sum + parseFloat(c.total_amount || 0),
             0
         ) || 0
 
@@ -113,13 +113,13 @@ export async function GET() {
 
         // Calculate expected vs actual
         const totalClaimed = allClaimsResult.data?.reduce(
-            (sum, c: any) => sum + parseFloat(c.amount_claimed || 0),
+            (sum, c: any) => sum + parseFloat(c.total_amount || 0),
             0
         ) || 0
 
         const totalPaidAmount = allClaimsResult.data
             ?.filter((c: any) => c.status === 'paid')
-            .reduce((sum, c: any) => sum + parseFloat(c.amount_claimed || 0), 0) || 0
+            .reduce((sum, c: any) => sum + parseFloat(c.total_amount || 0), 0) || 0
 
         // Alert indicators
         const alerts = []

@@ -20,6 +20,9 @@ export type NotificationType =
     | "invoice_paid"
     | "invoice_overdue"
     | "new_message"
+    | "patient_ready_for_exam"
+    | "patient_ready_for_billing"
+    | "visit_status_update"
 
 export interface CreateNotificationParams {
     supabase: SupabaseClient

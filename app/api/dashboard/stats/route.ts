@@ -159,8 +159,8 @@ export async function GET() {
 
             // Pending insurance claims
             supabase
-                .from("insurance_claims")
-                .select("amount_claimed")
+                .from("claims")
+                .select("total_amount")
                 .eq("clinic_id", clinicId)
                 .eq("status", "pending"),
 
@@ -307,7 +307,7 @@ export async function GET() {
 
         // Outstanding claims
         const outstandingClaims = pendingClaimsResult.data?.reduce(
-            (sum, claim: any) => sum + parseFloat(claim.amount_claimed || 0),
+            (sum, claim: any) => sum + parseFloat(claim.total_amount || 0),
             0
         ) || 0
         const outstandingClaimsCount = pendingClaimsResult.data?.length || 0

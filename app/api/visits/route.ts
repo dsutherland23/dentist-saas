@@ -29,6 +29,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "appointmentId required" }, { status: 400 })
     }
 
+    const { data: clinicRow } = await supabase
+      .from("clinics")
+      .select("workflow_template, active_workflow_id")
+      .eq("id", userData.clinic_id)
+      .single()
+
+    let workflowTemplate: string = clinicRow?.workflow_template ?? "full_clinic_workflow"
+    let workflowConfig: { nodes: { state: string; label?: string; assigned_role: string }[] } | null = null
+    if (clinicRow?.active_workflow_id) {
+      const { data: customTemplate } = await supabase
+        .from("workflow_templates")
+        .select("config")
+        .eq("id", clinicRow.active_workflow_id)
+        .eq("clinic_id", userData.clinic_id)
+        .single()
+      if (customTemplate?.config) {
+        workflowTemplate = "custom"
+        workflowConfig = customTemplate.config as { nodes: { state: string; label?: string; assigned_role: string }[] }
+      }
+    }
+
     const { data: visit, error } = await supabase
       .from("visits")
       .select("*")
@@ -42,7 +63,11 @@ export async function GET(request: Request) {
     }
 
     if (!visit) {
-      return NextResponse.json({ visit: null })
+      return NextResponse.json({
+        visit: null,
+        workflowTemplate,
+        ...(workflowConfig ? { workflowConfig } : {}),
+      })
     }
 
     // Shape for UI: camelCase ids and consistent structure
@@ -60,6 +85,8 @@ export async function GET(request: Request) {
         createdAt: visit.created_at,
         updatedAt: visit.updated_at,
       },
+      workflowTemplate,
+      ...(workflowConfig ? { workflowConfig } : {}),
     }
 
     return NextResponse.json(response)

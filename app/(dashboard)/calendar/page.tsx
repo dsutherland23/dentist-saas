@@ -8,13 +8,12 @@ export const dynamic = "force-dynamic"
 
 type CalendarPageProps = { searchParams?: Promise<Record<string, string | string[] | undefined>> }
 
-export default async function CalendarPage({ searchParams: searchParamsPromise }: CalendarPageProps) {
+export default async function CalendarPage(props: CalendarPageProps) {
+    const searchParams = props.searchParams != null ? await props.searchParams : {}
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect("/login")
-
-    const searchParams = searchParamsPromise ? await searchParamsPromise : {}
     const appointmentId = typeof searchParams?.appointmentId === "string" ? searchParams.appointmentId : null
     const openAll = searchParams?.openAll === "true" || searchParams?.openAll === "1"
 

@@ -5,7 +5,7 @@ import PatientProfileClient from "./patient-profile-client"
 
 export const dynamic = "force-dynamic"
 
-/** Unwrap params with React.use() to satisfy Next.js 16 async params (avoids enumeration warning). */
+/** Unwrap params with React.use() to avoid Next.js 16 params enumeration warning (dev overlay serialization). */
 export default function PatientPage(props: { params: Promise<{ id: string }> }) {
     const { id } = use(props.params)
     return <PatientPageContent id={id} />
