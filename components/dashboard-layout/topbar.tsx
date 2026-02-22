@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Search, Menu, User, Settings, LogOut, Sparkles, PanelLeftOpen, PanelLeftClose } from "lucide-react"
+import { Bell, Search, Menu, ChevronDown, User, Settings, LogOut, Sparkles, PanelLeftOpen, PanelLeftClose } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -255,7 +255,7 @@ export function Topbar() {
                                     <span className="text-sm font-semibold text-slate-900">{fullName}</span>
                                     <span className="text-xs text-slate-500">{userRole}</span>
                                 </div>
-                                <Menu className="h-4 w-4 text-slate-400 md:hidden" />
+                                <ChevronDown className="h-4 w-4 text-slate-400 md:hidden shrink-0" aria-hidden />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 backdrop-blur-xl bg-white/95 border-slate-200/50">
